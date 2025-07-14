@@ -1,7 +1,15 @@
-import { AppRouter } from './routes/AppRouter'
+import { BrowserRouter as Router } from 'react-router-dom'
+import { AuthProvider } from './context'
+import { AppRoutes } from './routes'
 
 function App() {
-  return <AppRouter />
+  return (
+    <Router>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </Router>
+  )
 }
 
 export default App

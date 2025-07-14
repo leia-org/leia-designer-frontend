@@ -36,11 +36,11 @@ export const Login = () => {
       if (token) {
         setSuccess(true);
         setMessage('Logged in successfully!');
-        
+
         login(token);
 
         setTimeout(() => {
-          navigate('/dashboard');
+          navigate('/');
         }, 1000);
       } else {
         setSuccess(false);
