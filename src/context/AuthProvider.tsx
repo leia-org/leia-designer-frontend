@@ -9,6 +9,8 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const PUBLIC_ROUTES = ['/login'];
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<DecodedToken | null>(null);
@@ -57,7 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
-        if (location.pathname !== '/login') {
+        if (!PUBLIC_ROUTES.includes(location.pathname)) {
           navigate('/login');
         }
       } else {
@@ -66,7 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(decoded);
       }
     } else {
-      if (location.pathname !== '/login') {
+      if (!PUBLIC_ROUTES.includes(location.pathname)) {
         navigate('/login');
       }
     }
