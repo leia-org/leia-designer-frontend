@@ -5,6 +5,8 @@ import { CreateLeia } from '../screens/CreateLeia';
 import { Chat } from '../screens/Chat';
 import { Login } from '../screens/Login';
 import { Profile } from '../screens/Profile';
+import { ForbiddenPage } from '../screens/ForbiddenPage';
+import { UserManagement } from '../screens/UserManagement';
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -17,14 +19,18 @@ const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAuthenticated } = useAuth();
 
   if (isLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
   
-  if (!user || !user.role || user.role !== 'admin') {
-    return <Navigate to="/" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== 'admin') {
+    return <ForbiddenPage />;
   }
   
   return <>{children}</>;
@@ -49,6 +55,20 @@ export const AppRoutes = () => {
           <Profile />
         </AuthenticatedRoute>
       } />
+      <Route path="/admin" element={
+        <AdminRoute>
+          <div className="p-8">
+            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+            <p>This is an admin-only area.</p>
+          </div>
+        </AdminRoute>
+      } />
+      <Route path="/administration/users" element={
+        <AdminRoute>
+          <UserManagement />
+        </AdminRoute>
+      } />
+      <Route path="/forbidden" element={<ForbiddenPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
