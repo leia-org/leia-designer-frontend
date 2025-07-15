@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { AuthContext, type AuthContextType } from './AuthContext';
 import type { DecodedToken } from '../models';
@@ -14,7 +14,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<DecodedToken | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const isTokenExpired = (token: string): boolean => {
     try {
@@ -57,22 +56,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
-        if (location.pathname !== '/login') {
-          navigate('/login');
-        }
       } else {
         const decoded = decodeToken(storedToken);
         setToken(storedToken);
         setUser(decoded);
       }
-    } else {
-      if (location.pathname !== '/login') {
-        navigate('/login');
-      }
     }
     
     setIsLoading(false);
-  }, [navigate, location.pathname]);
+  }, []);
 
   useEffect(() => {
     if (!token) return;
