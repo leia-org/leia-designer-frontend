@@ -25,8 +25,14 @@ export const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserResponse | null>(null);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     role: "instructor" as "admin" | "instructor",
@@ -105,13 +111,13 @@ export const UserManagement = () => {
       errors.email = "Please enter a valid email address";
     }
 
-    if (!formData.password) {
+    if (!formData.password && !editingUser) {
       errors.password = "Password is required";
-    } else if (formData.password.length < 6) {
+    } else if (formData.password && formData.password.length < 6) {
       errors.password = "Password must be at least 6 characters";
     }
 
-    if (!formData.confirmPassword) {
+    if (!formData.confirmPassword && formData.password) {
       errors.confirmPassword = "Please confirm your password";
     } else if (formData.password !== formData.confirmPassword) {
       errors.confirmPassword = "Passwords do not match";
@@ -130,37 +136,37 @@ export const UserManagement = () => {
     setSubmitMessage("");
 
     try {
-      await api.post("/api/v1/users", {
-        email: formData.email.trim(),
-        role: formData.role,
-        password: formData.password,
-      });
+      if (editingUser) {
+        await api.put(`/api/v1/users/${editingUser.id}`, {
+          email: formData.email.trim(),
+          role: formData.role,
+          password: formData.password || undefined,
+        });
+        setSubmitSuccess(true);
+        setSubmitMessage("User updated successfully!");
+      } else {
+        await api.post("/api/v1/users", {
+          email: formData.email.trim(),
+          role: formData.role,
+          password: formData.password,
+        });
+        setSubmitSuccess(true);
+        setSubmitMessage("User created successfully!");
+      }
 
-      setSubmitSuccess(true);
-      setSubmitMessage("User created successfully!");
-
-      // Reset form
-      setFormData({
-        email: "",
-        role: "instructor",
-        password: "",
-        confirmPassword: "",
-      });
-      setFormErrors({});
-
-      // Refresh users list
-      fetchUsers();
-
-      // Close modal after a short delay
       setTimeout(() => {
         setIsModalOpen(false);
         setSubmitMessage("");
         setSubmitSuccess(false);
+        setEditingUser(null);
+        fetchUsers();
       }, 1500);
     } catch (error: unknown) {
       setSubmitSuccess(false);
 
-      let errorMessage = "An error occurred while creating the user";
+      let errorMessage = editingUser
+        ? "An error occurred while updating the user"
+        : "An error occurred while creating the user";
 
       if (axios.isAxiosError(error) && error.response) {
         if (error.response.data?.message) {
@@ -179,13 +185,86 @@ export const UserManagement = () => {
     }
   };
 
-  const resetModal = () => {
+  const openDeleteModal = (user: UserResponse) => {
+    setDeletingUser(user);
+    setDeleteConfirmEmail("");
+    setDeleteMessage("");
+    setDeleteSuccess(false);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingUser) return;
+
+    setIsDeleting(true);
+    setDeleteMessage("");
+
+    try {
+      await api.delete(`/api/v1/users/${deletingUser.id}`);
+      setDeleteSuccess(true);
+      setDeleteMessage("User deleted successfully!");
+
+      setTimeout(() => {
+        setIsDeleteModalOpen(false);
+        setDeleteMessage("");
+        setDeleteSuccess(false);
+        setDeletingUser(null);
+        setDeleteConfirmEmail("");
+        fetchUsers();
+      }, 1500);
+    } catch (error: unknown) {
+      setDeleteSuccess(false);
+
+      let errorMessage = "An error occurred while deleting the user";
+
+      if (axios.isAxiosError(error) && error.response) {
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        }
+      }
+
+      setDeleteMessage(errorMessage);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const resetDeleteModal = () => {
+    setDeleteConfirmEmail("");
+    setDeleteMessage("");
+    setDeleteSuccess(false);
+  };
+
+  const openEditModal = (user: UserResponse) => {
+    setEditingUser(user);
     setFormData({
-      email: "",
-      role: "instructor",
+      email: user.email,
+      role: user.role,
       password: "",
       confirmPassword: "",
     });
+    setFormErrors({});
+    setSubmitMessage("");
+    setSubmitSuccess(false);
+    setIsModalOpen(true);
+  };
+
+  const resetModal = () => {
+    if (editingUser) {
+      setFormData({
+        email: editingUser.email,
+        role: editingUser.role,
+        password: "",
+        confirmPassword: "",
+      });
+    } else {
+      setFormData({
+        email: "",
+        role: "instructor",
+        password: "",
+        confirmPassword: "",
+      });
+    }
     setFormErrors({});
     setSubmitMessage("");
     setSubmitSuccess(false);
@@ -297,10 +376,16 @@ export const UserManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-blue-600 hover:text-blue-900 p-1 rounded">
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                        >
                           <PencilIcon className="h-4 w-4" />
                         </button>
-                        <button className="text-red-600 hover:text-red-900 p-1 rounded">
+                        <button
+                          className="text-red-600 hover:text-red-900 p-1 rounded"
+                          onClick={() => openDeleteModal(user)}
+                        >
                           <TrashIcon className="h-4 w-4" />
                         </button>
                       </div>
@@ -319,18 +404,19 @@ export const UserManagement = () => {
           )}
         </div>
 
-        {/* Add User Modal */}
+        {/* User Modal - Create/Edit */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500/50 backdrop-blur-sm">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-auto p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  Add New User
+                  {editingUser ? "Edit User" : "Add New User"}
                 </h2>
                 <button
                   onClick={() => {
                     resetModal();
                     setIsModalOpen(false);
+                    setEditingUser(null);
                   }}
                   className="text-gray-500 hover:text-gray-700"
                 >
@@ -416,7 +502,10 @@ export const UserManagement = () => {
                       id="password"
                       value={formData.password}
                       onChange={(e) =>
-                        setFormData({ ...formData, password: e.target.value })
+                        setFormData({
+                          ...formData,
+                          password: e.target.value,
+                        })
                       }
                       className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${
                         formErrors.password
@@ -424,7 +513,7 @@ export const UserManagement = () => {
                           : "border-gray-300"
                       }`}
                       placeholder="Enter password"
-                      required
+                      required={!editingUser}
                     />
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                       <button
@@ -471,7 +560,7 @@ export const UserManagement = () => {
                           : "border-gray-300"
                       }`}
                       placeholder="Confirm password"
-                      required
+                      required={!editingUser || formData.password.trim() !== ""}
                     />
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                       <button
@@ -516,10 +605,122 @@ export const UserManagement = () => {
                     {isSubmitting && (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     )}
-                    Create User
+                    {editingUser ? "Update User" : "Create User"}
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete User Modal */}
+        {isDeleteModalOpen && deletingUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500/50 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-auto p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Delete User
+                </h2>
+                <button
+                  onClick={() => {
+                    resetDeleteModal();
+                    setIsDeleteModalOpen(false);
+                    setDeletingUser(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+
+              {deleteMessage && (
+                <div
+                  className={`p-4 mb-4 rounded-md text-sm ${
+                    deleteSuccess
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                  role="alert"
+                >
+                  {deleteMessage}
+                </div>
+              )}
+
+              <div className="mb-6">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center">
+                    <div className="text-sm text-red-700">
+                      <p>
+                        You are about to permanently delete the user:
+                        <br />
+                        <strong className="font-semibold">
+                          {deletingUser.email}
+                        </strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="confirmEmail"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    To confirm deletion, please type the user's email address:
+                  </label>
+                  <input
+                    type="email"
+                    id="confirmEmail"
+                    value={deleteConfirmEmail}
+                    onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                    placeholder={deletingUser.email}
+                    disabled={isDeleting}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={resetDeleteModal}
+                  className="text-gray-500 hover:text-gray-700 text-sm"
+                  disabled={isDeleting}
+                >
+                  Reset
+                </button>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetDeleteModal();
+                      setIsDeleteModalOpen(false);
+                      setDeletingUser(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={
+                      isDeleting || deleteConfirmEmail !== deletingUser.email
+                    }
+                    className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 flex items-center ${
+                      isDeleting || deleteConfirmEmail !== deletingUser.email
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700"
+                    }`}
+                  >
+                    {isDeleting && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    )}
+                    Delete User
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
