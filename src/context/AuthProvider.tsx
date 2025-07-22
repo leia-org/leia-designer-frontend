@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { AuthContext, type AuthContextType } from './AuthContext';
 import type { DecodedToken } from '../models';
@@ -9,14 +9,11 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-const PUBLIC_ROUTES = ['/login'];
-
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<DecodedToken | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const isTokenExpired = (token: string): boolean => {
     try {
@@ -59,22 +56,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
-        if (!PUBLIC_ROUTES.includes(location.pathname)) {
-          navigate('/login');
-        }
       } else {
         const decoded = decodeToken(storedToken);
         setToken(storedToken);
         setUser(decoded);
       }
-    } else {
-      if (!PUBLIC_ROUTES.includes(location.pathname)) {
-        navigate('/login');
-      }
     }
     
     setIsLoading(false);
-  }, [navigate, location.pathname]);
+  }, []);
 
   useEffect(() => {
     if (!token) return;
