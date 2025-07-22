@@ -1,5 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Editor } from '@monaco-editor/react';
+import React, { useState, useRef, useEffect } from "react";
+import { Editor, loader } from "@monaco-editor/react";
+
+// Ensure YAML language support is loaded
+loader.init().then((monaco) => {
+  // Register YAML language if not already registered
+  if (!monaco.languages.getLanguages().find((lang) => lang.id === "yaml")) {
+    monaco.languages.register({ id: "yaml" });
+  }
+});
 
 interface LeiaCardProps {
   title: string;
@@ -15,8 +23,8 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
   description,
   version,
   selected = false,
-  yaml = '',
-  onClick
+  yaml = "",
+  onClick,
 }) => {
   const [showPopup, setShowPopup] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -27,13 +35,13 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
       const rect = cardRef.current.getBoundingClientRect();
       setPopoverPosition({
         top: rect.top + rect.height / 2,
-        left: rect.right + 8
+        left: rect.right + 8,
       });
     }
   }, [showPopup]);
 
   return (
-    <div 
+    <div
       ref={cardRef}
       className="relative"
       onMouseEnter={() => setShowPopup(true)}
@@ -41,9 +49,9 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
     >
       <div
         className={`p-4 rounded-lg cursor-pointer transition-colors ${
-          selected 
-            ? 'bg-blue-50 border-2 border-blue-500' 
-            : 'border border-gray-200 hover:border-blue-300'
+          selected
+            ? "bg-blue-50 border-2 border-blue-500"
+            : "border border-gray-200 hover:border-blue-300"
         }`}
         onClick={onClick}
       >
@@ -53,7 +61,9 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
             v{version}
           </span>
         </div>
-        <p className="text-gray-600 text-sm leading-relaxed">{description}</p>
+        <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
+          {description}
+        </p>
         {selected && (
           <div className="mt-3 flex items-center text-blue-600 text-sm font-medium">
             <svg
@@ -71,15 +81,15 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
           </div>
         )}
       </div>
-      
+
       {/* Popup de YAML con Monaco Editor */}
       {showPopup && yaml && (
-        <div 
+        <div
           className="fixed z-[9999] transition-opacity duration-200"
           style={{
             top: popoverPosition.top,
             left: popoverPosition.left,
-            transform: 'translateY(-50%)'
+            transform: "translateY(-50%)",
           }}
         >
           <div className="bg-gray-900 rounded-lg shadow-xl p-2 w-[500px] h-[300px]">
@@ -92,23 +102,41 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
                 readOnly: true,
                 minimap: { enabled: false },
                 fontSize: 12,
-                lineNumbers: 'off',
+                lineNumbers: "off",
                 folding: false,
                 lineDecorationsWidth: 0,
                 lineNumbersMinChars: 0,
-                renderLineHighlight: 'none',
+                renderLineHighlight: "none",
                 scrollBeyondLastLine: false,
-                wordWrap: 'on'
+                wordWrap: "on",
+                automaticLayout: true,
+                contextmenu: false,
+                hover: { enabled: false },
+                links: false,
+                occurrencesHighlight: "off",
+                renderValidationDecorations: "off",
+                selectionHighlight: false,
+              }}
+              beforeMount={(monaco) => {
+                // Ensure YAML language is available
+                if (
+                  !monaco.languages
+                    .getLanguages()
+                    .find((lang) => lang.id === "yaml")
+                ) {
+                  monaco.languages.register({ id: "yaml" });
+                }
               }}
             />
           </div>
-          <div className="absolute left-0 top-1/2 -ml-2 w-0 h-0 
+          <div
+            className="absolute left-0 top-1/2 -ml-2 w-0 h-0 
             border-t-[6px] border-r-[6px] border-b-[6px] 
             border-t-transparent border-r-gray-900 border-b-transparent"
-            style={{ transform: 'translateY(-50%)' }}>
-          </div>
+            style={{ transform: "translateY(-50%)" }}
+          ></div>
         </div>
       )}
     </div>
   );
-}; 
+};
