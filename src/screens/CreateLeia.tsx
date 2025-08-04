@@ -1,13 +1,24 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Editor } from "@monaco-editor/react";
 import { CreateSidebar } from "../components/CreateSidebar";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import type { Persona, Behavior, Problem } from "../models/Leia";
 import api from "../lib/axios";
+import { generateLeia } from "../lib/leia";
 
 interface LeiaConfig {
   persona: Persona | null;
   problem: Problem | null;
   behaviour: Behavior | null;
+}
+
+interface Leia {
+  spec: {
+    persona: Persona;
+    problem: Problem;
+    behaviour: Behavior;
+  };
 }
 
 const exampleTemplates = {
@@ -59,12 +70,14 @@ const exampleTemplates = {
 type WizardStep = 1 | 2 | 3;
 
 export const CreateLeia: React.FC = () => {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
     persona: null,
     problem: null,
     behaviour: null,
   });
+  const [generatedLeia, setGeneratedLeia] = useState<Leia | null>(null);
 
   // Estados para los datos de la API
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -72,6 +85,7 @@ export const CreateLeia: React.FC = () => {
   const [behaviours, setBehaviours] = useState<Behavior[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [testingLeia, setTestingLeia] = useState(false);
 
   const [editingItem, setEditingItem] = useState<{
     type: keyof LeiaConfig | null;
@@ -85,6 +99,22 @@ export const CreateLeia: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (
+      currentStep > 1 &&
+      leiaConfig.persona &&
+      leiaConfig.behaviour &&
+      leiaConfig.problem
+    ) {
+      const leia = generateLeia(
+        leiaConfig.persona,
+        leiaConfig.behaviour,
+        leiaConfig.problem
+      );
+      setGeneratedLeia(leia as Leia);
+    }
+  }, [currentStep, leiaConfig]);
 
   const loadData = async () => {
     try {
@@ -208,9 +238,26 @@ spec:
     }
   };
 
-  const handleTestLeia = () => {
-    localStorage.setItem("leiaConfig", JSON.stringify(leiaConfig));
-    window.location.href = "/chat";
+  const handleTestLeia = async () => {
+    if (!generatedLeia) {
+      console.error("No generated LEIA available");
+      return;
+    }
+
+    try {
+      setTestingLeia(true);
+      const response = await api.post("/api/v1/runner/initialize", {
+        ...generatedLeia,
+      });
+      const { sessionId } = response.data;
+      localStorage.setItem("leiaConfig", JSON.stringify(leiaConfig));
+      navigate(`/chat/${sessionId}`);
+    } catch (error) {
+      console.error("Error initializing LEIA:", error);
+      setError("Failed to initialize LEIA session");
+    } finally {
+      setTestingLeia(false);
+    }
   };
 
   const handleNextStep = () => {
@@ -387,48 +434,6 @@ spec:
           </div>
         </div>
       )}
-
-      {/* Vista previa */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold mb-4">LEIA Preview</h3>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Behavior</h4>
-            <p className="text-sm text-gray-600">
-              {leiaConfig.behaviour?.metadata.name || "Not selected"}
-            </p>
-            {leiaConfig.behaviour && (
-              <p className="text-xs text-gray-500 mt-1">
-                {leiaConfig.behaviour.spec.description}
-              </p>
-            )}
-          </div>
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
-            <p className="text-sm text-gray-600">
-              {leiaConfig.problem?.metadata.name || "Not selected"}
-            </p>
-            {leiaConfig.problem && (
-              <p className="text-xs text-gray-500 mt-1">
-                {leiaConfig.problem.spec.description}
-              </p>
-            )}
-          </div>
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
-            <p className="text-sm text-gray-600">
-              {leiaConfig.persona?.spec.fullName ||
-                leiaConfig.persona?.metadata.name ||
-                "Not selected"}
-            </p>
-            {leiaConfig.persona && (
-              <p className="text-xs text-gray-500 mt-1">
-                {leiaConfig.persona.spec.description}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 
@@ -454,7 +459,7 @@ spec:
                   <p className="text-sm font-medium">
                     {leiaConfig.behaviour.metadata.name}
                   </p>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-gray-600 mt-1 line-clamp-3">
                     {leiaConfig.behaviour.spec.description}
                   </p>
                 </div>
@@ -481,7 +486,7 @@ spec:
                   <p className="text-sm font-medium">
                     {leiaConfig.problem.metadata.name}
                   </p>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-gray-600 mt-1 line-clamp-3">
                     {leiaConfig.problem.spec.description}
                   </p>
                 </div>
@@ -506,10 +511,9 @@ spec:
               <div className="space-y-3">
                 <div className="p-3 bg-gray-50 rounded border border-gray-200">
                   <p className="text-sm font-medium">
-                    {leiaConfig.persona.spec.fullName ||
-                      leiaConfig.persona.metadata.name}
+                    {leiaConfig.persona.metadata.name}
                   </p>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-gray-600 mt-1 line-clamp-3">
                     {leiaConfig.persona.spec.description}
                   </p>
                 </div>
@@ -533,37 +537,130 @@ spec:
         <div className="grid grid-cols-3 gap-4">
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Behavior</h4>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 mb-3">
               {leiaConfig.behaviour?.metadata.name || "Not selected"}
             </p>
-            {leiaConfig.behaviour && (
-              <p className="text-xs text-gray-500 mt-1">
-                {leiaConfig.behaviour.spec.description}
-              </p>
+            {leiaConfig.behaviour ? (
+              <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                <Editor
+                  height="150px"
+                  language="json"
+                  theme="vs-light"
+                  value={JSON.stringify(generatedLeia?.spec.behaviour, null, 2)}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: "off",
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    automaticLayout: true,
+                    contextmenu: false,
+                    scrollbar: {
+                      vertical: "auto",
+                      horizontal: "auto",
+                      handleMouseWheel: true,
+                    },
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerBorder: false,
+                    wordWrap: "on",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                No behavior selected
+              </div>
             )}
           </div>
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 mb-3">
               {leiaConfig.problem?.metadata.name || "Not selected"}
             </p>
-            {leiaConfig.problem && (
-              <p className="text-xs text-gray-500 mt-1">
-                {leiaConfig.problem.spec.description}
-              </p>
+            {leiaConfig.problem ? (
+              <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                <Editor
+                  height="150px"
+                  language="json"
+                  theme="vs-light"
+                  value={JSON.stringify(generatedLeia?.spec.problem, null, 2)}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: "off",
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    automaticLayout: true,
+                    contextmenu: false,
+                    scrollbar: {
+                      vertical: "auto",
+                      horizontal: "auto",
+                      handleMouseWheel: true,
+                    },
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerBorder: false,
+                    wordWrap: "on",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                No problem selected
+              </div>
             )}
           </div>
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 mb-3">
               {leiaConfig.persona?.spec.fullName ||
                 leiaConfig.persona?.metadata.name ||
                 "Not selected"}
             </p>
-            {leiaConfig.persona && (
-              <p className="text-xs text-gray-500 mt-1">
-                {leiaConfig.persona.spec.description}
-              </p>
+            {leiaConfig.persona ? (
+              <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                <Editor
+                  height="150px"
+                  language="json"
+                  theme="vs-light"
+                  value={JSON.stringify(generatedLeia?.spec.persona, null, 2)}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: "off",
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    automaticLayout: true,
+                    contextmenu: false,
+                    scrollbar: {
+                      vertical: "auto",
+                      horizontal: "auto",
+                      handleMouseWheel: true,
+                    },
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerBorder: false,
+                    wordWrap: "on",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                No persona selected
+              </div>
             )}
           </div>
         </div>
@@ -731,48 +828,135 @@ spec:
         <div className="grid grid-cols-3 gap-4">
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Behavior</h4>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 mb-3">
               {customizations.behaviour.name ||
-                leiaConfig.behaviour?.metadata.name ||
+                generatedLeia?.spec.behaviour?.metadata.name ||
                 "Not selected"}
             </p>
-            {(customizations.behaviour.description ||
-              leiaConfig.behaviour?.spec.description) && (
-              <p className="text-xs text-gray-500 mt-1">
-                {customizations.behaviour.description ||
-                  leiaConfig.behaviour?.spec.description}
-              </p>
+            {generatedLeia?.spec.behaviour ? (
+              <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                <Editor
+                  height="150px"
+                  language="json"
+                  theme="vs-light"
+                  value={JSON.stringify(generatedLeia?.spec.behaviour, null, 2)}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: "off",
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    automaticLayout: true,
+                    contextmenu: false,
+                    scrollbar: {
+                      vertical: "auto",
+                      horizontal: "auto",
+                      handleMouseWheel: true,
+                    },
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerBorder: false,
+                    wordWrap: "on",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                No behavior selected
+              </div>
             )}
           </div>
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 mb-3">
               {customizations.problem.name ||
-                leiaConfig.problem?.metadata.name ||
+                generatedLeia?.spec.problem?.metadata.name ||
                 "Not selected"}
             </p>
-            {(customizations.problem.description ||
-              leiaConfig.problem?.spec.description) && (
-              <p className="text-xs text-gray-500 mt-1">
-                {customizations.problem.description ||
-                  leiaConfig.problem?.spec.description}
-              </p>
+            {generatedLeia?.spec.problem ? (
+              <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                <Editor
+                  height="150px"
+                  language="json"
+                  theme="vs-light"
+                  value={JSON.stringify(generatedLeia?.spec.problem, null, 2)}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: "off",
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    automaticLayout: true,
+                    contextmenu: false,
+                    scrollbar: {
+                      vertical: "auto",
+                      horizontal: "auto",
+                      handleMouseWheel: true,
+                    },
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerBorder: false,
+                    wordWrap: "on",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                No problem selected
+              </div>
             )}
           </div>
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 mb-3">
               {customizations.persona.name ||
-                leiaConfig.persona?.spec.fullName ||
-                leiaConfig.persona?.metadata.name ||
+                generatedLeia?.spec.persona?.spec.fullName ||
+                generatedLeia?.spec.persona?.metadata.name ||
                 "Not selected"}
             </p>
-            {(customizations.persona.description ||
-              leiaConfig.persona?.spec.description) && (
-              <p className="text-xs text-gray-500 mt-1">
-                {customizations.persona.description ||
-                  leiaConfig.persona?.spec.description}
-              </p>
+            {generatedLeia?.spec.persona ? (
+              <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                <Editor
+                  height="150px"
+                  language="json"
+                  theme="vs-light"
+                  value={JSON.stringify(generatedLeia?.spec.persona, null, 2)}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 11,
+                    lineNumbers: "off",
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    automaticLayout: true,
+                    contextmenu: false,
+                    scrollbar: {
+                      vertical: "auto",
+                      horizontal: "auto",
+                      handleMouseWheel: true,
+                    },
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerBorder: false,
+                    wordWrap: "on",
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                No persona selected
+              </div>
             )}
           </div>
         </div>
@@ -902,25 +1086,39 @@ spec:
               </p>
             </div>
             <div className="flex items-center space-x-4">
-              {currentStep === 3 && isStep3Complete && (
+              {currentStep === 3 && isStep2Complete && (
                 <button
                   onClick={handleTestLeia}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                  disabled={testingLeia}
+                  className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                    testingLeia
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                  } text-white`}
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                    />
-                  </svg>
-                  Test LEIA
+                  {testingLeia ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Testing...
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                        />
+                      </svg>
+                      Test LEIA
+                    </>
+                  )}
                 </button>
               )}
             </div>
