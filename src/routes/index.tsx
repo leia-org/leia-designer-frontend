@@ -6,6 +6,7 @@ import { Chat } from "../screens/Chat";
 import { Login } from "../screens/Login";
 import { Profile } from "../screens/Profile";
 import { ForbiddenPage } from "../screens/ForbiddenPage";
+import { LeiaSearch } from "../screens/LeiaSearch";
 import { UserManagement } from "../screens/UserManagement";
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -69,6 +70,14 @@ export const AppRoutes = () => {
         element={
           <AuthenticatedRoute>
             <Profile />
+          </AuthenticatedRoute>
+        }
+      />
+      <Route
+        path="/leias"
+        element={
+          <AuthenticatedRoute>
+            <LeiaSearch />
           </AuthenticatedRoute>
         }
       />

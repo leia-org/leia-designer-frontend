@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import { CreateSidebar } from "../components/CreateSidebar";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
@@ -71,6 +71,7 @@ type WizardStep = 1 | 2 | 3;
 
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation() as { state?: any };
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
     persona: null,
@@ -87,18 +88,25 @@ export const CreateLeia: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
 
-  const [editingItem, setEditingItem] = useState<{
-    type: keyof LeiaConfig | null;
-    item: Persona | Behavior | Problem | null;
-  }>({
-    type: null,
-    item: null,
-  });
+  // Eliminado estado no usado de edición temporal
 
   // Cargar datos al montar el componente
   useEffect(() => {
     loadData();
   }, []);
+
+  // Aplicar preset si viene desde navegación
+  useEffect(() => {
+    const preset = location.state?.preset;
+    if (preset) {
+      setLeiaConfig({
+        persona: preset.persona ?? null,
+        problem: preset.problem ?? null,
+        behaviour: preset.behaviour ?? null,
+      });
+      setCurrentStep(2);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     if (
@@ -211,8 +219,6 @@ spec:
   const handleEditItem = (type: keyof LeiaConfig) => {
     const item = leiaConfig[type];
     if (item) {
-      setEditingItem({ type, item });
-
       const itemYaml = `apiVersion: ${item.apiVersion}
 metadata:
   name: "${item.metadata.name}"
