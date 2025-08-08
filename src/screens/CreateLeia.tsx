@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import type { Persona, Behavior, Problem } from "../models/Leia";
@@ -24,6 +24,7 @@ type WizardStep = 1 | 2 | 3;
 
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation() as { state?: any };
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
     persona: null,
@@ -58,6 +59,19 @@ export const CreateLeia: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Aplicar preset si viene desde navegación
+  useEffect(() => {
+    const preset = location.state?.preset;
+    if (preset) {
+      setLeiaConfig({
+        persona: preset.persona ?? null,
+        problem: preset.problem ?? null,
+        behaviour: preset.behaviour ?? null,
+      });
+      setCurrentStep(2);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     if (
