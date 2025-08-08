@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
-import type { Leia } from "../models/Leia";
+import type { Leia, Persona, Problem, Behavior } from "../models/Leia";
 
 type VersionFilter = "" | "latest";
 
@@ -53,16 +53,26 @@ export const LeiaSearch: React.FC = () => {
     };
   }, [params]);
 
-  const handlePersonalize = (leia: Leia) => {
-    navigate("/", {
-      state: {
-        preset: {
-          persona: leia.spec.persona,
-          problem: leia.spec.problem,
-          behaviour: leia.spec.behaviour,
+  const handlePersonalize = async (leia: Leia) => {
+    try {
+      const [personaResp, problemResp, behaviourResp] = await Promise.all([
+        api.get<Persona>(`/api/v1/personas/${leia.spec.persona.id}`),
+        api.get<Problem>(`/api/v1/problems/${leia.spec.problem.id}`),
+        api.get<Behavior>(`/api/v1/behaviours/${leia.spec.behaviour.id}`),
+      ]);
+
+      navigate("/", {
+        state: {
+          preset: {
+            persona: personaResp.data,
+            problem: problemResp.data,
+            behaviour: behaviourResp.data,
+          },
         },
-      },
-    });
+      });
+    } catch (e) {
+      setError("Could not load preset data");
+    }
   };
 
   const handleTest = async (leia: Leia) => {
