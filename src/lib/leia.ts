@@ -131,7 +131,7 @@ export function resolvePlaceholders(leia: Leia) {
 }
 
 export function generateLeia(persona: any, behaviour: any, problem: any) {
-  const entities = { persona, behaviour, problem };
+  const entities = { persona: structuredClone(persona), behaviour: structuredClone(behaviour), problem: structuredClone(problem) };
 
   checkConstraints(entities);
   const extendedEntities = resolveExtensions(entities);

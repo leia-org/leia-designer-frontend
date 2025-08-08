@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
-import { Editor } from '@monaco-editor/react';
-import type { OnMount } from '@monaco-editor/react';
+import React, { useRef } from "react";
+import { Editor } from "@monaco-editor/react";
+import type { OnMount } from "@monaco-editor/react";
 
 interface CreateSidebarProps {
   isOpen: boolean;
@@ -24,50 +24,12 @@ export const CreateSidebar: React.FC<CreateSidebarProps> = ({
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-
-    // Configurar el esquema de validación para YAML
-    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-      validate: true,
-      schemas: [{
-        uri: "http://leia-schema/item",
-        fileMatch: ['*'],
-        schema: {
-          type: 'object',
-          required: ['kind', 'apiVersion', 'metadata', 'spec'],
-          properties: {
-            kind: { type: 'string' },
-            apiVersion: { type: 'string' },
-            metadata: {
-              type: 'object',
-              required: ['name', 'version'],
-              properties: {
-                name: { type: 'string' },
-                version: { type: 'string' }
-              }
-            },
-            spec: {
-              type: 'object',
-              properties: {
-                description: { type: 'string' },
-                fullName: { type: 'string' }
-              }
-            }
-          }
-        }
-      }]
-    });
   };
 
   const handleSave = () => {
     if (editorRef.current) {
-      const model = editorRef.current.getModel();
-      const markers = monacoRef.current?.editor.getModelMarkers({ resource: model?.uri });
-      
-      // Solo guardar si no hay errores de validación
-      if (!markers?.length) {
-        onSave(editedYaml);
-        onClose();
-      }
+      onSave(editedYaml);
+      onClose();
     }
   };
 
@@ -76,16 +38,16 @@ export const CreateSidebar: React.FC<CreateSidebarProps> = ({
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/30 z-[9998] transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Sidebar */}
-      <div 
+      <div
         className={`fixed right-0 top-0 h-full w-[600px] bg-white shadow-xl z-[9999] 
           transform transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+          ${isOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="h-full flex flex-col">
           {/* Header */}
@@ -95,8 +57,18 @@ export const CreateSidebar: React.FC<CreateSidebarProps> = ({
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             >
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-5 h-5 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -108,15 +80,14 @@ export const CreateSidebar: React.FC<CreateSidebarProps> = ({
               language="yaml"
               theme="vs-dark"
               value={editedYaml}
-              onChange={(value) => setEditedYaml(value || '')}
               onMount={handleEditorDidMount}
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,
-                lineNumbers: 'on',
-                wordWrap: 'on',
+                lineNumbers: "on",
+                wordWrap: "on",
                 formatOnPaste: true,
-                formatOnType: true
+                formatOnType: true,
               }}
             />
           </div>
@@ -133,11 +104,11 @@ export const CreateSidebar: React.FC<CreateSidebarProps> = ({
               onClick={handleSave}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
             >
-              Create
+              Save
             </button>
           </div>
         </div>
       </div>
     </>
   );
-}; 
+};

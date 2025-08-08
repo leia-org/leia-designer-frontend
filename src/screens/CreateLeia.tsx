@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
-import { CreateSidebar } from "../components/CreateSidebar";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import type { Persona, Behavior, Problem } from "../models/Leia";
 import api from "../lib/axios";
@@ -21,52 +20,6 @@ interface Leia {
   };
 }
 
-const exampleTemplates = {
-  persona: {
-    kind: "persona",
-    apiVersion: "v1",
-    metadata: {
-      name: "new-persona",
-      version: "1.0.0",
-    },
-    spec: {
-      fullName: "New Persona",
-      description: "A new persona template for creating custom personas.",
-      traits: ["Detail-oriented", "Problem solver", "Team player"],
-      background: "Custom background information",
-      expertise: "Custom expertise areas",
-    },
-  },
-  problem: {
-    kind: "problem",
-    apiVersion: "v1",
-    metadata: {
-      name: "new-problem",
-      version: "1.0.0",
-    },
-    spec: {
-      description: "A new problem template for creating custom problems",
-      context: "Custom problem context",
-      objectives: ["Custom objective 1", "Custom objective 2"],
-      constraints: ["Custom constraint 1", "Custom constraint 2"],
-    },
-  },
-  behaviour: {
-    kind: "behaviour",
-    apiVersion: "v1",
-    metadata: {
-      name: "new-behaviour",
-      version: "1.0.0",
-    },
-    spec: {
-      description: "A new behaviour template for creating custom behaviours",
-      approach: "Custom approach description",
-      topics: ["Custom topic 1", "Custom topic 2"],
-      expectedOutcomes: ["Custom outcome 1", "Custom outcome 2"],
-    },
-  },
-} as const;
-
 type WizardStep = 1 | 2 | 3;
 
 export const CreateLeia: React.FC = () => {
@@ -79,6 +32,12 @@ export const CreateLeia: React.FC = () => {
   });
   const [generatedLeia, setGeneratedLeia] = useState<Leia | null>(null);
 
+  const [customizations, setCustomizations] = useState<{
+    persona?: { name: string };
+    problem?: { name: string };
+    behaviour?: { name: string };
+  }>({});
+
   // Estados para los datos de la API
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -87,12 +46,12 @@ export const CreateLeia: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
 
-  const [editingItem, setEditingItem] = useState<{
-    type: keyof LeiaConfig | null;
-    item: Persona | Behavior | Problem | null;
+  const [editingResource, setEditingResource] = useState<{
+    resource: keyof LeiaConfig | null;
+    content: string | null;
   }>({
-    type: null,
-    item: null,
+    resource: null,
+    content: null,
   });
 
   // Cargar datos al montar el componente
@@ -140,44 +99,6 @@ export const CreateLeia: React.FC = () => {
     }
   };
 
-  const [createSidebar, setCreateSidebar] = useState<{
-    isOpen: boolean;
-    type: keyof LeiaConfig | null;
-    yaml: string;
-  }>({
-    isOpen: false,
-    type: null,
-    yaml: "",
-  });
-
-  const [customizations, setCustomizations] = useState<{
-    persona: { name: string; description: string };
-    problem: { name: string; description: string };
-    behaviour: { name: string; description: string };
-  }>({
-    persona: { name: "", description: "" },
-    problem: { name: "", description: "" },
-    behaviour: { name: "", description: "" },
-  });
-
-  const generateItemYaml = (
-    item:
-      | Persona
-      | Behavior
-      | Problem
-      | (typeof exampleTemplates)[keyof typeof exampleTemplates]
-  ): string => {
-    if (!item) return "";
-    return `apiVersion: ${item.apiVersion}
-metadata:
-  name: "${item.metadata.name}"
-  version: "${item.metadata.version}"
-spec:
-  ${Object.entries(item.spec)
-    .map(([key, value]) => `${key}: "${value}"`)
-    .join("\n  ")}`;
-  };
-
   const handleSelect = (
     type: keyof LeiaConfig,
     item: Persona | Behavior | Problem
@@ -188,54 +109,27 @@ spec:
     }));
   };
 
-  const handleCreateNew = (type: keyof LeiaConfig) => {
-    const template = exampleTemplates[type];
-    setCreateSidebar({
-      isOpen: true,
-      type,
-      yaml: generateItemYaml(template),
-    });
-  };
-
-  const handleSaveNewItem = (yamlString: string) => {
+  const handleEditResource = (resource: keyof LeiaConfig, content: string) => {
     try {
-      const newItem = JSON.parse(yamlString) as Persona | Behavior | Problem;
-      if (createSidebar.type) {
-        handleSelect(createSidebar.type, newItem);
-      }
+      const parsedContent = JSON.parse(content);
+      parsedContent.edited = true;
+
+      setLeiaConfig((prev) => ({
+        ...prev,
+        [resource]: parsedContent,
+      }));
+
+      setEditingResource({ resource: null, content: null });
     } catch (error) {
-      console.error("Invalid YAML:", error);
+      console.error("Error parsing JSON content:", error);
     }
   };
 
-  const handleEditItem = (type: keyof LeiaConfig) => {
-    const item = leiaConfig[type];
-    if (item) {
-      setEditingItem({ type, item });
-
-      const itemYaml = `apiVersion: ${item.apiVersion}
-metadata:
-  name: "${item.metadata.name}"
-  version: "${item.metadata.version}"
-spec:
-  ${Object.entries(item.spec)
-    .map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return `${key}:\n    ${value.map((v) => `- "${v}"`).join("\n    ")}`;
-      } else if (typeof value === "string") {
-        return `${key}: "${value}"`;
-      } else {
-        return `${key}: ${JSON.stringify(value)}`;
-      }
-    })
-    .join("\n  ")}`;
-
-      setCreateSidebar({
-        isOpen: true,
-        type,
-        yaml: itemYaml,
-      });
-    }
+  const handleEditorChange = (value: string | undefined) => {
+    setEditingResource((prev) => ({
+      ...prev,
+      content: value || "",
+    }));
   };
 
   const handleTestLeia = async () => {
@@ -264,6 +158,19 @@ spec:
     if (currentStep < 3) {
       setCurrentStep((currentStep + 1) as WizardStep);
     }
+    if (currentStep === 3) {
+      setCustomizations({
+        persona: leiaConfig.persona?.edited
+          ? { name: leiaConfig.persona.metadata.name }
+          : undefined,
+        problem: leiaConfig.problem?.edited
+          ? { name: leiaConfig.problem.metadata.name }
+          : undefined,
+        behaviour: leiaConfig.behaviour?.edited
+          ? { name: leiaConfig.behaviour.metadata.name }
+          : undefined,
+      });
+    }
   };
 
   const handlePrevStep = () => {
@@ -274,10 +181,8 @@ spec:
 
   const isStep1Complete =
     leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour;
-  const isStep2Complete = true; // Siempre se puede avanzar del paso 2
-  const isStep3Complete = Object.values(customizations).some(
-    (c) => c.name || c.description
-  );
+  const isStep2Complete = true;
+  const isStep3Complete = Object.values(customizations).some((c) => c.name);
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center space-x-8 mb-8">
@@ -342,7 +247,7 @@ spec:
             currentStep >= 3 ? "text-blue-600" : "text-gray-600"
           }`}
         >
-          Customize
+          Create
         </span>
       </div>
     </div>
@@ -396,7 +301,7 @@ spec:
               items={behaviours}
               selectedItem={leiaConfig.behaviour}
               onSelect={(item) => handleSelect("behaviour", item)}
-              onCreateNew={() => handleCreateNew("behaviour")}
+              onCreateNew={() => null}
               placeholder="Search behaviors..."
             />
           </div>
@@ -412,7 +317,7 @@ spec:
               items={problems}
               selectedItem={leiaConfig.problem}
               onSelect={(item) => handleSelect("problem", item)}
-              onCreateNew={() => handleCreateNew("problem")}
+              onCreateNew={() => null}
               placeholder="Search problems..."
             />
           </div>
@@ -428,7 +333,7 @@ spec:
               items={personas}
               selectedItem={leiaConfig.persona}
               onSelect={(item) => handleSelect("persona", item)}
-              onCreateNew={() => handleCreateNew("persona")}
+              onCreateNew={() => null}
               placeholder="Search personas..."
             />
           </div>
@@ -440,11 +345,9 @@ spec:
   const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Step 2: Edit and Customize
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Step 2: Edit</h2>
         <p className="text-gray-600">
-          Modify any of the components and see changes in real-time
+          Modify any of the resources and see changes in real-time
         </p>
       </div>
 
@@ -464,7 +367,12 @@ spec:
                   </p>
                 </div>
                 <button
-                  onClick={() => handleEditItem("behaviour")}
+                  onClick={() =>
+                    setEditingResource({
+                      resource: "behaviour",
+                      content: JSON.stringify(leiaConfig.behaviour, null, 2),
+                    })
+                  }
                   className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                 >
                   Edit Behavior
@@ -491,7 +399,12 @@ spec:
                   </p>
                 </div>
                 <button
-                  onClick={() => handleEditItem("problem")}
+                  onClick={() =>
+                    setEditingResource({
+                      resource: "problem",
+                      content: JSON.stringify(leiaConfig.problem, null, 2),
+                    })
+                  }
                   className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                 >
                   Edit Problem
@@ -518,7 +431,12 @@ spec:
                   </p>
                 </div>
                 <button
-                  onClick={() => handleEditItem("persona")}
+                  onClick={() =>
+                    setEditingResource({
+                      resource: "persona",
+                      content: JSON.stringify(leiaConfig.persona, null, 2),
+                    })
+                  }
                   className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                 >
                   Edit Persona
@@ -530,6 +448,69 @@ spec:
           </div>
         </div>
       </div>
+
+      {/* Editor Monaco */}
+      {editingResource.content && editingResource.resource && (
+        <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
+          <div className="space-y-4 transform transition-all duration-300">
+            <Editor
+              height="300px"
+              language="json"
+              theme="vs-light"
+              value={editingResource.content}
+              onChange={handleEditorChange}
+              options={{
+                readOnly: false,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 12,
+                lineNumbers: "on",
+                glyphMargin: false,
+                folding: false,
+                lineDecorationsWidth: 0,
+                lineNumbersMinChars: 0,
+                automaticLayout: true,
+                contextmenu: false,
+                scrollbar: {
+                  vertical: "auto",
+                  horizontal: "auto",
+                  handleMouseWheel: true,
+                },
+                overviewRulerLanes: 0,
+                hideCursorInOverviewRuler: true,
+                overviewRulerBorder: false,
+                wordWrap: "on",
+              }}
+            />
+            {/* Buttons container */}
+            <div className="flex justify-end space-x-3 pt-2">
+              {/* Cancel button */}
+              <button
+                onClick={() =>
+                  setEditingResource({ resource: null, content: null })
+                }
+                className="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              {/* Save button */}
+              <button
+                onClick={() => {
+                  if (editingResource.resource && editingResource.content) {
+                    handleEditResource(
+                      editingResource.resource,
+                      editingResource.content
+                    );
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Vista previa en tiempo real */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -672,164 +653,139 @@ spec:
     <div className="space-y-6">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Step 3: Customize Names and Descriptions
+          Step 3: Create your LEIA
         </h2>
         <p className="text-gray-600">
-          Edit names and specifications to create your personalized version
+          Update the fields of the required resources, test your creation and
+          complete the process
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
         {/* Comportamiento */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Behavior</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Name
-              </label>
-              <input
-                type="text"
-                value={customizations.behaviour.name}
-                onChange={(e) =>
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    behaviour: { ...prev.behaviour, name: e.target.value },
-                  }))
-                }
-                placeholder={
-                  leiaConfig.behaviour?.metadata.name || "Behavior name"
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Description
-              </label>
-              <textarea
-                value={customizations.behaviour.description}
-                onChange={(e) =>
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    behaviour: {
-                      ...prev.behaviour,
-                      description: e.target.value,
-                    },
-                  }))
-                }
-                placeholder={
-                  leiaConfig.behaviour?.spec.description ||
-                  "Behavior description"
-                }
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+        {customizations.behaviour && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Behavior</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Name Required
+                </label>
+                <input
+                  type="text"
+                  value={customizations.behaviour.name}
+                  onChange={(e) =>
+                    setCustomizations((prev) => ({
+                      ...prev,
+                      behaviour: { ...prev.behaviour, name: e.target.value },
+                    }))
+                  }
+                  placeholder={"resource-name"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Problema */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Problem</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Name
-              </label>
-              <input
-                type="text"
-                value={customizations.problem.name}
-                onChange={(e) =>
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    problem: { ...prev.problem, name: e.target.value },
-                  }))
-                }
-                placeholder={
-                  leiaConfig.problem?.metadata.name || "Problem name"
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Description
-              </label>
-              <textarea
-                value={customizations.problem.description}
-                onChange={(e) =>
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    problem: { ...prev.problem, description: e.target.value },
-                  }))
-                }
-                placeholder={
-                  leiaConfig.problem?.spec.description || "Problem description"
-                }
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+        {customizations.problem && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Problem</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Name Required
+                </label>
+                <input
+                  type="text"
+                  value={customizations.problem.name}
+                  onChange={(e) =>
+                    setCustomizations((prev) => ({
+                      ...prev,
+                      problem: { ...prev.problem, name: e.target.value },
+                    }))
+                  }
+                  placeholder={"resource-name"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Persona */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Persona</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Name
-              </label>
-              <input
-                type="text"
-                value={customizations.persona.name}
-                onChange={(e) =>
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    persona: { ...prev.persona, name: e.target.value },
-                  }))
-                }
-                placeholder={
-                  leiaConfig.persona?.spec.fullName ||
-                  leiaConfig.persona?.metadata.name ||
-                  "Persona name"
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Description
-              </label>
-              <textarea
-                value={customizations.persona.description}
-                onChange={(e) =>
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    persona: { ...prev.persona, description: e.target.value },
-                  }))
-                }
-                placeholder={
-                  leiaConfig.persona?.spec.description || "Persona description"
-                }
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+        {customizations.persona && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Persona</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Name Required
+                </label>
+                <input
+                  type="text"
+                  value={customizations.persona.name}
+                  onChange={(e) =>
+                    setCustomizations((prev) => ({
+                      ...prev,
+                      persona: { ...prev.persona, name: e.target.value },
+                    }))
+                  }
+                  placeholder={"resource-name"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Vista final */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold mb-4">Final LEIA Preview</h3>
+        <div className="flex flex-row w-full mb-4">
+          <h3 className="text-lg w-full font-semibold">Final LEIA Preview</h3>
+          <div className="flex justify-end w-full">
+            <button
+              onClick={handleTestLeia}
+              disabled={testingLeia}
+              className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                testingLeia
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700"
+              } text-white`}
+            >
+              {testingLeia ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                    />
+                  </svg>
+                  Test LEIA
+                </>
+              )}
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Behavior</h4>
             <p className="text-sm text-gray-600 mb-3">
-              {customizations.behaviour.name ||
+              {customizations.behaviour?.name ||
                 generatedLeia?.spec.behaviour?.metadata.name ||
                 "Not selected"}
             </p>
@@ -873,7 +829,7 @@ spec:
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
             <p className="text-sm text-gray-600 mb-3">
-              {customizations.problem.name ||
+              {customizations.problem?.name ||
                 generatedLeia?.spec.problem?.metadata.name ||
                 "Not selected"}
             </p>
@@ -917,7 +873,7 @@ spec:
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
             <p className="text-sm text-gray-600 mb-3">
-              {customizations.persona.name ||
+              {customizations.persona?.name ||
                 generatedLeia?.spec.persona?.spec.fullName ||
                 generatedLeia?.spec.persona?.metadata.name ||
                 "Not selected"}
@@ -990,7 +946,7 @@ spec:
             <div className="flex flex-col items-center justify-center py-16">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Loading Components
+                Loading resources...
               </h3>
               <p className="text-gray-600 text-center">
                 Loading personas, problems, and behaviors from the API...
@@ -1085,43 +1041,6 @@ spec:
                 Create your own LEIA and test it!
               </p>
             </div>
-            <div className="flex items-center space-x-4">
-              {currentStep === 3 && isStep2Complete && (
-                <button
-                  onClick={handleTestLeia}
-                  disabled={testingLeia}
-                  className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                    testingLeia
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-green-600 hover:bg-green-700"
-                  } text-white`}
-                >
-                  {testingLeia ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Testing...
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                        />
-                      </svg>
-                      Test LEIA
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
           </div>
         </div>
       </div>
@@ -1160,14 +1079,14 @@ spec:
             )}
             {currentStep === 2 && (
               <div className="text-sm text-gray-500">
-                ✓ You can edit components
+                ✓ You can edit resources or continue
               </div>
             )}
             {currentStep === 3 && (
               <div className="text-sm text-gray-500">
                 {isStep3Complete
                   ? "✓ Customization complete"
-                  : "Customize names and descriptions"}
+                  : "Customize names for edited resources"}
               </div>
             )}
           </div>
@@ -1191,21 +1110,6 @@ spec:
           </button>
         </div>
       </div>
-
-      <CreateSidebar
-        isOpen={createSidebar.isOpen}
-        onClose={() =>
-          setCreateSidebar({ isOpen: false, type: null, yaml: "" })
-        }
-        title={`Create New ${
-          createSidebar.type
-            ? createSidebar.type.charAt(0).toUpperCase() +
-              createSidebar.type.slice(1)
-            : ""
-        }`}
-        yaml={createSidebar.yaml}
-        onSave={handleSaveNewItem}
-      />
     </div>
   );
 };

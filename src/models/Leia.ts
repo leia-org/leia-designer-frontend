@@ -16,7 +16,8 @@ export interface Persona {
     possesiveAdjective: string
   },
   createdAt: string,
-  updatedAt: string
+  updatedAt: string,
+  edited?: boolean
 }
 
 export interface Behavior {
@@ -34,7 +35,8 @@ export interface Behavior {
     ]
   },
   createdAt: string,
-  updatedAt: string
+  updatedAt: string,
+  edited?: boolean
 }
 
 export interface Problem {
@@ -58,7 +60,8 @@ export interface Problem {
     constrainedTo: object
   },
   createdAt: string,
-  updatedAt: string
+  updatedAt: string,
+  edited?: boolean
 }
 
 export interface Leia {
