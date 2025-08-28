@@ -1,8 +1,31 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/axios";
+
+interface NavigationState {
+  preset?: {
+    persona?: unknown;
+    problem?: unknown;
+    behaviour?: unknown;
+  };
+  save?: {
+    currentStep: number;
+    leiaConfig: {
+      persona: unknown | null;
+      problem: unknown | null;
+      behaviour: unknown | null;
+    };
+    leiaConfigSnapShot: unknown | null;
+    customizations: {
+      leia: { name: string; version: string };
+      persona?: { name: string; version: string };
+      problem?: { name: string; version: string };
+      behaviour?: { name: string; version: string };
+    };
+  };
+}
 
 const TypingAnimation = () => (
   <div className="flex items-center space-x-1.5">
@@ -29,6 +52,7 @@ interface Message {
 
 export const Chat = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { sessionId } = useParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessageText, setNewMessageText] = useState("");
@@ -52,7 +76,7 @@ export const Chat = () => {
     } catch {
       setMessages([]);
     }
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -98,7 +122,7 @@ export const Chat = () => {
         };
         addMessage(leiaMessage);
       }
-    } catch (error) {
+    } catch {
       const leiaMessage: Message = {
         text: "Your message is taking a bit longer to send. Retry?",
         timestamp: new Date(),
@@ -115,7 +139,14 @@ export const Chat = () => {
   };
 
   const handleFinishConversation = async () => {
-    navigate(`/`);
+    const navigationState = location.state as NavigationState;
+    if (navigationState?.save) {
+      navigate("/", {
+        state: { save: navigationState.save } as NavigationState,
+      });
+    } else {
+      navigate("/");
+    }
   };
 
   return (
