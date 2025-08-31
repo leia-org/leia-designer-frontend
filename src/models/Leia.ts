@@ -17,7 +17,8 @@ export interface Persona {
   },
   createdAt: string,
   updatedAt: string,
-  edited?: boolean
+  edited?: boolean,
+  userId: string
 }
 
 export interface Behavior {
@@ -36,7 +37,8 @@ export interface Behavior {
   },
   createdAt: string,
   updatedAt: string,
-  edited?: boolean
+  edited?: boolean,
+  userId: string
 }
 
 export interface Problem {
@@ -61,7 +63,8 @@ export interface Problem {
   },
   createdAt: string,
   updatedAt: string,
-  edited?: boolean
+  edited?: boolean,
+  userId: string
 }
 
 export interface Leia {
@@ -90,7 +93,8 @@ export interface Leia {
         possesiveAdjective: string
       },
       createdAt: string,
-      updatedAt: string
+      updatedAt: string,
+      userId: string
     },
     problem: {
       id: string,
@@ -113,7 +117,8 @@ export interface Leia {
         constrainedTo: object
       },
       createdAt: string,
-      updatedAt: string
+      updatedAt: string,
+      userId: string
     },
     behaviour: {
       id: string,
@@ -130,9 +135,11 @@ export interface Leia {
         ]
       },
       createdAt: string,
-      updatedAt: string
+      updatedAt: string,
+      userId: string
     }
   },
   createdAt: string,
-  updatedAt: string
+  updatedAt: string,
+  userId: string
 }

@@ -61,6 +61,13 @@ export const CreateLeia: React.FC = () => {
     leia: { name: string; version?: string };
   }>({ leia: { name: "", version: "1.0.0" } });
 
+  const [validationErrors, setValidationErrors] = useState<
+    | {
+        [key in keyof typeof customizations]?: string;
+      }
+    | null
+  >(null);
+
   // Estados para los datos de la API
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -223,6 +230,7 @@ export const CreateLeia: React.FC = () => {
     delete cleaned.updatedAt;
     delete cleaned.id;
     delete cleaned.edited;
+    delete cleaned.user;
     if (currentStep === 3 && resource && leiaConfig[resource]?.edited) {
       const metadata = cleaned.metadata as Record<string, unknown>;
       if (metadata) {
@@ -264,7 +272,81 @@ export const CreateLeia: React.FC = () => {
     }
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
+    if (currentStep === 3 && isStep3Complete) {
+      const errors = {} as Record<string, string>;
+
+      for (const [key, value] of Object.entries(customizations)) {
+        if (value) {
+          if (!value.name?.trim()) {
+            errors[key] = "Name is required";
+            continue;
+          }
+
+          try {
+            const response = await api.get(
+              `/api/v1/${key}s/exists/${value.name}`
+            );
+            if (response.data.exists) {
+              errors[key] = "Name already exists";
+            }
+          } catch {
+            errors[key] = "Failed to check name existence";
+          }
+        }
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setValidationErrors(errors);
+        return;
+      }
+
+      const leia = {
+        apiVersion: "v1",
+        metadata: {
+          name: customizations.leia.name,
+          version: "1.0.0",
+        },
+        spec: {} as Record<string, any>,
+      };
+
+      for (const [key, value] of Object.entries(leiaConfig)) {
+        if (value && value.edited) {
+          const newResource = structuredClone(value) as any;
+          delete newResource.edited;
+          delete newResource.id;
+          delete newResource.createdAt;
+          delete newResource.updatedAt;
+          delete newResource.user;
+          delete newResource.metadata.version;
+          newResource.metadata.name =
+            customizations[key as keyof LeiaConfig]?.name;
+          try {
+            const response = await api.post(`/api/v1/${key}s`, newResource);
+            leia.spec[key] = response.data.id;
+            leiaConfig[key as keyof LeiaConfig] = response.data;
+            if (leiaConfigSnapShot) {
+              leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
+            }
+            delete customizations[key as keyof LeiaConfig];
+          } catch (error) {
+            console.error("Error creating resource:", error);
+            setError(`Failed to create ${key} resource`);
+            return;
+          }
+        } else {
+          leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
+        }
+      }
+      try {
+        const response = await api.post("/api/v1/leias", leia);
+        console.log("LEIA created successfully:", response.data);
+        navigate("/leias");
+      } catch (error) {
+        console.error("Error creating LEIA:", error);
+        setError("Failed to create LEIA");
+      }
+    }
     if (currentStep < 3) {
       if (currentStep === 1) {
         setLeiaConfigSnapShot(structuredClone(leiaConfig));
