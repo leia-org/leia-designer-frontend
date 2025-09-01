@@ -101,6 +101,7 @@ export const CreateLeia: React.FC = () => {
         problem: preset.problem ?? null,
         behaviour: preset.behaviour ?? null,
       });
+      setLeiaConfigSnapShot(preset);
       setCurrentStep(2);
     }
   }, [location.state]);
@@ -352,7 +353,17 @@ export const CreateLeia: React.FC = () => {
     }
     if (currentStep < 3) {
       if (currentStep === 1) {
-        setLeiaConfigSnapShot(structuredClone(leiaConfig));
+        setLeiaConfigSnapShot({
+          persona: leiaConfig.persona?.edited
+            ? leiaConfigSnapShot?.persona || null
+            : leiaConfig.persona,
+          problem: leiaConfig.problem?.edited
+            ? leiaConfigSnapShot?.problem || null
+            : leiaConfig.problem,
+          behaviour: leiaConfig.behaviour?.edited
+            ? leiaConfigSnapShot?.behaviour || null
+            : leiaConfig.behaviour,
+        });
       }
       if (currentStep === 2) {
         setCustomizations({
@@ -382,19 +393,18 @@ export const CreateLeia: React.FC = () => {
     leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour;
   const isStep2Complete = true;
   const isStep3Complete = (() => {
-    const leiaNameValid =
-      customizations.leia.name && customizations.leia.name.trim() !== "";
+    const customizationsValid = Object.values(customizations).every(
+      (resource) => {
+        if (!resource) return true;
+        return resource.name && resource.name.trim() !== "";
+      }
+    );
 
-    const editedResourcesValid = [
-      customizations.behaviour,
-      customizations.problem,
-      customizations.persona,
-    ].every((resource) => {
-      if (!resource) return true;
-      return resource.name && resource.name.trim() !== "";
-    });
+    const noValidationErrors = validationErrors
+      ? Object.values(validationErrors).every((error) => !error)
+      : true;
 
-    return leiaNameValid && editedResourcesValid;
+    return customizationsValid && noValidationErrors;
   })();
 
   const renderStepIndicator = () => (
@@ -1042,15 +1052,31 @@ export const CreateLeia: React.FC = () => {
             <input
               type="text"
               value={customizations.leia.name}
-              onChange={(e) =>
+              onChange={(e) => {
                 setCustomizations((prev) => ({
                   ...prev,
                   leia: { ...prev.leia, name: e.target.value },
-                }))
-              }
+                }));
+                // Limpiar error cuando el usuario escriba
+                if (validationErrors?.leia) {
+                  setValidationErrors((prev) => ({
+                    ...prev,
+                    leia: undefined,
+                  }));
+                }
+              }}
               placeholder={"leia-name"}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                validationErrors?.leia
+                  ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                  : "border-gray-300"
+              }`}
             />
+            {validationErrors?.leia && (
+              <p className="mt-1 text-sm text-red-600">
+                {validationErrors.leia}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -1066,15 +1092,31 @@ export const CreateLeia: React.FC = () => {
               <input
                 type="text"
                 value={customizations.behaviour.name}
-                onChange={(e) =>
+                onChange={(e) => {
                   setCustomizations((prev) => ({
                     ...prev,
                     behaviour: { ...prev.behaviour, name: e.target.value },
-                  }))
-                }
+                  }));
+                  // Limpiar error cuando el usuario escriba
+                  if (validationErrors?.behaviour) {
+                    setValidationErrors((prev) => ({
+                      ...prev,
+                      behaviour: undefined,
+                    }));
+                  }
+                }}
                 placeholder={"resource-name"}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  validationErrors?.behaviour
+                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                    : "border-gray-300"
+                }`}
               />
+              {validationErrors?.behaviour && (
+                <p className="mt-1 text-sm text-red-600">
+                  {validationErrors.behaviour}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1091,15 +1133,31 @@ export const CreateLeia: React.FC = () => {
                 <input
                   type="text"
                   value={customizations.problem.name}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setCustomizations((prev) => ({
                       ...prev,
                       problem: { ...prev.problem, name: e.target.value },
-                    }))
-                  }
+                    }));
+                    // Limpiar error cuando el usuario escriba
+                    if (validationErrors?.problem) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        problem: undefined,
+                      }));
+                    }
+                  }}
                   placeholder={"resource-name"}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors?.problem
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                 />
+                {validationErrors?.problem && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {validationErrors.problem}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1117,15 +1175,31 @@ export const CreateLeia: React.FC = () => {
               <input
                 type="text"
                 value={customizations.persona.name}
-                onChange={(e) =>
+                onChange={(e) => {
                   setCustomizations((prev) => ({
                     ...prev,
                     persona: { ...prev.persona, name: e.target.value },
-                  }))
-                }
+                  }));
+                  // Limpiar error cuando el usuario escriba
+                  if (validationErrors?.persona) {
+                    setValidationErrors((prev) => ({
+                      ...prev,
+                      persona: undefined,
+                    }));
+                  }
+                }}
                 placeholder={"resource-name"}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  validationErrors?.persona
+                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                    : "border-gray-300"
+                }`}
               />
+              {validationErrors?.persona && (
+                <p className="mt-1 text-sm text-red-600">
+                  {validationErrors.persona}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1243,7 +1317,6 @@ export const CreateLeia: React.FC = () => {
             <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
             <p className="text-sm text-gray-600 mb-3">
               {customizations.persona?.name ||
-                generatedLeia?.spec.persona?.spec.fullName ||
                 generatedLeia?.spec.persona?.metadata.name ||
                 "Not selected"}
             </p>

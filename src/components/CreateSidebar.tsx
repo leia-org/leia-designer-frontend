@@ -17,7 +17,7 @@ export const CreateSidebar: React.FC<CreateSidebarProps> = ({
   yaml,
   onSave,
 }) => {
-  const [editedYaml, setEditedYaml] = React.useState(yaml);
+  const [editedYaml] = React.useState(yaml);
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
 
