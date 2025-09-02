@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
+import { LightBulbIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import type { Persona, Behavior, Problem } from "../models/Leia";
 import api from "../lib/axios";
@@ -257,7 +258,6 @@ export const CreateLeia: React.FC = () => {
         ...generatedLeia,
       });
       const { sessionId } = response.data;
-      localStorage.setItem("leiaConfig", JSON.stringify(leiaConfig));
       navigate(`/chat/${sessionId}`, {
         state: {
           save: {
@@ -524,7 +524,6 @@ export const CreateLeia: React.FC = () => {
               items={behaviours}
               selectedItem={leiaConfig.behaviour}
               onSelect={(item) => handleSelect("behaviour", item)}
-              onCreateNew={() => null}
               placeholder="Search behaviors..."
             />
           </div>
@@ -540,7 +539,6 @@ export const CreateLeia: React.FC = () => {
               items={problems}
               selectedItem={leiaConfig.problem}
               onSelect={(item) => handleSelect("problem", item)}
-              onCreateNew={() => null}
               placeholder="Search problems..."
             />
           </div>
@@ -556,7 +554,6 @@ export const CreateLeia: React.FC = () => {
               items={personas}
               selectedItem={leiaConfig.persona}
               onSelect={(item) => handleSelect("persona", item)}
-              onCreateNew={() => null}
               placeholder="Search personas..."
             />
           </div>
@@ -865,33 +862,23 @@ export const CreateLeia: React.FC = () => {
           <button
             onClick={handleTestLeia}
             disabled={testingLeia}
-            className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+            className={`group relative px-2.5 py-2 rounded-lg transition-all duration-300 flex items-center gap-2 overflow-hidden text-white ${
               testingLeia
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-green-600 hover:bg-green-700"
-            } text-white`}
+                ? "bg-gray-400 cursor-not-allowed w-32"
+                : "bg-green-600 hover:bg-green-700 w-10 hover:w-22"
+            }`}
           >
             {testingLeia ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Testing...
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0"></div>
+                <span className="whitespace-nowrap">Testing...</span>
               </>
             ) : (
               <>
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                  />
-                </svg>
-                Test LEIA
+                <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
+                <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                  Try
+                </span>
               </>
             )}
           </button>

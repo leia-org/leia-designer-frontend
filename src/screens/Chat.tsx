@@ -145,7 +145,7 @@ export const Chat = () => {
         state: { save: navigationState.save } as NavigationState,
       });
     } else {
-      navigate("/");
+      navigate(-1);
     }
   };
 

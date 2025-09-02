@@ -8,7 +8,6 @@ interface SelectionColumnProps {
   items: Persona[] | Behavior[] | Problem[];
   selectedItem: Persona | Behavior | Problem | null;
   onSelect: (item: Persona | Behavior | Problem) => void;
-  onCreateNew: () => void;
   placeholder: string;
 }
 
@@ -17,7 +16,6 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
   items,
   selectedItem,
   onSelect,
-  onCreateNew,
   placeholder,
 }) => {
   const [filterValue, setFilterValue] = useState("");
@@ -64,29 +62,6 @@ spec:
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-3">
-          {/* Create New Button */}
-          <div
-            className="p-4 rounded-lg cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors group"
-            onClick={onCreateNew}
-          >
-            <div className="flex items-center justify-center text-gray-500 group-hover:text-blue-500">
-              <svg
-                className="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              <span className="font-medium">Crear Nuevo {title}</span>
-            </div>
-          </div>
-
           {/* Filtered Items */}
           {filteredItems.length > 0 ? (
             filteredItems.map((item) => (
