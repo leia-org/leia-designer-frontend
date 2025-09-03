@@ -62,7 +62,7 @@ export const LeiaSearch: React.FC = () => {
         api.get<Behavior>(`/api/v1/behaviours/${leia.spec.behaviour.id}`),
       ]);
 
-      navigate("/", {
+      navigate("/create", {
         state: {
           preset: {
             persona: personaResp.data,

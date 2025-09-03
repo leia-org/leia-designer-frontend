@@ -567,7 +567,8 @@ export const CreateLeia: React.FC = () => {
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Step 2: Edit</h2>
         <p className="text-gray-600">
-          Modify any of the resources and see changes in real-time
+          Modify any of the resources, see changes in real-time and test your
+          creation
         </p>
       </div>
 
@@ -1025,8 +1026,7 @@ export const CreateLeia: React.FC = () => {
           Step 3: Create your LEIA
         </h2>
         <p className="text-gray-600">
-          Update the fields of the required resources, test your creation and
-          complete the process
+          Update the fields of the required resources and complete the process
         </p>
       </div>
       <div className="bg-white rounded-lg border border-gray-200 p-6">

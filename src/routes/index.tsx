@@ -52,7 +52,7 @@ export const AppRoutes = () => {
         path="/"
         element={
           <AuthenticatedRoute>
-            <CreateLeia />
+            <LeiaSearch />
           </AuthenticatedRoute>
         }
       />
@@ -74,10 +74,10 @@ export const AppRoutes = () => {
         }
       />
       <Route
-        path="/leias"
+        path="/create"
         element={
           <AuthenticatedRoute>
-            <LeiaSearch />
+            <CreateLeia />
           </AuthenticatedRoute>
         }
       />

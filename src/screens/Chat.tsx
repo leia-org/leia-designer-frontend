@@ -141,7 +141,7 @@ export const Chat = () => {
   const handleFinishConversation = async () => {
     const navigationState = location.state as NavigationState;
     if (navigationState?.save) {
-      navigate("/", {
+      navigate("/create", {
         state: { save: navigationState.save } as NavigationState,
       });
     } else {
