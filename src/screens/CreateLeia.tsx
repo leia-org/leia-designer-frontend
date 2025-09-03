@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import { LightBulbIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
+import { Header } from "../components/shared/Header";
 import type { Persona, Behavior, Problem } from "../models/Leia";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
@@ -1360,21 +1361,10 @@ export const CreateLeia: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200">
-          <div className="container mx-auto px-6 py-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Create LEIA
-                </h1>
-                <p className="mt-2 text-gray-600">
-                  Create your own LEIA and test it!
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <Header
+          title="LEIA Designer"
+          description="Create your own LEIAs and test them!"
+        />
 
         {/* Loading Content */}
         <div className="flex-1 container mx-auto px-6 py-8">
@@ -1398,21 +1388,10 @@ export const CreateLeia: React.FC = () => {
   if (error) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200">
-          <div className="container mx-auto px-6 py-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Create LEIA
-                </h1>
-                <p className="mt-2 text-gray-600">
-                  Create your own LEIA and test it!
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <Header
+          title="LEIA Designer"
+          description="Create your own LEIAs and test them!"
+        />
 
         {/* Error Content */}
         <div className="flex-1 container mx-auto px-6 py-8">
@@ -1465,21 +1444,10 @@ export const CreateLeia: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Create LEIA
-              </h1>
-              <p className="mt-2 text-gray-600">
-                Create your own LEIA and test it!
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Header
+        title="LEIA Designer"
+        description="Create your own LEIAs and test them!"
+      />
 
       {/* Main Content */}
       <div className="flex-1 container mx-auto px-6 py-8">

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { useNavigate } from "react-router-dom";
+import { Header } from "../components/shared/Header";
 import api from "../lib/axios";
 
 interface NavigationState {
@@ -151,17 +152,19 @@ export const Chat = () => {
 
   return (
     <div className="flex flex-col h-screen bg-white">
-      <header className="flex justify-between items-center px-4 py-3 border-b">
-        <h1 className="text-lg font-semibold text-gray-900">Chat</h1>
-        <div className="flex gap-2">
+      <Header
+        title="LEIA Chat"
+        description="Test and interact with a LEIA configuration"
+        showNavigation={false}
+        rightContent={
           <button
             onClick={handleFinishConversation}
             className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             Finish Conversation
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth">
         <div ref={chatMessagesRef} className="max-w-3xl mx-auto space-y-4 py-4">
