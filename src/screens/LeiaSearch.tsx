@@ -171,7 +171,7 @@ export const LeiaSearch: React.FC = () => {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <button
-                        className="group relative px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-44"
+                        className="group relative px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-40"
                         onClick={() => handlePersonalize(leia)}
                       >
                         <SwatchIcon className="w-4 h-4 flex-shrink-0" />
@@ -180,7 +180,11 @@ export const LeiaSearch: React.FC = () => {
                         </span>
                       </button>
                       <button
-                        className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-20"
+                        className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
+                          initializingId === leia.id
+                            ? "w-30"
+                            : "w-10 hover:w-20"
+                        }`}
                         onClick={() => handleTest(leia)}
                         disabled={initializingId === leia.id}
                       >
