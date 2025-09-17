@@ -5,15 +5,16 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   UsersIcon,
-  UserIcon,
+  ArrowRightStartOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/useAuth";
 
 interface NavigationItem {
   label: string;
-  href: string;
+  href?: string;
   icon?: React.ReactNode;
   show?: boolean;
+  onClick?: () => void;
 }
 
 interface HeaderProps {
@@ -32,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   showNavigation = true, // Por defecto se muestra
 }) => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Default navigation items if none provided
@@ -56,10 +57,10 @@ export const Header: React.FC<HeaderProps> = ({
       show: user?.role === "admin",
     },
     {
-      label: "Profile",
-      href: "/profile",
-      icon: <UserIcon className="w-4 h-4" />,
+      label: "Logout",
+      icon: <ArrowRightStartOnRectangleIcon className="w-4 h-4" />,
       show: true,
+      onClick: logout,
     },
   ];
 
@@ -98,6 +99,12 @@ export const Header: React.FC<HeaderProps> = ({
           <p className="text-gray-600">{description}</p>
         </div>
         <div className="flex items-center gap-4 flex-shrink-0 ml-6">
+          {user?.email && (
+            <span className="text-sm text-gray-500 font-medium">
+              {user.email}
+            </span>
+          )}
+
           {visibleItems.length > 0 && (
             <div className="relative navigation-dropdown">
               <button
@@ -115,7 +122,12 @@ export const Header: React.FC<HeaderProps> = ({
                       <button
                         key={index}
                         onClick={() => {
-                          navigate(item.href);
+                          if (item.onClick) {
+                            item.onClick();
+                          }
+                          if (item.href) {
+                            navigate(item.href);
+                          }
                           setDropdownOpen(false);
                         }}
                         className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
