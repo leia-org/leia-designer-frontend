@@ -159,13 +159,29 @@ export const LeiaSearch: React.FC = () => {
                       className="flex items-start justify-between gap-4 p-4"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-medium text-gray-900 truncate">
-                            {leia.metadata.name}
-                          </h3>
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                            v{leia.metadata.version}
-                          </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base font-medium text-gray-900 truncate">
+                              {leia.metadata.name}
+                            </h3>
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                              v{leia.metadata.version}
+                            </span>
+                          </div>
+                          {/* User information moved back to the right without margin */}
+                          {leia.user && leia.user.email && leia.user.role && (
+                            <div className="flex items-center gap-3 text-xs text-gray-500 flex-shrink-0">
+                              <span>{leia.user.email}</span>
+                              <span className="flex items-center gap-1">
+                                <span className={`inline-block w-2 h-2 rounded-full ${
+                                  leia.user.role === "admin"
+                                    ? "bg-purple-500"
+                                    : "bg-green-500"
+                                }`}></span>
+                                {leia.user.role === "admin" ? "Administrator" : "Instructor"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {description && (
                           <p className="mt-1 text-sm text-gray-600 line-clamp-2">
