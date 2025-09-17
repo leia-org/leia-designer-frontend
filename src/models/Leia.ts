@@ -1,4 +1,3 @@
-// User interface matching the backend toJSON output
 export interface User {
   id: string;
   email: string;

@@ -173,12 +173,16 @@ export const LeiaSearch: React.FC = () => {
                             <div className="flex items-center gap-3 text-xs text-gray-500 flex-shrink-0">
                               <span>{leia.user.email}</span>
                               <span className="flex items-center gap-1">
-                                <span className={`inline-block w-2 h-2 rounded-full ${
-                                  leia.user.role === "admin"
-                                    ? "bg-purple-500"
-                                    : "bg-green-500"
-                                }`}></span>
-                                {leia.user.role === "admin" ? "Administrator" : "Instructor"}
+                                <span
+                                  className={`inline-block w-2 h-2 rounded-full ${
+                                    leia.user.role === "admin"
+                                      ? "bg-purple-500"
+                                      : "bg-green-500"
+                                  }`}
+                                ></span>
+                                {leia.user.role === "admin"
+                                  ? "Administrator"
+                                  : "Instructor"}
                               </span>
                             </div>
                           )}
