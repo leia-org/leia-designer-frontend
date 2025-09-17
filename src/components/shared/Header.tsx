@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/useAuth";
 
-interface NavigationItem {
+interface MenuItem {
   label: string;
   href?: string;
   icon?: React.ReactNode;
@@ -21,7 +21,7 @@ interface HeaderProps {
   title: string;
   description: string;
   rightContent?: React.ReactNode;
-  navigationItems?: NavigationItem[];
+  menuItems?: MenuItem[];
   showNavigation?: boolean; // Control para mostrar/ocultar el dropdown
 }
 
@@ -29,15 +29,15 @@ export const Header: React.FC<HeaderProps> = ({
   title,
   description,
   rightContent,
-  navigationItems,
+  menuItems,
   showNavigation = true, // Por defecto se muestra
 }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // Default navigation items if none provided
-  const defaultNavigationItems: NavigationItem[] = [
+  // Default menu items if none provided
+  const defaultMenuItems: MenuItem[] = [
     {
       label: "Search LEIAs",
       href: "/",
@@ -64,8 +64,8 @@ export const Header: React.FC<HeaderProps> = ({
     },
   ];
 
-  // Use provided navigationItems or default ones
-  const itemsToUse = navigationItems || defaultNavigationItems;
+  // Use provided menuItems or default ones
+  const itemsToUse = menuItems || defaultMenuItems;
 
   // Filter items that should be shown
   const visibleItems = showNavigation
