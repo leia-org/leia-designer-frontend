@@ -4,7 +4,7 @@ import { SwatchIcon, LightBulbIcon } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
 import { Header } from "../components/shared/Header";
-import type { Leia, Persona, Problem, Behavior } from "../models/Leia";
+import type { Leia, Persona, Problem, Behaviour } from "../models/Leia";
 
 type VersionFilter = "" | "latest";
 
@@ -60,7 +60,7 @@ export const LeiaSearch: React.FC = () => {
       const [personaResp, problemResp, behaviourResp] = await Promise.all([
         api.get<Persona>(`/api/v1/personas/${leia.spec.persona.id}`),
         api.get<Problem>(`/api/v1/problems/${leia.spec.problem.id}`),
-        api.get<Behavior>(`/api/v1/behaviours/${leia.spec.behaviour.id}`),
+        api.get<Behaviour>(`/api/v1/behaviours/${leia.spec.behaviour.id}`),
       ]);
 
       navigate("/create", {
