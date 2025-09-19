@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { LeiaCard } from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
-import type { Persona, Problem, Behavior } from "../../models/Leia";
+import type { Persona, Problem, Behaviour } from "../../models/Leia";
 
 interface SelectionColumnProps {
   title: string;
-  items: Persona[] | Behavior[] | Problem[];
-  selectedItem: Persona | Behavior | Problem | null;
-  onSelect: (item: Persona | Behavior | Problem) => void;
+  items: Persona[] | Behaviour[] | Problem[];
+  selectedItem: Persona | Behaviour | Problem | null;
+  onSelect: (item: Persona | Behaviour | Problem) => void;
   placeholder: string;
 }
 
@@ -36,7 +36,7 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
     });
   }, [items, filterValue]);
 
-  const generateItemYaml = (item: Persona | Behavior | Problem) => {
+  const generateItemYaml = (item: Persona | Behaviour | Problem) => {
     return `apiVersion: ${item.apiVersion}
 metadata:
   name: "${item.metadata.name}"
