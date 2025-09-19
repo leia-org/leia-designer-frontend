@@ -1,3 +1,11 @@
+export interface User {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Persona {
   id: string,
   apiVersion: string,
@@ -18,7 +26,7 @@ export interface Persona {
   createdAt: string,
   updatedAt: string,
   edited?: boolean,
-  userId: string
+  user: User
 }
 
 export interface Behaviour {
@@ -38,7 +46,7 @@ export interface Behaviour {
   createdAt: string,
   updatedAt: string,
   edited?: boolean,
-  userId: string
+  user: User
 }
 
 export interface Problem {
@@ -64,7 +72,7 @@ export interface Problem {
   createdAt: string,
   updatedAt: string,
   edited?: boolean,
-  userId: string
+  user: User
 }
 
 export interface Leia {
@@ -94,7 +102,7 @@ export interface Leia {
       },
       createdAt: string,
       updatedAt: string,
-      userId: string
+      user: User
     },
     problem: {
       id: string,
@@ -118,7 +126,7 @@ export interface Leia {
       },
       createdAt: string,
       updatedAt: string,
-      userId: string
+      user: User
     },
     behaviour: {
       id: string,
@@ -136,10 +144,10 @@ export interface Leia {
       },
       createdAt: string,
       updatedAt: string,
-      userId: string
+      user: User
     }
   },
   createdAt: string,
   updatedAt: string,
-  userId: string
+  user: User
 }
