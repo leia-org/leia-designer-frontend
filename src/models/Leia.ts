@@ -21,7 +21,7 @@ export interface Persona {
   userId: string
 }
 
-export interface Behavior {
+export interface Behaviour {
   id: string,
   apiVersion: string,
   metadata: {

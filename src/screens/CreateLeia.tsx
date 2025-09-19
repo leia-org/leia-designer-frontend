@@ -4,21 +4,21 @@ import { Editor } from "@monaco-editor/react";
 import { LightBulbIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
-import type { Persona, Behavior, Problem } from "../models/Leia";
+import type { Persona, Behaviour, Problem } from "../models/Leia";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
 
 interface LeiaConfig {
   persona: Persona | null;
   problem: Problem | null;
-  behaviour: Behavior | null;
+  behaviour: Behaviour | null;
 }
 
 interface Leia {
   spec: {
     persona: Persona;
     problem: Problem;
-    behaviour: Behavior;
+    behaviour: Behaviour;
   };
 }
 
@@ -26,7 +26,7 @@ interface NavigationState {
   preset?: {
     persona: Persona | null;
     problem: Problem | null;
-    behaviour: Behavior | null;
+    behaviour: Behaviour | null;
   };
   save?: {
     currentStep: WizardStep;
@@ -73,7 +73,7 @@ export const CreateLeia: React.FC = () => {
   // Estados para los datos de la API
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
-  const [behaviours, setBehaviours] = useState<Behavior[]>([]);
+  const [behaviours, setBehaviours] = useState<Behaviour[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
@@ -161,7 +161,7 @@ export const CreateLeia: React.FC = () => {
         await Promise.all([
           api.get<Persona[]>("/api/v1/personas"),
           api.get<Problem[]>("/api/v1/problems"),
-          api.get<Behavior[]>("/api/v1/behaviours"),
+          api.get<Behaviour[]>("/api/v1/behaviours"),
         ]);
 
       setPersonas(personasResponse.data);
@@ -177,7 +177,7 @@ export const CreateLeia: React.FC = () => {
 
   const handleSelect = (
     type: keyof LeiaConfig,
-    item: Persona | Behavior | Problem
+    item: Persona | Behaviour | Problem
   ) => {
     setLeiaConfig((prev) => ({
       ...prev,
@@ -484,7 +484,7 @@ export const CreateLeia: React.FC = () => {
           Step 1: Select Components
         </h2>
         <p className="text-gray-600">
-          Choose a persona, problem, and behavior for your LEIA
+          Choose a persona, problem, and behaviour for your LEIA
         </p>
       </div>
 
@@ -521,11 +521,11 @@ export const CreateLeia: React.FC = () => {
             }`}
           >
             <SelectionColumn
-              title="Behavior"
+              title="Behaviour"
               items={behaviours}
               selectedItem={leiaConfig.behaviour}
               onSelect={(item) => handleSelect("behaviour", item)}
-              placeholder="Search behaviors..."
+              placeholder="Search behaviours..."
             />
           </div>
 
@@ -579,7 +579,7 @@ export const CreateLeia: React.FC = () => {
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
-                Behavior
+                Behaviour
                 {leiaConfig.behaviour?.edited && (
                   <span className="text-xs text-gray-500 font-normal ml-2">
                     (edited)
@@ -887,7 +887,7 @@ export const CreateLeia: React.FC = () => {
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Behavior</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
             {leiaConfig.behaviour ? (
               <div className="bg-white rounded border border-gray-300 overflow-hidden">
                 <Editor
@@ -925,7 +925,7 @@ export const CreateLeia: React.FC = () => {
               </div>
             ) : (
               <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No behavior selected
+                No behaviour selected
               </div>
             )}
           </div>
@@ -1072,7 +1072,7 @@ export const CreateLeia: React.FC = () => {
         {/* Comportamiento */}
         {customizations.behaviour && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900">Behavior</h3>
+            <h3 className="font-semibold text-gray-900">Behaviour</h3>
             <div>
               <label className="block text-sm font-small text-gray-700 mb-2">
                 A new behaviour will be created with the following name:
@@ -1200,7 +1200,7 @@ export const CreateLeia: React.FC = () => {
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Behavior</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
             <p className="text-sm text-gray-600 mb-3">
               {customizations.behaviour?.name ||
                 generatedLeia?.spec.behaviour?.metadata.name ||
@@ -1246,7 +1246,7 @@ export const CreateLeia: React.FC = () => {
               </div>
             ) : (
               <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No behavior selected
+                No behaviour selected
               </div>
             )}
           </div>
@@ -1375,7 +1375,7 @@ export const CreateLeia: React.FC = () => {
                 Loading resources...
               </h3>
               <p className="text-gray-600 text-center">
-                Loading personas, problems, and behaviors from the API...
+                Loading personas, problems, and behaviours from the API...
               </p>
             </div>
           </div>

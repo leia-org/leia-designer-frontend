@@ -8,12 +8,12 @@ import {
   replacePlaceholders,
 } from './helper.js';
 
-import type { Problem, Behavior, Persona } from '../models/Leia.js';
+import type { Problem, Behaviour, Persona } from '../models/Leia.js';
 
 interface Leia {
   problem?: Problem;
   persona?: Persona;
-  behaviour?: Behavior;
+  behaviour?: Behaviour;
 }
 
 /**
