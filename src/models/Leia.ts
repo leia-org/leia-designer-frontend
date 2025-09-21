@@ -150,6 +150,7 @@ export interface Leia {
       user: User
     }
   },
+  isPublished: boolean,
   createdAt: string,
   updatedAt: string,
   user: User

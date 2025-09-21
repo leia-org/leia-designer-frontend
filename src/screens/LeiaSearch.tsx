@@ -167,6 +167,15 @@ export const LeiaSearch: React.FC = () => {
                             <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                               v{leia.metadata.version}
                             </span>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                leia.isPublished
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {leia.isPublished ? "Published" : "Unpublished"}
+                            </span>
                           </div>
                           {/* User information moved back to the right without margin */}
                           {leia.user && leia.user.email && leia.user.role && (
