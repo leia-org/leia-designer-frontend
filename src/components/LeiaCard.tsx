@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Editor, loader } from "@monaco-editor/react";
+import type { User } from "../models/Leia";
 
 // Ensure YAML language support is loaded
 loader.init().then((monaco) => {
@@ -16,16 +17,20 @@ interface LeiaCardProps {
   selected?: boolean;
   yaml?: string;
   onClick?: () => void;
+  user?: User;
+  isPublished?: boolean;
 }
 
-export const LeiaCard: React.FC<LeiaCardProps> = ({
+export default function LeiaCard({
   title,
   description,
   version,
   selected = false,
-  yaml = "",
+  yaml,
   onClick,
-}) => {
+  user,
+  isPublished = false,
+}: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
@@ -55,12 +60,39 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
         }`}
         onClick={onClick}
       >
-        <div className="flex justify-between items-start mb-3">
+        <div className="flex justify-between items-start mb-1">
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-            v{version}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+              v{version}
+            </span>
+            {user && (
+              <span
+                className={`px-2 py-1 text-xs font-medium rounded-full ${
+                  isPublished
+                    ? "bg-green-100 text-green-800"
+                    : "bg-yellow-100 text-yellow-800"
+                }`}
+              >
+                {isPublished ? "Published" : "Unpublished"}
+              </span>
+            )}
+          </div>
         </div>
+        {/* User information */}
+        {user && user.email && user.role ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+            <span>{user.email}</span>
+            <span className="flex items-center gap-1">
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  user.role === "admin" ? "bg-purple-500" : "bg-green-500"
+                }`}
+              ></span>
+              {user.role === "admin" ? "Administrator" : "Instructor"}
+            </span>
+          </div>
+        ) : null}
         <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
           {description}
         </p>
@@ -139,4 +171,4 @@ export const LeiaCard: React.FC<LeiaCardProps> = ({
       )}
     </div>
   );
-};
+}
