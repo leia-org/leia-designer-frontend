@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { LeiaCard } from "../LeiaCard";
+import LeiaCard from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
 import type { Persona, Problem, Behaviour } from "../../models/Leia";
 
@@ -73,6 +73,8 @@ spec:
                 selected={selectedItem?.id === item.id}
                 yaml={generateItemYaml(item)}
                 onClick={() => onSelect(item)}
+                user={item.user}
+                isPublished={item.isPublished}
               />
             ))
           ) : (
