@@ -234,6 +234,7 @@ export const CreateLeia: React.FC = () => {
     delete cleaned.id;
     delete cleaned.edited;
     delete cleaned.user;
+    delete cleaned.isPublished;
     if (currentStep === 2) {
       delete cleaned.metadata;
     }
@@ -324,6 +325,7 @@ export const CreateLeia: React.FC = () => {
           delete newResource.updatedAt;
           delete newResource.user;
           delete newResource.metadata.version;
+          delete newResource.isPublished;
           newResource.metadata.name =
             customizations[key as keyof LeiaConfig]?.name;
           try {
