@@ -9,6 +9,7 @@ interface SelectionColumnProps {
   selectedItem: Persona | Behaviour | Problem | null;
   onSelect: (item: Persona | Behaviour | Problem) => void;
   placeholder: string;
+  rightHeaderElement?: React.ReactNode;
 }
 
 export const SelectionColumn: React.FC<SelectionColumnProps> = ({
@@ -17,6 +18,7 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
   selectedItem,
   onSelect,
   placeholder,
+  rightHeaderElement,
 }) => {
   const [filterValue, setFilterValue] = useState("");
 
@@ -51,7 +53,10 @@ spec:
     <div className="h-full flex flex-col bg-white border-r border-gray-200">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">{title}</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          {rightHeaderElement && <div>{rightHeaderElement}</div>}
+        </div>
         <SearchFilter
           placeholder={placeholder}
           value={filterValue}

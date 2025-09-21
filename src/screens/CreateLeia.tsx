@@ -78,6 +78,17 @@ export const CreateLeia: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
 
+  // Estados para filtros de visibilidad
+  const [personaVisibility, setPersonaVisibility] = useState<
+    "all" | "public" | "private"
+  >("all");
+  const [problemVisibility, setProblemVisibility] = useState<
+    "all" | "public" | "private"
+  >("all");
+  const [behaviourVisibility, setBehaviourVisibility] = useState<
+    "all" | "public" | "private"
+  >("all");
+
   const [editingResource, setEditingResource] = useState<{
     resource: keyof LeiaConfig | null;
     content: string | null;
@@ -91,6 +102,7 @@ export const CreateLeia: React.FC = () => {
   // Cargar datos al montar el componente
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Aplicar preset si viene desde navegación
@@ -151,22 +163,56 @@ export const CreateLeia: React.FC = () => {
     }
   }, [currentStep, leiaConfig]);
 
+  const loadPersonas = async (
+    visibility: "all" | "public" | "private" = "all"
+  ) => {
+    try {
+      const response = await api.get<Persona[]>("/api/v1/personas", {
+        params: { visibility },
+      });
+      setPersonas(response.data);
+    } catch (err) {
+      console.error("Error loading personas:", err);
+    }
+  };
+
+  const loadProblems = async (
+    visibility: "all" | "public" | "private" = "all"
+  ) => {
+    try {
+      const response = await api.get<Problem[]>("/api/v1/problems", {
+        params: { visibility },
+      });
+      setProblems(response.data);
+    } catch (err) {
+      console.error("Error loading problems:", err);
+    }
+  };
+
+  const loadBehaviours = async (
+    visibility: "all" | "public" | "private" = "all"
+  ) => {
+    try {
+      const response = await api.get<Behaviour[]>("/api/v1/behaviours", {
+        params: { visibility },
+      });
+      setBehaviours(response.data);
+    } catch (err) {
+      console.error("Error loading behaviours:", err);
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Hacer las peticiones en paralelo
-      const [personasResponse, problemsResponse, behavioursResponse] =
-        await Promise.all([
-          api.get<Persona[]>("/api/v1/personas"),
-          api.get<Problem[]>("/api/v1/problems"),
-          api.get<Behaviour[]>("/api/v1/behaviours"),
-        ]);
-
-      setPersonas(personasResponse.data);
-      setProblems(problemsResponse.data);
-      setBehaviours(behavioursResponse.data);
+      // Hacer las peticiones en paralelo con los filtros de visibilidad actuales
+      await Promise.all([
+        loadPersonas(personaVisibility),
+        loadProblems(problemVisibility),
+        loadBehaviours(behaviourVisibility),
+      ]);
     } catch (err) {
       console.error("Error loading data:", err);
       setError("Failed to load data from API");
@@ -174,6 +220,44 @@ export const CreateLeia: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Funciones para manejar cambios de visibilidad
+  const handlePersonaVisibilityChange = (
+    visibility: "all" | "private" | "public"
+  ) => {
+    setPersonaVisibility(visibility);
+    loadPersonas(visibility); // Solo recargar personas
+  };
+
+  const handleProblemVisibilityChange = (
+    visibility: "all" | "private" | "public"
+  ) => {
+    setProblemVisibility(visibility);
+    loadProblems(visibility); // Solo recargar problemas
+  };
+
+  const handleBehaviourVisibilityChange = (
+    visibility: "all" | "private" | "public"
+  ) => {
+    setBehaviourVisibility(visibility);
+    loadBehaviours(visibility); // Solo recargar behaviours
+  };
+
+  // Componente para selector de visibilidad
+  const VisibilitySelector: React.FC<{
+    value: "all" | "private" | "public";
+    onChange: (value: "all" | "private" | "public") => void;
+  }> = ({ value, onChange }) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as "all" | "private" | "public")}
+      className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="all">All</option>
+      <option value="private">Private</option>
+      <option value="public">Public</option>
+    </select>
+  );
 
   const handleSelect = (
     type: keyof LeiaConfig,
@@ -528,6 +612,12 @@ export const CreateLeia: React.FC = () => {
               selectedItem={leiaConfig.behaviour}
               onSelect={(item) => handleSelect("behaviour", item)}
               placeholder="Search behaviours..."
+              rightHeaderElement={
+                <VisibilitySelector
+                  value={behaviourVisibility}
+                  onChange={handleBehaviourVisibilityChange}
+                />
+              }
             />
           </div>
 
@@ -543,6 +633,12 @@ export const CreateLeia: React.FC = () => {
               selectedItem={leiaConfig.problem}
               onSelect={(item) => handleSelect("problem", item)}
               placeholder="Search problems..."
+              rightHeaderElement={
+                <VisibilitySelector
+                  value={problemVisibility}
+                  onChange={handleProblemVisibilityChange}
+                />
+              }
             />
           </div>
 
@@ -558,6 +654,12 @@ export const CreateLeia: React.FC = () => {
               selectedItem={leiaConfig.persona}
               onSelect={(item) => handleSelect("persona", item)}
               placeholder="Search personas..."
+              rightHeaderElement={
+                <VisibilitySelector
+                  value={personaVisibility}
+                  onChange={handlePersonaVisibilityChange}
+                />
+              }
             />
           </div>
         </div>
@@ -582,10 +684,28 @@ export const CreateLeia: React.FC = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Behaviour
-                {leiaConfig.behaviour?.edited && (
+                {leiaConfig.behaviour?.edited ? (
                   <span className="text-xs text-gray-500 font-normal ml-2">
                     (edited)
                   </span>
+                ) : (
+                  leiaConfig.behaviour?.user && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                      <span>by {leiaConfig.behaviour.user.email}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            leiaConfig.behaviour.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                          }`}
+                        ></span>
+                        {leiaConfig.behaviour.user.role === "admin"
+                          ? "Administrator"
+                          : "Instructor"}
+                      </span>
+                    </div>
+                  )
                 )}
               </h3>
             </div>
@@ -644,10 +764,28 @@ export const CreateLeia: React.FC = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Problem
-                {leiaConfig.problem?.edited && (
+                {leiaConfig.problem?.edited ? (
                   <span className="text-xs text-gray-500 font-normal ml-2">
                     (edited)
                   </span>
+                ) : (
+                  leiaConfig.problem?.user && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                      <span>by {leiaConfig.problem.user.email}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            leiaConfig.problem.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                          }`}
+                        ></span>
+                        {leiaConfig.problem.user.role === "admin"
+                          ? "Administrator"
+                          : "Instructor"}
+                      </span>
+                    </div>
+                  )
                 )}
               </h3>
             </div>
@@ -706,10 +844,28 @@ export const CreateLeia: React.FC = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Persona
-                {leiaConfig.persona?.edited && (
+                {leiaConfig.persona?.edited ? (
                   <span className="text-xs text-gray-500 font-normal ml-2">
                     (edited)
                   </span>
+                ) : (
+                  leiaConfig.persona?.user && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                      <span>by {leiaConfig.persona.user.email}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            leiaConfig.persona.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                          }`}
+                        ></span>
+                        {leiaConfig.persona.user.role === "admin"
+                          ? "Administrator"
+                          : "Instructor"}
+                      </span>
+                    </div>
+                  )
                 )}
               </h3>
             </div>
