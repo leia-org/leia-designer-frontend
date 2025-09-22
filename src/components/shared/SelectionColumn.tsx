@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { LeiaCard } from "../LeiaCard";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { useAuth } from "../../context";
+import LeiaCard from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
 import type { Persona, Problem, Behaviour } from "../../models/Leia";
 
@@ -9,6 +11,7 @@ interface SelectionColumnProps {
   selectedItem: Persona | Behaviour | Problem | null;
   onSelect: (item: Persona | Behaviour | Problem) => void;
   placeholder: string;
+  rightHeaderElement?: React.ReactNode;
 }
 
 export const SelectionColumn: React.FC<SelectionColumnProps> = ({
@@ -17,8 +20,16 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
   selectedItem,
   onSelect,
   placeholder,
+  rightHeaderElement,
 }) => {
   const [filterValue, setFilterValue] = useState("");
+  const { user: currentUser } = useAuth();
+
+  // Determinar si esta columna es de behaviours
+  const isBehaviourColumn = title.toLowerCase() === "behaviour";
+
+  // Determinar si el usuario actual es instructor
+  const isCurrentUserInstructor = currentUser?.role === "instructor";
 
   const filteredItems = useMemo(() => {
     if (!filterValue.trim()) return items;
@@ -51,7 +62,17 @@ spec:
     <div className="h-full flex flex-col bg-white border-r border-gray-200">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">{title}</h2>
+        <div className="flex items-end justify-between mb-4">
+          <div className="flex items-center gap-2 h-full">
+            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            <CheckCircleIcon
+              className={`w-6 h-6 ${
+                selectedItem ? "text-green-500" : "text-gray-400"
+              }`}
+            />
+          </div>
+          {rightHeaderElement && <div>{rightHeaderElement}</div>}
+        </div>
         <SearchFilter
           placeholder={placeholder}
           value={filterValue}
@@ -73,13 +94,16 @@ spec:
                 selected={selectedItem?.id === item.id}
                 yaml={generateItemYaml(item)}
                 onClick={() => onSelect(item)}
+                user={item.user}
+                isPublished={item.isPublished}
+                hideContentForInstructor={
+                  isBehaviourColumn && isCurrentUserInstructor
+                }
               />
             ))
           ) : (
             <div className="text-center py-8 text-gray-500">
-              {filterValue
-                ? "No se encontraron resultados"
-                : "No hay elementos disponibles"}
+              {filterValue ? "No results found" : "No items available"}
             </div>
           )}
         </div>

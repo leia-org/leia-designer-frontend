@@ -4,6 +4,7 @@ import { Editor } from "@monaco-editor/react";
 import { LightBulbIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
+import { useAuth } from "../context";
 import type { Persona, Behaviour, Problem } from "../models/Leia";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
@@ -46,6 +47,7 @@ type WizardStep = 1 | 2 | 3;
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user: currentUser } = useAuth();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
     persona: null,
@@ -78,6 +80,25 @@ export const CreateLeia: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
 
+  // Estados para filtros de visibilidad
+  const [personaVisibility, setPersonaVisibility] = useState<
+    "all" | "public" | "private"
+  >("all");
+  const [problemVisibility, setProblemVisibility] = useState<
+    "all" | "public" | "private"
+  >("all");
+  const [behaviourVisibility, setBehaviourVisibility] = useState<
+    "all" | "public" | "private"
+  >("all");
+
+  // Estados para filtros de process
+  const [problemProcess, setProblemProcess] = useState<
+    "all" | "requirements-elicitation" | "game"
+  >("all");
+  const [behaviourProcess, setBehaviourProcess] = useState<
+    "all" | "requirements-elicitation" | "game"
+  >("all");
+
   const [editingResource, setEditingResource] = useState<{
     resource: keyof LeiaConfig | null;
     content: string | null;
@@ -91,6 +112,7 @@ export const CreateLeia: React.FC = () => {
   // Cargar datos al montar el componente
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Aplicar preset si viene desde navegación
@@ -151,22 +173,63 @@ export const CreateLeia: React.FC = () => {
     }
   }, [currentStep, leiaConfig]);
 
+  const loadPersonas = async (
+    visibility: "all" | "public" | "private" = "all"
+  ) => {
+    try {
+      const response = await api.get<Persona[]>("/api/v1/personas", {
+        params: { visibility },
+      });
+      setPersonas(response.data);
+    } catch (err) {
+      console.error("Error loading personas:", err);
+    }
+  };
+
+  const loadProblems = async (
+    visibility: "all" | "public" | "private" = "all",
+    process: "all" | "requirements-elicitation" | "game" = "all"
+  ) => {
+    try {
+      const params: Record<string, string> = { visibility };
+      if (process !== "all") {
+        params.process = process;
+      }
+      const response = await api.get<Problem[]>("/api/v1/problems", {
+        params,
+      });
+      setProblems(response.data);
+    } catch (err) {
+      console.error("Error loading problems:", err);
+    }
+  };
+
+  const loadBehaviours = async (
+    visibility: "all" | "public" | "private" = "all",
+    process: "all" | "requirements-elicitation" | "game" = "all"
+  ) => {
+    try {
+      const params: Record<string, string> = { visibility, process };
+      const response = await api.get<Behaviour[]>("/api/v1/behaviours", {
+        params,
+      });
+      setBehaviours(response.data);
+    } catch (err) {
+      console.error("Error loading behaviours:", err);
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Hacer las peticiones en paralelo
-      const [personasResponse, problemsResponse, behavioursResponse] =
-        await Promise.all([
-          api.get<Persona[]>("/api/v1/personas"),
-          api.get<Problem[]>("/api/v1/problems"),
-          api.get<Behaviour[]>("/api/v1/behaviours"),
-        ]);
-
-      setPersonas(personasResponse.data);
-      setProblems(problemsResponse.data);
-      setBehaviours(behavioursResponse.data);
+      // Hacer las peticiones en paralelo con los filtros de visibilidad y process actuales
+      await Promise.all([
+        loadPersonas(personaVisibility),
+        loadProblems(problemVisibility, problemProcess),
+        loadBehaviours(behaviourVisibility, behaviourProcess),
+      ]);
     } catch (err) {
       console.error("Error loading data:", err);
       setError("Failed to load data from API");
@@ -174,6 +237,87 @@ export const CreateLeia: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Funciones para manejar cambios de visibilidad
+  const handlePersonaVisibilityChange = (
+    visibility: "all" | "private" | "public"
+  ) => {
+    setPersonaVisibility(visibility);
+    loadPersonas(visibility); // Solo recargar personas
+  };
+
+  const handleProblemVisibilityChange = (
+    visibility: "all" | "private" | "public"
+  ) => {
+    setProblemVisibility(visibility);
+    loadProblems(visibility, problemProcess); // Solo recargar problemas
+  };
+
+  const handleBehaviourVisibilityChange = (
+    visibility: "all" | "private" | "public"
+  ) => {
+    setBehaviourVisibility(visibility);
+    loadBehaviours(visibility, behaviourProcess); // Solo recargar behaviours
+  };
+
+  // Funciones para manejar cambios de process
+  const handleProblemProcessChange = (
+    process: "all" | "requirements-elicitation" | "game"
+  ) => {
+    setProblemProcess(process);
+    loadProblems(problemVisibility, process); // Solo recargar problems
+  };
+
+  const handleBehaviourProcessChange = (
+    process: "all" | "requirements-elicitation" | "game"
+  ) => {
+    setBehaviourProcess(process);
+    loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
+  };
+
+  // Componente para selector de visibilidad
+  const VisibilitySelector: React.FC<{
+    value: "all" | "private" | "public";
+    onChange: (value: "all" | "private" | "public") => void;
+  }> = ({ value, onChange }) => (
+    <div className="flex flex-col items-center">
+      <label className="text-xs text-gray-600 mb-1">Visibility</label>
+      <select
+        value={value}
+        onChange={(e) =>
+          onChange(e.target.value as "all" | "private" | "public")
+        }
+        className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[70px]"
+      >
+        <option value="all">All</option>
+        <option value="private">Private</option>
+        <option value="public">Public</option>
+      </select>
+    </div>
+  );
+
+  // Componente para selector de process
+  const ProcessSelector: React.FC<{
+    value: "all" | "requirements-elicitation" | "game";
+    onChange: (value: "all" | "requirements-elicitation" | "game") => void;
+  }> = ({ value, onChange }) => (
+    <div className="flex flex-col items-center">
+      <label className="text-xs text-gray-600 mb-1">Process</label>
+      <select
+        value={value}
+        onChange={(e) =>
+          onChange(
+            e.target.value as "all" | "requirements-elicitation" | "game"
+          )
+        }
+        className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[60px] max-w-[140px]"
+      >
+        <option value="all">All</option>
+        <option value="requirements-elicitation">Req. Elicitation</option>
+        <option value="game">Game</option>
+      </select>
+    </div>
+  );
 
   const handleSelect = (
     type: keyof LeiaConfig,
@@ -234,6 +378,7 @@ export const CreateLeia: React.FC = () => {
     delete cleaned.id;
     delete cleaned.edited;
     delete cleaned.user;
+    delete cleaned.isPublished;
     if (currentStep === 2) {
       delete cleaned.metadata;
     }
@@ -324,6 +469,7 @@ export const CreateLeia: React.FC = () => {
           delete newResource.updatedAt;
           delete newResource.user;
           delete newResource.metadata.version;
+          delete newResource.isPublished;
           newResource.metadata.name =
             customizations[key as keyof LeiaConfig]?.name;
           try {
@@ -490,7 +636,7 @@ export const CreateLeia: React.FC = () => {
 
       {/* Show loading state for individual columns if data is still loading */}
       {loading && (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-3">
           {[1, 2, 3].map((index) => (
             <div
               key={index}
@@ -511,57 +657,75 @@ export const CreateLeia: React.FC = () => {
 
       {/* Show actual content when not loading */}
       {!loading && (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-3">
           {/* Columna 1: Behaviour */}
-          <div
-            className={`h-full ${
-              leiaConfig.behaviour
-                ? "ring-2 ring-green-500 ring-opacity-50"
-                : ""
-            }`}
-          >
+          <div className="h-full">
             <SelectionColumn
               title="Behaviour"
               items={behaviours}
               selectedItem={leiaConfig.behaviour}
               onSelect={(item) => handleSelect("behaviour", item)}
               placeholder="Search behaviours..."
+              rightHeaderElement={
+                <div className="flex gap-3 items-start">
+                  <VisibilitySelector
+                    value={behaviourVisibility}
+                    onChange={handleBehaviourVisibilityChange}
+                  />
+                  <ProcessSelector
+                    value={behaviourProcess}
+                    onChange={handleBehaviourProcessChange}
+                  />
+                </div>
+              }
             />
           </div>
 
           {/* Columna 2: Problem */}
-          <div
-            className={`h-full ${
-              leiaConfig.problem ? "ring-2 ring-green-500 ring-opacity-50" : ""
-            }`}
-          >
+          <div className="h-full">
             <SelectionColumn
               title="Problem"
               items={problems}
               selectedItem={leiaConfig.problem}
               onSelect={(item) => handleSelect("problem", item)}
               placeholder="Search problems..."
+              rightHeaderElement={
+                <div className="flex gap-3 items-start">
+                  <VisibilitySelector
+                    value={problemVisibility}
+                    onChange={handleProblemVisibilityChange}
+                  />
+                  <ProcessSelector
+                    value={problemProcess}
+                    onChange={handleProblemProcessChange}
+                  />
+                </div>
+              }
             />
           </div>
 
           {/* Columna 3: Persona */}
-          <div
-            className={`h-full ${
-              leiaConfig.persona ? "ring-2 ring-green-500 ring-opacity-50" : ""
-            }`}
-          >
+          <div className="h-full">
             <SelectionColumn
               title="Persona"
               items={personas}
               selectedItem={leiaConfig.persona}
               onSelect={(item) => handleSelect("persona", item)}
               placeholder="Search personas..."
+              rightHeaderElement={
+                <VisibilitySelector
+                  value={personaVisibility}
+                  onChange={handlePersonaVisibilityChange}
+                />
+              }
             />
           </div>
         </div>
       )}
     </div>
   );
+
+  const isCurrentUserInstructor = currentUser?.role === "instructor";
 
   const renderStep2 = () => (
     <div className="space-y-6">
@@ -573,62 +737,99 @@ export const CreateLeia: React.FC = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-6 h-full">
         {/* Columna 1: Behaviour */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="space-y-4 flex flex-col">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Behaviour
-                {leiaConfig.behaviour?.edited && (
+                {leiaConfig.behaviour?.edited ? (
                   <span className="text-xs text-gray-500 font-normal ml-2">
                     (edited)
                   </span>
+                ) : (
+                  leiaConfig.behaviour?.user && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                      <span>by {leiaConfig.behaviour.user.email}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            leiaConfig.behaviour.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                          }`}
+                        ></span>
+                        {leiaConfig.behaviour.user.role === "admin"
+                          ? "Administrator"
+                          : "Instructor"}
+                      </span>
+                    </div>
+                  )
                 )}
               </h3>
             </div>
             {leiaConfig.behaviour ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                  <p className="text-xs text-gray-600 mt-1 line-clamp-3">
-                    {leiaConfig.behaviour.spec.description}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  {leiaConfig.behaviour?.edited && (
-                    <button
-                      onClick={() =>
-                        setLeiaConfig((prev) => ({
-                          ...prev,
-                          behaviour:
-                            structuredClone(leiaConfigSnapShot?.behaviour) ||
-                            null,
-                        }))
-                      }
-                      className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
-                    >
-                      Reset
-                    </button>
-                  )}
-                  <button
-                    onClick={() =>
-                      setEditingResource({
-                        resource: "behaviour",
-                        content: JSON.stringify(
-                          leiaConfig.behaviour?.spec,
-                          null,
-                          2
-                        ),
-                        apiVersion: leiaConfig.behaviour?.apiVersion || "v1",
-                      })
-                    }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                      leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
-                    }`}
-                  >
-                    Edit
-                  </button>
-                </div>
+              <div className="space-y-3 flex-1 flex flex-col">
+                {!isCurrentUserInstructor ? (
+                  <>
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1">
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-3">
+                        {leiaConfig.behaviour.spec.description}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {leiaConfig.behaviour?.edited && (
+                        <button
+                          onClick={() =>
+                            setLeiaConfig((prev) => ({
+                              ...prev,
+                              behaviour:
+                                structuredClone(
+                                  leiaConfigSnapShot?.behaviour
+                                ) || null,
+                            }))
+                          }
+                          className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <button
+                        onClick={() =>
+                          setEditingResource({
+                            resource: "behaviour",
+                            content: JSON.stringify(
+                              leiaConfig.behaviour?.spec,
+                              null,
+                              2
+                            ),
+                            apiVersion:
+                              leiaConfig.behaviour?.apiVersion || "v1",
+                          })
+                        }
+                        className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
+                          leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
+                        }`}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1 flex items-center justify-center">
+                      <p className="text-xs text-gray-500 italic">
+                        Not enough permissions to edit this resource
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="w-full px-4 py-2 bg-gray-300 text-gray-500 rounded-lg text-sm text-center cursor-not-allowed">
+                        Edit
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <p className="text-sm text-gray-500">Not selected</p>
@@ -637,15 +838,33 @@ export const CreateLeia: React.FC = () => {
         </div>
 
         {/* Columna 2: Problem */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="space-y-4 flex flex-col">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Problem
-                {leiaConfig.problem?.edited && (
+                {leiaConfig.problem?.edited ? (
                   <span className="text-xs text-gray-500 font-normal ml-2">
                     (edited)
                   </span>
+                ) : (
+                  leiaConfig.problem?.user && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                      <span>by {leiaConfig.problem.user.email}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            leiaConfig.problem.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                          }`}
+                        ></span>
+                        {leiaConfig.problem.user.role === "admin"
+                          ? "Administrator"
+                          : "Instructor"}
+                      </span>
+                    </div>
+                  )
                 )}
               </h3>
             </div>
@@ -699,15 +918,33 @@ export const CreateLeia: React.FC = () => {
         </div>
 
         {/* Columna 3: Persona */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="space-y-4 flex flex-col">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Persona
-                {leiaConfig.persona?.edited && (
+                {leiaConfig.persona?.edited ? (
                   <span className="text-xs text-gray-500 font-normal ml-2">
                     (edited)
                   </span>
+                ) : (
+                  leiaConfig.persona?.user && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                      <span>by {leiaConfig.persona.user.email}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            leiaConfig.persona.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                          }`}
+                        ></span>
+                        {leiaConfig.persona.user.role === "admin"
+                          ? "Administrator"
+                          : "Instructor"}
+                      </span>
+                    </div>
+                  )
                 )}
               </h3>
             </div>
@@ -885,50 +1122,56 @@ export const CreateLeia: React.FC = () => {
             )}
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
-            {leiaConfig.behaviour ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(generatedLeia?.spec.behaviour),
-                    null,
-                    2
-                  )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No behaviour selected
-              </div>
-            )}
-          </div>
+        <div
+          className={`grid ${
+            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+          } gap-4`}
+        >
+          {!isCurrentUserInstructor && (
+            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
+              {leiaConfig.behaviour ? (
+                <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                  <Editor
+                    height="150px"
+                    language="json"
+                    theme="vs-light"
+                    value={JSON.stringify(
+                      cleanObjectForPreview(generatedLeia?.spec.behaviour),
+                      null,
+                      2
+                    )}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 11,
+                      lineNumbers: "off",
+                      glyphMargin: false,
+                      folding: false,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 0,
+                      automaticLayout: true,
+                      contextmenu: false,
+                      scrollbar: {
+                        vertical: "auto",
+                        horizontal: "auto",
+                        handleMouseWheel: true,
+                      },
+                      overviewRulerLanes: 0,
+                      hideCursorInOverviewRuler: true,
+                      overviewRulerBorder: false,
+                      wordWrap: "on",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                  No behaviour selected
+                </div>
+              )}
+            </div>
+          )}
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
             {leiaConfig.problem ? (
@@ -1068,9 +1311,13 @@ export const CreateLeia: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-6">
+      <div
+        className={`grid gap-6 ${
+          isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+        }`}
+      >
         {/* Comportamiento */}
-        {customizations.behaviour && (
+        {customizations.behaviour && !isCurrentUserInstructor && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900">Behaviour</h3>
             <div>
@@ -1198,58 +1445,64 @@ export const CreateLeia: React.FC = () => {
         <div className="flex flex-row w-full mb-4">
           <h3 className="text-lg w-full font-semibold">Final LEIA Preview</h3>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
-            <p className="text-sm text-gray-600 mb-3">
-              {customizations.behaviour?.name ||
-                generatedLeia?.spec.behaviour?.metadata.name ||
-                "Not selected"}
-            </p>
-            {generatedLeia?.spec.behaviour ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(
-                      generatedLeia?.spec.behaviour,
-                      "behaviour"
-                    ),
-                    null,
-                    2
-                  )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No behaviour selected
-              </div>
-            )}
-          </div>
+        <div
+          className={`grid gap-4 ${
+            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+          }`}
+        >
+          {!isCurrentUserInstructor && (
+            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
+              <p className="text-sm text-gray-600 mb-3">
+                {customizations.behaviour?.name ||
+                  generatedLeia?.spec.behaviour?.metadata.name ||
+                  "Not selected"}
+              </p>
+              {generatedLeia?.spec.behaviour ? (
+                <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                  <Editor
+                    height="150px"
+                    language="json"
+                    theme="vs-light"
+                    value={JSON.stringify(
+                      cleanObjectForPreview(
+                        generatedLeia?.spec.behaviour,
+                        "behaviour"
+                      ),
+                      null,
+                      2
+                    )}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 11,
+                      lineNumbers: "off",
+                      glyphMargin: false,
+                      folding: false,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 0,
+                      automaticLayout: true,
+                      contextmenu: false,
+                      scrollbar: {
+                        vertical: "auto",
+                        horizontal: "auto",
+                        handleMouseWheel: true,
+                      },
+                      overviewRulerLanes: 0,
+                      hideCursorInOverviewRuler: true,
+                      overviewRulerBorder: false,
+                      wordWrap: "on",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                  No behaviour selected
+                </div>
+              )}
+            </div>
+          )}
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
             <p className="text-sm text-gray-600 mb-3">

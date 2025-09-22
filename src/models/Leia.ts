@@ -23,6 +23,7 @@ export interface Persona {
     possesivePronoum: string,
     possesiveAdjective: string
   },
+  isPublished: boolean,
   createdAt: string,
   updatedAt: string,
   edited?: boolean,
@@ -43,6 +44,7 @@ export interface Behaviour {
       string
     ]
   },
+  isPublished: boolean,
   createdAt: string,
   updatedAt: string,
   edited?: boolean,
@@ -69,6 +71,7 @@ export interface Problem {
     overrides: object,
     constrainedTo: object
   },
+  isPublished: boolean,
   createdAt: string,
   updatedAt: string,
   edited?: boolean,
@@ -147,6 +150,7 @@ export interface Leia {
       user: User
     }
   },
+  isPublished: boolean,
   createdAt: string,
   updatedAt: string,
   user: User

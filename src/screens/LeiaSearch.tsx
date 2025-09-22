@@ -13,6 +13,9 @@ export const LeiaSearch: React.FC = () => {
 
   const [queryText, setQueryText] = useState("");
   const [versionFilter, setVersionFilter] = useState<VersionFilter>("latest");
+  const [visibilityFilter, setVisibilityFilter] = useState<
+    "all" | "private" | "public"
+  >("all");
   const [leias, setLeias] = useState<Leia[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +25,9 @@ export const LeiaSearch: React.FC = () => {
     const p: Record<string, string> = {};
     if (queryText.trim()) p.text = queryText.trim();
     if (versionFilter) p.version = versionFilter;
+    if (visibilityFilter !== "all") p.visibility = visibilityFilter;
     return p;
-  }, [queryText, versionFilter]);
+  }, [queryText, versionFilter, visibilityFilter]);
 
   useEffect(() => {
     let active = true;
@@ -113,20 +117,40 @@ export const LeiaSearch: React.FC = () => {
               className="max-w-xl"
             />
           </div>
-          <div className="min-w-[180px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Version
-            </label>
-            <select
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              value={versionFilter}
-              onChange={(e) =>
-                setVersionFilter(e.target.value as VersionFilter)
-              }
-            >
-              <option value="latest">Latest only</option>
-              <option value="">All</option>
-            </select>
+          <div className="flex gap-4">
+            <div className="min-w-[140px]">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Visibility
+              </label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                value={visibilityFilter}
+                onChange={(e) =>
+                  setVisibilityFilter(
+                    e.target.value as "all" | "private" | "public"
+                  )
+                }
+              >
+                <option value="all">All</option>
+                <option value="private">Private</option>
+                <option value="public">Public</option>
+              </select>
+            </div>
+            <div className="min-w-[180px]">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Version
+              </label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                value={versionFilter}
+                onChange={(e) =>
+                  setVersionFilter(e.target.value as VersionFilter)
+                }
+              >
+                <option value="latest">Latest only</option>
+                <option value="">All</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -166,6 +190,15 @@ export const LeiaSearch: React.FC = () => {
                             </h3>
                             <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                               v{leia.metadata.version}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                leia.isPublished
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {leia.isPublished ? "Published" : "Unpublished"}
                             </span>
                           </div>
                           {/* User information moved back to the right without margin */}
