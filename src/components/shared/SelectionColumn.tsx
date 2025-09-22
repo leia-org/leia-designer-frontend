@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { useAuth } from "../../context";
 import LeiaCard from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
 import type { Persona, Problem, Behaviour } from "../../models/Leia";
@@ -22,6 +23,13 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
   rightHeaderElement,
 }) => {
   const [filterValue, setFilterValue] = useState("");
+  const { user: currentUser } = useAuth();
+
+  // Determinar si esta columna es de behaviours
+  const isBehaviourColumn = title.toLowerCase() === "behaviour";
+
+  // Determinar si el usuario actual es instructor
+  const isCurrentUserInstructor = currentUser?.role === "instructor";
 
   const filteredItems = useMemo(() => {
     if (!filterValue.trim()) return items;
@@ -88,6 +96,9 @@ spec:
                 onClick={() => onSelect(item)}
                 user={item.user}
                 isPublished={item.isPublished}
+                hideContentForInstructor={
+                  isBehaviourColumn && isCurrentUserInstructor
+                }
               />
             ))
           ) : (

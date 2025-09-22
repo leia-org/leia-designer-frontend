@@ -4,6 +4,7 @@ import { Editor } from "@monaco-editor/react";
 import { LightBulbIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
+import { useAuth } from "../context";
 import type { Persona, Behaviour, Problem } from "../models/Leia";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
@@ -46,6 +47,7 @@ type WizardStep = 1 | 2 | 3;
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user: currentUser } = useAuth();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
     persona: null,
@@ -723,6 +725,8 @@ export const CreateLeia: React.FC = () => {
     </div>
   );
 
+  const isCurrentUserInstructor = currentUser?.role === "instructor";
+
   const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center mb-8">
@@ -733,10 +737,10 @@ export const CreateLeia: React.FC = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-6 h-full">
         {/* Columna 1: Behaviour */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="space-y-4 flex flex-col">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Behaviour
@@ -766,47 +770,66 @@ export const CreateLeia: React.FC = () => {
               </h3>
             </div>
             {leiaConfig.behaviour ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                  <p className="text-xs text-gray-600 mt-1 line-clamp-3">
-                    {leiaConfig.behaviour.spec.description}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  {leiaConfig.behaviour?.edited && (
-                    <button
-                      onClick={() =>
-                        setLeiaConfig((prev) => ({
-                          ...prev,
-                          behaviour:
-                            structuredClone(leiaConfigSnapShot?.behaviour) ||
-                            null,
-                        }))
-                      }
-                      className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
-                    >
-                      Reset
-                    </button>
-                  )}
-                  <button
-                    onClick={() =>
-                      setEditingResource({
-                        resource: "behaviour",
-                        content: JSON.stringify(
-                          leiaConfig.behaviour?.spec,
-                          null,
-                          2
-                        ),
-                        apiVersion: leiaConfig.behaviour?.apiVersion || "v1",
-                      })
-                    }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                      leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
-                    }`}
-                  >
-                    Edit
-                  </button>
-                </div>
+              <div className="space-y-3 flex-1 flex flex-col">
+                {!isCurrentUserInstructor ? (
+                  <>
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1">
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-3">
+                        {leiaConfig.behaviour.spec.description}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {leiaConfig.behaviour?.edited && (
+                        <button
+                          onClick={() =>
+                            setLeiaConfig((prev) => ({
+                              ...prev,
+                              behaviour:
+                                structuredClone(
+                                  leiaConfigSnapShot?.behaviour
+                                ) || null,
+                            }))
+                          }
+                          className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <button
+                        onClick={() =>
+                          setEditingResource({
+                            resource: "behaviour",
+                            content: JSON.stringify(
+                              leiaConfig.behaviour?.spec,
+                              null,
+                              2
+                            ),
+                            apiVersion:
+                              leiaConfig.behaviour?.apiVersion || "v1",
+                          })
+                        }
+                        className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
+                          leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
+                        }`}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1 flex items-center justify-center">
+                      <p className="text-xs text-gray-500 italic">
+                        Not enough permissions to edit this resource
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="w-full px-4 py-2 bg-gray-300 text-gray-500 rounded-lg text-sm text-center cursor-not-allowed">
+                        Edit
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <p className="text-sm text-gray-500">Not selected</p>
@@ -815,8 +838,8 @@ export const CreateLeia: React.FC = () => {
         </div>
 
         {/* Columna 2: Problem */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="space-y-4 flex flex-col">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Problem
@@ -895,8 +918,8 @@ export const CreateLeia: React.FC = () => {
         </div>
 
         {/* Columna 3: Persona */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="space-y-4 flex flex-col">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">
                 Persona
@@ -1099,50 +1122,56 @@ export const CreateLeia: React.FC = () => {
             )}
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
-            {leiaConfig.behaviour ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(generatedLeia?.spec.behaviour),
-                    null,
-                    2
-                  )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No behaviour selected
-              </div>
-            )}
-          </div>
+        <div
+          className={`grid ${
+            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+          } gap-4`}
+        >
+          {!isCurrentUserInstructor && (
+            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
+              {leiaConfig.behaviour ? (
+                <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                  <Editor
+                    height="150px"
+                    language="json"
+                    theme="vs-light"
+                    value={JSON.stringify(
+                      cleanObjectForPreview(generatedLeia?.spec.behaviour),
+                      null,
+                      2
+                    )}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 11,
+                      lineNumbers: "off",
+                      glyphMargin: false,
+                      folding: false,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 0,
+                      automaticLayout: true,
+                      contextmenu: false,
+                      scrollbar: {
+                        vertical: "auto",
+                        horizontal: "auto",
+                        handleMouseWheel: true,
+                      },
+                      overviewRulerLanes: 0,
+                      hideCursorInOverviewRuler: true,
+                      overviewRulerBorder: false,
+                      wordWrap: "on",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                  No behaviour selected
+                </div>
+              )}
+            </div>
+          )}
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
             {leiaConfig.problem ? (
@@ -1282,9 +1311,13 @@ export const CreateLeia: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-6">
+      <div
+        className={`grid gap-6 ${
+          isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+        }`}
+      >
         {/* Comportamiento */}
-        {customizations.behaviour && (
+        {customizations.behaviour && !isCurrentUserInstructor && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900">Behaviour</h3>
             <div>
@@ -1412,58 +1445,64 @@ export const CreateLeia: React.FC = () => {
         <div className="flex flex-row w-full mb-4">
           <h3 className="text-lg w-full font-semibold">Final LEIA Preview</h3>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
-            <p className="text-sm text-gray-600 mb-3">
-              {customizations.behaviour?.name ||
-                generatedLeia?.spec.behaviour?.metadata.name ||
-                "Not selected"}
-            </p>
-            {generatedLeia?.spec.behaviour ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(
-                      generatedLeia?.spec.behaviour,
-                      "behaviour"
-                    ),
-                    null,
-                    2
-                  )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No behaviour selected
-              </div>
-            )}
-          </div>
+        <div
+          className={`grid gap-4 ${
+            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+          }`}
+        >
+          {!isCurrentUserInstructor && (
+            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
+              <p className="text-sm text-gray-600 mb-3">
+                {customizations.behaviour?.name ||
+                  generatedLeia?.spec.behaviour?.metadata.name ||
+                  "Not selected"}
+              </p>
+              {generatedLeia?.spec.behaviour ? (
+                <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                  <Editor
+                    height="150px"
+                    language="json"
+                    theme="vs-light"
+                    value={JSON.stringify(
+                      cleanObjectForPreview(
+                        generatedLeia?.spec.behaviour,
+                        "behaviour"
+                      ),
+                      null,
+                      2
+                    )}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 11,
+                      lineNumbers: "off",
+                      glyphMargin: false,
+                      folding: false,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 0,
+                      automaticLayout: true,
+                      contextmenu: false,
+                      scrollbar: {
+                        vertical: "auto",
+                        horizontal: "auto",
+                        handleMouseWheel: true,
+                      },
+                      overviewRulerLanes: 0,
+                      hideCursorInOverviewRuler: true,
+                      overviewRulerBorder: false,
+                      wordWrap: "on",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                  No behaviour selected
+                </div>
+              )}
+            </div>
+          )}
           <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
             <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
             <p className="text-sm text-gray-600 mb-3">
