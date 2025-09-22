@@ -19,6 +19,7 @@ interface LeiaCardProps {
   onClick?: () => void;
   user?: User;
   isPublished?: boolean;
+  hideContentForInstructor?: boolean;
 }
 
 export default function LeiaCard({
@@ -30,6 +31,7 @@ export default function LeiaCard({
   onClick,
   user,
   isPublished = false,
+  hideContentForInstructor = false,
 }: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -49,7 +51,7 @@ export default function LeiaCard({
     <div
       ref={cardRef}
       className="relative"
-      onMouseEnter={() => setShowPopup(true)}
+      onMouseEnter={() => !hideContentForInstructor && setShowPopup(true)}
       onMouseLeave={() => setShowPopup(false)}
     >
       <div
@@ -93,9 +95,11 @@ export default function LeiaCard({
             </span>
           </div>
         ) : null}
-        <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
-          {description}
-        </p>
+        {!hideContentForInstructor && (
+          <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
+            {description}
+          </p>
+        )}
         {selected && (
           <div className="mt-3 flex items-center text-blue-600 text-sm font-medium">
             <svg
@@ -109,13 +113,13 @@ export default function LeiaCard({
                 clipRule="evenodd"
               />
             </svg>
-            Seleccionado
+            Selected
           </div>
         )}
       </div>
 
       {/* Popup de YAML con Monaco Editor */}
-      {showPopup && yaml && (
+      {showPopup && yaml && !hideContentForInstructor && (
         <div
           className="fixed z-[9999] transition-opacity duration-200"
           style={{
