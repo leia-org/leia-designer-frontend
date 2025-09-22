@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import LeiaCard from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
 import type { Persona, Problem, Behaviour } from "../../models/Leia";
@@ -53,8 +54,15 @@ spec:
     <div className="h-full flex flex-col bg-white border-r border-gray-200">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-end justify-between mb-4">
+          <div className="flex items-center gap-2 h-full">
+            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            <CheckCircleIcon
+              className={`w-6 h-6 ${
+                selectedItem ? "text-green-500" : "text-gray-400"
+              }`}
+            />
+          </div>
           {rightHeaderElement && <div>{rightHeaderElement}</div>}
         </div>
         <SearchFilter
@@ -84,9 +92,7 @@ spec:
             ))
           ) : (
             <div className="text-center py-8 text-gray-500">
-              {filterValue
-                ? "No se encontraron resultados"
-                : "No hay elementos disponibles"}
+              {filterValue ? "No results found" : "No items available"}
             </div>
           )}
         </div>

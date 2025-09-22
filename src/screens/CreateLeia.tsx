@@ -89,6 +89,14 @@ export const CreateLeia: React.FC = () => {
     "all" | "public" | "private"
   >("all");
 
+  // Estados para filtros de process
+  const [problemProcess, setProblemProcess] = useState<
+    "all" | "requirements-elicitation" | "game"
+  >("all");
+  const [behaviourProcess, setBehaviourProcess] = useState<
+    "all" | "requirements-elicitation" | "game"
+  >("all");
+
   const [editingResource, setEditingResource] = useState<{
     resource: keyof LeiaConfig | null;
     content: string | null;
@@ -177,11 +185,16 @@ export const CreateLeia: React.FC = () => {
   };
 
   const loadProblems = async (
-    visibility: "all" | "public" | "private" = "all"
+    visibility: "all" | "public" | "private" = "all",
+    process: "all" | "requirements-elicitation" | "game" = "all"
   ) => {
     try {
+      const params: Record<string, string> = { visibility };
+      if (process !== "all") {
+        params.process = process;
+      }
       const response = await api.get<Problem[]>("/api/v1/problems", {
-        params: { visibility },
+        params,
       });
       setProblems(response.data);
     } catch (err) {
@@ -190,11 +203,13 @@ export const CreateLeia: React.FC = () => {
   };
 
   const loadBehaviours = async (
-    visibility: "all" | "public" | "private" = "all"
+    visibility: "all" | "public" | "private" = "all",
+    process: "all" | "requirements-elicitation" | "game" = "all"
   ) => {
     try {
+      const params: Record<string, string> = { visibility, process };
       const response = await api.get<Behaviour[]>("/api/v1/behaviours", {
-        params: { visibility },
+        params,
       });
       setBehaviours(response.data);
     } catch (err) {
@@ -207,11 +222,11 @@ export const CreateLeia: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Hacer las peticiones en paralelo con los filtros de visibilidad actuales
+      // Hacer las peticiones en paralelo con los filtros de visibilidad y process actuales
       await Promise.all([
         loadPersonas(personaVisibility),
-        loadProblems(problemVisibility),
-        loadBehaviours(behaviourVisibility),
+        loadProblems(problemVisibility, problemProcess),
+        loadBehaviours(behaviourVisibility, behaviourProcess),
       ]);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -233,14 +248,29 @@ export const CreateLeia: React.FC = () => {
     visibility: "all" | "private" | "public"
   ) => {
     setProblemVisibility(visibility);
-    loadProblems(visibility); // Solo recargar problemas
+    loadProblems(visibility, problemProcess); // Solo recargar problemas
   };
 
   const handleBehaviourVisibilityChange = (
     visibility: "all" | "private" | "public"
   ) => {
     setBehaviourVisibility(visibility);
-    loadBehaviours(visibility); // Solo recargar behaviours
+    loadBehaviours(visibility, behaviourProcess); // Solo recargar behaviours
+  };
+
+  // Funciones para manejar cambios de process
+  const handleProblemProcessChange = (
+    process: "all" | "requirements-elicitation" | "game"
+  ) => {
+    setProblemProcess(process);
+    loadProblems(problemVisibility, process); // Solo recargar problems
+  };
+
+  const handleBehaviourProcessChange = (
+    process: "all" | "requirements-elicitation" | "game"
+  ) => {
+    setBehaviourProcess(process);
+    loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
   };
 
   // Componente para selector de visibilidad
@@ -248,15 +278,43 @@ export const CreateLeia: React.FC = () => {
     value: "all" | "private" | "public";
     onChange: (value: "all" | "private" | "public") => void;
   }> = ({ value, onChange }) => (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as "all" | "private" | "public")}
-      className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <option value="all">All</option>
-      <option value="private">Private</option>
-      <option value="public">Public</option>
-    </select>
+    <div className="flex flex-col items-center">
+      <label className="text-xs text-gray-600 mb-1">Visibility</label>
+      <select
+        value={value}
+        onChange={(e) =>
+          onChange(e.target.value as "all" | "private" | "public")
+        }
+        className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[70px]"
+      >
+        <option value="all">All</option>
+        <option value="private">Private</option>
+        <option value="public">Public</option>
+      </select>
+    </div>
+  );
+
+  // Componente para selector de process
+  const ProcessSelector: React.FC<{
+    value: "all" | "requirements-elicitation" | "game";
+    onChange: (value: "all" | "requirements-elicitation" | "game") => void;
+  }> = ({ value, onChange }) => (
+    <div className="flex flex-col items-center">
+      <label className="text-xs text-gray-600 mb-1">Process</label>
+      <select
+        value={value}
+        onChange={(e) =>
+          onChange(
+            e.target.value as "all" | "requirements-elicitation" | "game"
+          )
+        }
+        className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[60px] max-w-[140px]"
+      >
+        <option value="all">All</option>
+        <option value="requirements-elicitation">Req. Elicitation</option>
+        <option value="game">Game</option>
+      </select>
+    </div>
   );
 
   const handleSelect = (
@@ -576,7 +634,7 @@ export const CreateLeia: React.FC = () => {
 
       {/* Show loading state for individual columns if data is still loading */}
       {loading && (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-3">
           {[1, 2, 3].map((index) => (
             <div
               key={index}
@@ -597,15 +655,9 @@ export const CreateLeia: React.FC = () => {
 
       {/* Show actual content when not loading */}
       {!loading && (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-3">
           {/* Columna 1: Behaviour */}
-          <div
-            className={`h-full ${
-              leiaConfig.behaviour
-                ? "ring-2 ring-green-500 ring-opacity-50"
-                : ""
-            }`}
-          >
+          <div className="h-full">
             <SelectionColumn
               title="Behaviour"
               items={behaviours}
@@ -613,20 +665,22 @@ export const CreateLeia: React.FC = () => {
               onSelect={(item) => handleSelect("behaviour", item)}
               placeholder="Search behaviours..."
               rightHeaderElement={
-                <VisibilitySelector
-                  value={behaviourVisibility}
-                  onChange={handleBehaviourVisibilityChange}
-                />
+                <div className="flex gap-3 items-start">
+                  <VisibilitySelector
+                    value={behaviourVisibility}
+                    onChange={handleBehaviourVisibilityChange}
+                  />
+                  <ProcessSelector
+                    value={behaviourProcess}
+                    onChange={handleBehaviourProcessChange}
+                  />
+                </div>
               }
             />
           </div>
 
           {/* Columna 2: Problem */}
-          <div
-            className={`h-full ${
-              leiaConfig.problem ? "ring-2 ring-green-500 ring-opacity-50" : ""
-            }`}
-          >
+          <div className="h-full">
             <SelectionColumn
               title="Problem"
               items={problems}
@@ -634,20 +688,22 @@ export const CreateLeia: React.FC = () => {
               onSelect={(item) => handleSelect("problem", item)}
               placeholder="Search problems..."
               rightHeaderElement={
-                <VisibilitySelector
-                  value={problemVisibility}
-                  onChange={handleProblemVisibilityChange}
-                />
+                <div className="flex gap-3 items-start">
+                  <VisibilitySelector
+                    value={problemVisibility}
+                    onChange={handleProblemVisibilityChange}
+                  />
+                  <ProcessSelector
+                    value={problemProcess}
+                    onChange={handleProblemProcessChange}
+                  />
+                </div>
               }
             />
           </div>
 
           {/* Columna 3: Persona */}
-          <div
-            className={`h-full ${
-              leiaConfig.persona ? "ring-2 ring-green-500 ring-opacity-50" : ""
-            }`}
-          >
+          <div className="h-full">
             <SelectionColumn
               title="Persona"
               items={personas}
