@@ -153,7 +153,7 @@ export const Chat = () => {
   return (
     <div className="flex flex-col h-screen bg-white">
       <Header
-        title="LEIA Chat"
+        title="Chat"
         description="Test and interact with a LEIA configuration"
         showNavigation={false}
         rightContent={

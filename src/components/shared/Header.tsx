@@ -93,9 +93,9 @@ export const Header: React.FC<HeaderProps> = ({
     <div className="bg-white border-b border-gray-200">
       <div className="mx-auto px-6 py-6 flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1">
-          <img 
-            src="/Logo.png" 
-            alt="Logo" 
+          <img
+            src="/logo/leia_puzzle_clear.png"
+            alt="LEIA Logo"
             className="h-10 w-auto"
           />
           <div className="flex items-baseline gap-4">

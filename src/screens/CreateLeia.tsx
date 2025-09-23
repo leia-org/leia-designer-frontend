@@ -1615,7 +1615,7 @@ export const CreateLeia: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
         <Header
-          title="LEIA Designer"
+          title="Designer"
           description="Create your own LEIAs and test them!"
         />
 
@@ -1642,7 +1642,7 @@ export const CreateLeia: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
         <Header
-          title="LEIA Designer"
+          title="Designer"
           description="Create your own LEIAs and test them!"
         />
 
@@ -1698,7 +1698,7 @@ export const CreateLeia: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header
-        title="LEIA Designer"
+        title="Designer"
         description="Create your own LEIAs and test them!"
       />
 
