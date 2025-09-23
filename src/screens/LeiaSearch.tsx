@@ -103,7 +103,7 @@ export const LeiaSearch: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-white">
       <Header
-        title="LEIA Search"
+        title="Search"
         description="Discover and test existing LEIA configurations"
       />
 
