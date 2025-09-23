@@ -1,10 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  UserCircleIcon,
-  EyeIcon,
-  EyeSlashIcon,
-} from "@heroicons/react/24/solid";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import axios from "axios";
 import { useAuth } from "../context";
 
@@ -83,12 +79,14 @@ export const Login = () => {
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center transform rotate-12 shadow-lg">
-              <UserCircleIcon className="w-10 h-10 text-white transform -rotate-12" />
+              <img
+                src="/logo/leia_main_white.png"
+                alt="LEIA Logo"
+                className="w-10 h-10 transform -rotate-12"
+              />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            LEIA – Designer
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Designer</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
