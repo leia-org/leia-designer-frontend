@@ -246,7 +246,13 @@ export const LeiaSearch: React.FC = () => {
                           disabled={initializingId === leia.id}
                         >
                           <LightBulbIcon className="w-4 h-4 flex-shrink-0" />
-                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                          <span
+                            className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
+                              initializingId === leia.id
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
+                          >
                             {initializingId === leia.id ? "Starting…" : "Try"}
                           </span>
                         </button>

@@ -78,6 +78,7 @@ export const CreateLeia: React.FC = () => {
   const [behaviours, setBehaviours] = useState<Behaviour[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<Error | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
 
   // Estados para filtros de visibilidad
@@ -164,12 +165,22 @@ export const CreateLeia: React.FC = () => {
       leiaConfig.behaviour &&
       leiaConfig.problem
     ) {
-      const leia = generateLeia(
-        leiaConfig.persona,
-        leiaConfig.behaviour,
-        leiaConfig.problem
-      );
-      setGeneratedLeia(leia as Leia);
+      try {
+        setGenerationError(null);
+        const leia = generateLeia(
+          leiaConfig.persona,
+          leiaConfig.behaviour,
+          leiaConfig.problem
+        );
+        setGeneratedLeia(leia as Leia);
+      } catch (err: unknown) {
+        const error =
+          err instanceof Error
+            ? err
+            : new Error("Unknown error occurred while generating LEIA");
+        setGenerationError(error);
+        setGeneratedLeia(null);
+      }
     }
   }, [currentStep, leiaConfig]);
 
@@ -538,7 +549,7 @@ export const CreateLeia: React.FC = () => {
 
   const isStep1Complete =
     leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour;
-  const isStep2Complete = true;
+  const isStep2Complete = !generationError && generatedLeia;
   const isStep3Complete = (() => {
     const customizationsValid = Object.values(customizations).every(
       (resource) => {
@@ -1098,46 +1109,104 @@ export const CreateLeia: React.FC = () => {
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Real-time Preview</h3>
-          <button
-            onClick={handleTestLeia}
-            disabled={testingLeia}
-            className={`group relative px-2.5 py-2 rounded-lg transition-all duration-300 flex items-center gap-2 overflow-hidden text-white ${
-              testingLeia
-                ? "bg-gray-400 cursor-not-allowed w-32"
-                : "bg-green-600 hover:bg-green-700 w-10 hover:w-22"
-            }`}
-          >
-            {testingLeia ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0"></div>
-                <span className="whitespace-nowrap">Testing...</span>
-              </>
-            ) : (
-              <>
+          {(() => {
+            if (!generatedLeia) {
+              return (
+                <button
+                  disabled
+                  className="px-2.5 py-2 rounded-lg bg-gray-300 text-gray-500 cursor-not-allowed transition-all duration-300 flex items-center gap-2"
+                >
+                  <LightBulbIcon className="w-5 h-5" />
+                </button>
+              );
+            }
+
+            if (testingLeia) {
+              return (
+                <button
+                  disabled
+                  className="px-4 py-2 rounded-lg bg-blue-500 text-white cursor-wait transition-all duration-300 flex items-center gap-2"
+                >
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Starting...</span>
+                </button>
+              );
+            }
+
+            return (
+              <button
+                onClick={handleTestLeia}
+                className="group relative px-2.5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all duration-300 flex items-center gap-2 overflow-hidden w-10 hover:w-22"
+              >
                 <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
                 <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
                   Try
                 </span>
-              </>
-            )}
-          </button>
+              </button>
+            );
+          })()}
         </div>
-        <div
-          className={`grid ${
-            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-          } gap-4`}
-        >
-          {!isCurrentUserInstructor && (
+        {generatedLeia && !generationError ? (
+          <div
+            className={`grid ${
+              isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+            } gap-4`}
+          >
+            {!isCurrentUserInstructor && (
+              <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+                <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
+                {leiaConfig.behaviour ? (
+                  <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                    <Editor
+                      height="150px"
+                      language="json"
+                      theme="vs-light"
+                      value={JSON.stringify(
+                        cleanObjectForPreview(generatedLeia?.spec.behaviour),
+                        null,
+                        2
+                      )}
+                      options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        fontSize: 11,
+                        lineNumbers: "off",
+                        glyphMargin: false,
+                        folding: false,
+                        lineDecorationsWidth: 0,
+                        lineNumbersMinChars: 0,
+                        automaticLayout: true,
+                        contextmenu: false,
+                        scrollbar: {
+                          vertical: "auto",
+                          horizontal: "auto",
+                          handleMouseWheel: true,
+                        },
+                        overviewRulerLanes: 0,
+                        hideCursorInOverviewRuler: true,
+                        overviewRulerBorder: false,
+                        wordWrap: "on",
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                    No behaviour selected
+                  </div>
+                )}
+              </div>
+            )}
             <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
-              {leiaConfig.behaviour ? (
+              <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
+              {leiaConfig.problem ? (
                 <div className="bg-white rounded border border-gray-300 overflow-hidden">
                   <Editor
                     height="150px"
                     language="json"
                     theme="vs-light"
                     value={JSON.stringify(
-                      cleanObjectForPreview(generatedLeia?.spec.behaviour),
+                      cleanObjectForPreview(generatedLeia?.spec.problem),
                       null,
                       2
                     )}
@@ -1167,98 +1236,97 @@ export const CreateLeia: React.FC = () => {
                 </div>
               ) : (
                 <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                  No behaviour selected
+                  No problem selected
                 </div>
               )}
             </div>
-          )}
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
-            {leiaConfig.problem ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(generatedLeia?.spec.problem),
-                    null,
-                    2
-                  )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No problem selected
-              </div>
-            )}
+            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
+              {leiaConfig.persona ? (
+                <div className="bg-white rounded border border-gray-300 overflow-hidden">
+                  <Editor
+                    height="150px"
+                    language="json"
+                    theme="vs-light"
+                    value={JSON.stringify(
+                      cleanObjectForPreview(generatedLeia?.spec.persona),
+                      null,
+                      2
+                    )}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 11,
+                      lineNumbers: "off",
+                      glyphMargin: false,
+                      folding: false,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 0,
+                      automaticLayout: true,
+                      contextmenu: false,
+                      scrollbar: {
+                        vertical: "auto",
+                        horizontal: "auto",
+                        handleMouseWheel: true,
+                      },
+                      overviewRulerLanes: 0,
+                      hideCursorInOverviewRuler: true,
+                      overviewRulerBorder: false,
+                      wordWrap: "on",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
+                  No persona selected
+                </div>
+              )}
+            </div>
           </div>
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
-            {leiaConfig.persona ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(generatedLeia?.spec.persona),
-                    null,
-                    2
-                  )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No persona selected
-              </div>
-            )}
+        ) : (
+          <div className="p-6 rounded-lg bg-red-50 border border-red-200">
+            <div className="flex items-center mb-3">
+              <h4 className="text-lg font-medium text-red-800">
+                LEIA Generation Error
+              </h4>
+            </div>
+            <div className="text-red-700">
+              <p className="mb-3">
+                {generationError ? (
+                  <>
+                    <strong>Error:</strong> {generationError.message}
+                  </>
+                ) : (
+                  "Unable to generate LEIA preview. Please ensure all components are properly selected and configured."
+                )}
+              </p>
+              <p className="text-sm">
+                Please review the affected components content.
+              </p>
+              <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                {!leiaConfig.behaviour && (
+                  <li className="flex items-center">
+                    <span className="text-red-500 mr-2">✗</span>
+                    Behaviour component is missing
+                  </li>
+                )}
+                {!leiaConfig.problem && (
+                  <li className="flex items-center">
+                    <span className="text-red-500 mr-2">✗</span>
+                    Problem component is missing
+                  </li>
+                )}
+                {!leiaConfig.persona && (
+                  <li className="flex items-center">
+                    <span className="text-red-500 mr-2">✗</span>
+                    Persona component is missing
+                  </li>
+                )}
+              </ul>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
