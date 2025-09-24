@@ -47,7 +47,7 @@ export function checkConstraints(leia: Leia) {
       const isCompatible = isProcessCompatible(leiaValue, constraintValue as string | string[]);
       if (!isCompatible) {
         const error = new Error(
-          `Constraint not met: ${key}. No compatible processes found. Expected: ${constraintValue}, got: ${leiaValue}`
+          `Constraint not met: ${key}. No compatible processes found. EXPECTED: ${constraintValue} GOT: ${leiaValue}`
         );
         throw error;
       }
@@ -55,7 +55,7 @@ export function checkConstraints(leia: Leia) {
       // Check if value matches constraint
       if (leiaValue !== constraintValue) {
         const error = new Error(
-          `Constraint not met: ${key}. Value does not match. Expected: ${constraintValue}, got: ${leiaValue}`
+          `Constraint not met: ${key}. Value does not match. EXPECTED: ${constraintValue} GOT: ${leiaValue}`
         );
         throw error;
       }
