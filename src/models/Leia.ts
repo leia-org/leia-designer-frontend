@@ -1,10 +1,4 @@
-export interface User {
-  id: string;
-  email: string;
-  role: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { User } from "./User";
 
 export interface Persona {
   id: string,
