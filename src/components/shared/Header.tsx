@@ -6,6 +6,7 @@ import {
   PlusIcon,
   UsersIcon,
   ArrowRightStartOnRectangleIcon,
+  PuzzlePieceIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/useAuth";
 
@@ -22,7 +23,7 @@ interface HeaderProps {
   description: string;
   rightContent?: React.ReactNode;
   menuItems?: MenuItem[];
-  showNavigation?: boolean; // Control para mostrar/ocultar el dropdown
+  showNavigation?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,7 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   description,
   rightContent,
   menuItems,
-  showNavigation = true, // Por defecto se muestra
+  showNavigation = true,
 }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -48,6 +49,12 @@ export const Header: React.FC<HeaderProps> = ({
       label: "Design a new LEIA",
       href: "/create",
       icon: <PlusIcon className="w-4 h-4" />,
+      show: true,
+    },
+    {
+      label: "My Activities",
+      href: "/users/me/activities",
+      icon: <PuzzlePieceIcon className="w-4 h-4" />,
       show: true,
     },
     {

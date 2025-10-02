@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   SwatchIcon,
   LightBulbIcon,
   PuzzlePieceIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
@@ -12,6 +13,7 @@ import type { Leia, Persona, Problem, Behaviour } from "../models/Leia";
 import type { Experiment } from "../models/Experiment";
 import { ToastContainer, toast } from "react-toastify";
 import CreatableSelect from "react-select/creatable";
+import { LeiaViewModal } from "../components/LeiaViewModal";
 
 type VersionFilter = "" | "latest";
 
@@ -50,7 +52,9 @@ export const LeiaSearch: React.FC = () => {
 
   const [creatingNewExperiment, setCreatingNewExperiment] = useState(false);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
-  useState(false);
+
+  // Estados para el modal de visualización de LEIA
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -206,6 +210,11 @@ export const LeiaSearch: React.FC = () => {
       setAddingLeiaToExperiment(false);
     }
   };
+
+  const handleViewLeiaContent = useCallback((leia: Leia) => {
+    setSelectedLeia(leia);
+    setIsViewModalOpen(true);
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-white">
@@ -477,6 +486,16 @@ export const LeiaSearch: React.FC = () => {
                           </span>
                         </button>
                         <button
+                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-20"
+                          onClick={() => handleViewLeiaContent(leia)}
+                          title="View LEIA content"
+                        >
+                          <EyeIcon className="w-4 h-4 flex-shrink-0" />
+                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                            View
+                          </span>
+                        </button>
+                        <button
                           className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
                             initializingId === leia.id
                               ? "w-30"
@@ -530,6 +549,18 @@ export const LeiaSearch: React.FC = () => {
         </div>
         <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-white via-white to-transparent pointer-events-none"></div>
       </div>
+
+      {/* LEIA View Modal */}
+      {selectedLeia && (
+        <LeiaViewModal
+          leia={selectedLeia}
+          isOpen={isViewModalOpen}
+          onClose={() => {
+            setIsViewModalOpen(false);
+            setSelectedLeia(null);
+          }}
+        />
+      )}
     </div>
   );
 };
