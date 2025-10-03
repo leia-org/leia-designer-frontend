@@ -4,6 +4,7 @@ import { Editor } from "@monaco-editor/react";
 import { LightBulbIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
+import { ResourceEditor } from "../components/ResourceEditor";
 import { useAuth } from "../context";
 import type { Persona, Behaviour, Problem } from "../models/Leia";
 import api from "../lib/axios";
@@ -900,11 +901,7 @@ export const CreateLeia: React.FC = () => {
                     onClick={() =>
                       setEditingResource({
                         resource: "problem",
-                        content: JSON.stringify(
-                          leiaConfig.problem?.spec,
-                          null,
-                          2
-                        ),
+                        content: null,
                         apiVersion: leiaConfig.problem?.apiVersion || "v1",
                       })
                     }
@@ -980,11 +977,7 @@ export const CreateLeia: React.FC = () => {
                     onClick={() =>
                       setEditingResource({
                         resource: "persona",
-                        content: JSON.stringify(
-                          leiaConfig.persona?.spec,
-                          null,
-                          2
-                        ),
+                        content: null,
                         apiVersion: leiaConfig.persona?.apiVersion || "v1",
                       })
                     }
@@ -1003,18 +996,45 @@ export const CreateLeia: React.FC = () => {
         </div>
       </div>
 
-      {/* Editor Monaco */}
-      {editingResource.content && editingResource.resource && (
+      {/* Resource Editor */}
+      {editingResource.resource && (editingResource.resource === 'persona' || editingResource.resource === 'problem') && (
+        <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
+          <ResourceEditor
+            resourceType={editingResource.resource}
+            initialData={leiaConfig[editingResource.resource] || undefined}
+            apiVersion={editingResource.apiVersion}
+            onSave={(data, apiVersion) => {
+              setLeiaConfig((prev) => ({
+                ...prev,
+                [editingResource.resource!]: {
+                  ...prev[editingResource.resource!],
+                  spec: data,
+                  apiVersion: apiVersion,
+                  edited: true,
+                },
+              }));
+              setEditingResource({ resource: null, content: null, apiVersion: "v1" });
+            }}
+            onCancel={() =>
+              setEditingResource({
+                resource: null,
+                content: null,
+                apiVersion: "v1",
+              })
+            }
+          />
+        </div>
+      )}
+
+      {/* Fallback Editor Monaco for Behaviour */}
+      {editingResource.content && editingResource.resource === 'behaviour' && (
         <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
           <div className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
             <div className="space-y-4">
               {/* Header with title and API version selector */}
               <div className="flex justify-between items-center pb-4">
                 <h4 className="text-lg font-semibold text-gray-900">
-                  Edit{" "}
-                  {editingResource.resource?.charAt(0).toUpperCase() +
-                    editingResource.resource?.slice(1)}{" "}
-                  Spec
+                  Edit Behaviour Spec
                 </h4>
                 <div className="flex items-center space-x-2">
                   <label className="text-sm font-medium text-gray-700">
