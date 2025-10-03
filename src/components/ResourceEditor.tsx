@@ -276,8 +276,13 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           onChange={(e) => handleVisualChange('solutionFormat', e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
-          <option value="text">Text</option>
-          <option value="mermaid">Mermaid</option>
+          <option value="text">Plain Text</option>
+          <option value="mermaid">Mermaid Diagram</option>
+          <option value="yaml">YAML</option>
+          <option value="markdown">Markdown</option>
+          <option value="html">HTML</option>
+          <option value="json">JSON</option>
+          <option value="xml">XML</option>
         </select>
       </div>
 
