@@ -14,11 +14,13 @@ import type { Experiment } from "../models/Experiment";
 import { ToastContainer, toast } from "react-toastify";
 import CreatableSelect from "react-select/creatable";
 import { LeiaViewModal } from "../components/LeiaViewModal";
+import { useAuth } from "../context";
 
 type VersionFilter = "" | "latest";
 
 export const LeiaSearch: React.FC = () => {
   const navigate = useNavigate();
+  const user = useAuth().user;
 
   const [queryText, setQueryText] = useState("");
   const [versionFilter, setVersionFilter] = useState<VersionFilter>("latest");
@@ -521,30 +523,32 @@ export const LeiaSearch: React.FC = () => {
                             {initializingId === leia.id ? "Starting…" : "Try"}
                           </span>
                         </button>
-                        <button
-                          className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
-                            selectedLeia?.id === leia.id
-                              ? "w-42"
-                              : "w-10 hover:w-38"
-                          }`}
-                          onClick={() => {
-                            setSelectedLeia(leia);
-                            handleOpenExperimentsModal();
-                          }}
-                        >
-                          <PuzzlePieceIcon className="w-4 h-4 flex-shrink-0" />
-                          <span
-                            className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
+                        {user?.role === "admin" && (
+                          <button
+                            className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
                               selectedLeia?.id === leia.id
-                                ? "opacity-100"
-                                : "opacity-0 group-hover:opacity-100"
+                                ? "w-42"
+                                : "w-10 hover:w-38"
                             }`}
+                            onClick={() => {
+                              setSelectedLeia(leia);
+                              handleOpenExperimentsModal();
+                            }}
                           >
-                            {selectedLeia?.id === leia.id
-                              ? "Adding to Activity"
-                              : "Add to Activity"}
-                          </span>
-                        </button>
+                            <PuzzlePieceIcon className="w-4 h-4 flex-shrink-0" />
+                            <span
+                              className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
+                                selectedLeia?.id === leia.id
+                                  ? "opacity-100"
+                                  : "opacity-0 group-hover:opacity-100"
+                              }`}
+                            >
+                              {selectedLeia?.id === leia.id
+                                ? "Adding to Activity"
+                                : "Add to Activity"}
+                            </span>
+                          </button>
+                        )}
                       </div>
                     </li>
                   );
