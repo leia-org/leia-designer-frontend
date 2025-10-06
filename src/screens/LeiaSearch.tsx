@@ -89,7 +89,11 @@ export const LeiaSearch: React.FC = () => {
       });
       const { sessionId } = response.data || {};
       if (sessionId) {
-        navigate(`/chat/${sessionId}`);
+        navigate(`/chat/${sessionId}`, {
+          state: {
+            problemDescription: leia.spec?.problem?.spec?.description || "",
+          },
+        });
       } else {
         setError("Could not start chat session");
       }
