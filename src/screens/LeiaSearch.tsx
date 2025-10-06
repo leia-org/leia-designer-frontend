@@ -290,10 +290,16 @@ export const LeiaSearch: React.FC = () => {
                         label: experiment.name,
                       })) || []
                     }
-                    placeholder="Choose or create an activity..."
+                    placeholder={
+                      loadingDraftExperiments
+                        ? "Loading activities..."
+                        : "Choose or create an activity..."
+                    }
                     isClearable
-                    isDisabled={creatingNewExperiment}
-                    isLoading={creatingNewExperiment}
+                    isDisabled={
+                      creatingNewExperiment || loadingDraftExperiments
+                    }
+                    isLoading={creatingNewExperiment || loadingDraftExperiments}
                     formatCreateLabel={(inputValue) =>
                       `Create activity: "${inputValue}"`
                     }

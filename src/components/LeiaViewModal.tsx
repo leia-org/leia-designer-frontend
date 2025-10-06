@@ -4,22 +4,26 @@ import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
-// Lazy load SyntaxHighlighter
-const SyntaxHighlighter = lazy(() => import("react-syntax-highlighter"));
+// Lazy load SyntaxHighlighter with Prism
+const SyntaxHighlighter = lazy(() =>
+  import("react-syntax-highlighter").then((module) => ({
+    default: module.Prism,
+  }))
+);
 
 const LazyCodeBlock: React.FC<{ code: string; language: string }> = ({
   code,
   language,
 }) => {
-  const [doccoStyle, setDoccoStyle] = useState<object | null>(null);
+  const [prismStyle, setPrismStyle] = useState<object | null>(null);
 
   useEffect(() => {
-    import("react-syntax-highlighter/dist/esm/styles/hljs").then((styles) => {
-      setDoccoStyle(styles.docco);
+    import("react-syntax-highlighter/dist/esm/styles/prism").then((styles) => {
+      setPrismStyle(styles.oneLight);
     });
   }, []);
 
-  if (!doccoStyle) {
+  if (!prismStyle) {
     return (
       <div className="flex items-center justify-center py-4">
         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
@@ -29,7 +33,17 @@ const LazyCodeBlock: React.FC<{ code: string; language: string }> = ({
   }
 
   return (
-    <SyntaxHighlighter language={language} style={doccoStyle}>
+    <SyntaxHighlighter
+      language={language}
+      style={prismStyle}
+      showLineNumbers={true}
+      wrapLines={true}
+      customStyle={{
+        borderRadius: "8px",
+        fontSize: "14px",
+        lineHeight: "1.5",
+      }}
+    >
       {code}
     </SyntaxHighlighter>
   );
@@ -160,11 +174,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                       >
                         <LazyCodeBlock
                           code={leia.spec.problem.spec.solution}
-                          language={
-                            leia.spec.problem.spec.solutionFormat === "mermaid"
-                              ? "mermaid"
-                              : "text"
-                          }
+                          language={leia.spec.problem.spec.solutionFormat}
                         />
                       </Suspense>
                     </div>
