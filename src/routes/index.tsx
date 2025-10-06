@@ -104,9 +104,9 @@ export const AppRoutes = () => {
       <Route
         path="/users/me/activities"
         element={
-          <AuthenticatedRoute>
+          <AdminRoute>
             <MyActivities />
-          </AuthenticatedRoute>
+          </AdminRoute>
         }
       />
       <Route path="/forbidden" element={<ForbiddenPage />} />

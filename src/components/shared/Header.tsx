@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
       label: "My Activities",
       href: "/users/me/activities",
       icon: <PuzzlePieceIcon className="w-4 h-4" />,
-      show: true,
+      show: user?.role === "admin",
     },
     {
       label: "Manage users",

@@ -393,22 +393,20 @@ export const MyActivities: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                experiment.isPublished
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}
-                            >
-                              {experiment.isPublished ? "Published" : "Draft"}
-                            </span>
+                            {experiment.isPublished && (
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-200`}
+                              >
+                                Published
+                              </span>
+                            )}
                             {!experiment.isPublished && (
                               <button
                                 onClick={() => publishExperiment(experiment)}
                                 disabled={publishingExperiments.has(
                                   experiment.id
                                 )}
-                                className="px-3 py-1.5 text-xs font-medium rounded-md border bg-green-50 text-green-700 border-green-200 hover:bg-green-100 disabled:bg-green-25 disabled:text-green-400 disabled:border-green-100 disabled:cursor-not-allowed transition-colors duration-200"
+                                className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
                               >
                                 {publishingExperiments.has(experiment.id) ? (
                                   <div className="flex items-center gap-1">
