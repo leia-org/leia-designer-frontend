@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode';
-import { AuthContext, type AuthContextType } from './AuthContext';
-import type { DecodedToken } from '../models';
+import React, { useEffect, useState, useCallback } from "react";
+import type { ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+import { AuthContext, type AuthContextType } from "./AuthContext";
+import type { DecodedToken } from "../models";
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -29,31 +29,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       return jwtDecode<DecodedToken>(token);
     } catch (error) {
-      console.error('Error decoding token:', error);
+      console.error("Error decoding token:", error);
       return null;
     }
   };
 
   const login = (newToken: string) => {
-    localStorage.setItem('token', newToken);
+    localStorage.setItem("token", newToken);
     setToken(newToken);
     const decoded = decodeToken(newToken);
     setUser(decoded);
   };
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
+    localStorage.removeItem("token");
     setToken(null);
     setUser(null);
-    navigate('/login');
+    navigate("/login");
   }, [navigate]);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    
+    const storedToken = localStorage.getItem("token");
+
     if (storedToken) {
       if (isTokenExpired(storedToken)) {
-        localStorage.removeItem('token');
+        localStorage.removeItem("token");
         setToken(null);
         setUser(null);
       } else {
@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(decoded);
       }
     }
-    
+
     setIsLoading(false);
   }, []);
 
@@ -85,11 +85,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading,
     login,
     logout,
+    setUser,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
