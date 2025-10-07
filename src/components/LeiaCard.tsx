@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Editor, loader } from "@monaco-editor/react";
-import type { User } from "../models/Leia";
+import type { User } from "../models/User";
 
 // Ensure YAML language support is loaded
 loader.init().then((monaco) => {

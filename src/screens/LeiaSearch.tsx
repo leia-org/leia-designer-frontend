@@ -105,7 +105,7 @@ export const LeiaSearch: React.FC = () => {
           },
         },
       });
-    } catch (e) {
+    } catch {
       setError("Could not load preset data");
     }
   };
