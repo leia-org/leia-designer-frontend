@@ -4,8 +4,6 @@ on:
   pull_request:
     branches: [main, develop]
 
-  workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -53,7 +51,7 @@ jobs:
       - name: Report
         run: |
           if [ "${{ needs.build.result }}" = "success" ]; then
-            echo "Build success"
+            echo "✅ Build success"
           else
-            echo "Build failed"; exit 1
+            echo "❌ Build failed"; exit 1
           fi
