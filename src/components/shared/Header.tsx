@@ -40,6 +40,12 @@ export const Header: React.FC<HeaderProps> = ({
   // Default menu items if none provided
   const defaultMenuItems: MenuItem[] = [
     {
+      label: "Profile",
+      href: "/profile",
+      icon: <UsersIcon className="w-4 h-4" />,
+      show: true,
+    },
+    {
       label: "Search LEIAs",
       href: "/",
       icon: <MagnifyingGlassIcon className="w-4 h-4" />,
