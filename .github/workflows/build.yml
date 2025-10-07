@@ -42,16 +42,3 @@ jobs:
         env:
           CI: true
         run: npm run build
-
-  gate:
-    runs-on: ubuntu-latest
-    needs: build
-    if: always()
-    steps:
-      - name: Report
-        run: |
-          if [ "${{ needs.build.result }}" = "success" ]; then
-            echo "Build success"
-          else
-            echo "Build failed"; exit 1
-          fi
