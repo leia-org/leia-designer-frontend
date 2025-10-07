@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
-import { LightBulbIcon } from "@heroicons/react/24/outline";
+import { LightBulbIcon, CpuChipIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
@@ -830,10 +830,8 @@ export const CreateLeia: React.FC = () => {
                     </div>
                   </>
                 ) : (
-                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1">
-                    <p className="text-xs text-gray-600 mt-1 line-clamp-3">
-                      {leiaConfig.behaviour.spec.description}
-                    </p>
+                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1 flex items-center justify-center">
+                    <CpuChipIcon className="w-10 h-10 text-gray-400 mx-auto" />
                   </div>
                 )}
               </div>
@@ -997,37 +995,43 @@ export const CreateLeia: React.FC = () => {
       </div>
 
       {/* Resource Editor */}
-      {editingResource.resource && (editingResource.resource === 'persona' || editingResource.resource === 'problem') && (
-        <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
-          <ResourceEditor
-            resourceType={editingResource.resource}
-            initialData={leiaConfig[editingResource.resource] || undefined}
-            apiVersion={editingResource.apiVersion}
-            onSave={(data, apiVersion) => {
-              setLeiaConfig((prev) => ({
-                ...prev,
-                [editingResource.resource!]: {
-                  ...prev[editingResource.resource!],
-                  spec: data,
-                  apiVersion: apiVersion,
-                  edited: true,
-                },
-              }));
-              setEditingResource({ resource: null, content: null, apiVersion: "v1" });
-            }}
-            onCancel={() =>
-              setEditingResource({
-                resource: null,
-                content: null,
-                apiVersion: "v1",
-              })
-            }
-          />
-        </div>
-      )}
+      {editingResource.resource &&
+        (editingResource.resource === "persona" ||
+          editingResource.resource === "problem") && (
+          <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
+            <ResourceEditor
+              resourceType={editingResource.resource}
+              initialData={leiaConfig[editingResource.resource] || undefined}
+              apiVersion={editingResource.apiVersion}
+              onSave={(data, apiVersion) => {
+                setLeiaConfig((prev) => ({
+                  ...prev,
+                  [editingResource.resource!]: {
+                    ...prev[editingResource.resource!],
+                    spec: data,
+                    apiVersion: apiVersion,
+                    edited: true,
+                  },
+                }));
+                setEditingResource({
+                  resource: null,
+                  content: null,
+                  apiVersion: "v1",
+                });
+              }}
+              onCancel={() =>
+                setEditingResource({
+                  resource: null,
+                  content: null,
+                  apiVersion: "v1",
+                })
+              }
+            />
+          </div>
+        )}
 
       {/* Fallback Editor Monaco for Behaviour */}
-      {editingResource.content && editingResource.resource === 'behaviour' && (
+      {editingResource.content && editingResource.resource === "behaviour" && (
         <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
           <div className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
             <div className="space-y-4">
