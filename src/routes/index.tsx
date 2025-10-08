@@ -8,6 +8,7 @@ import { Profile } from "../screens/Profile";
 import { ForbiddenPage } from "../screens/ForbiddenPage";
 import { LeiaSearch } from "../screens/LeiaSearch";
 import { UserManagement } from "../screens/UserManagement";
+import { MyActivities } from "../screens/MyActivities";
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -97,6 +98,14 @@ export const AppRoutes = () => {
         element={
           <AdminRoute>
             <UserManagement />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/users/me/activities"
+        element={
+          <AdminRoute>
+            <MyActivities />
           </AdminRoute>
         }
       />

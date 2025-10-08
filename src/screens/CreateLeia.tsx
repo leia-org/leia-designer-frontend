@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
-import { LightBulbIcon } from "@heroicons/react/24/outline";
+import { LightBulbIcon, CpuChipIcon } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
+import { ResourceEditor } from "../components/ResourceEditor";
 import { useAuth } from "../context";
 import type { Persona, Behaviour, Problem } from "../models/Leia";
 import api from "../lib/axios";
@@ -423,6 +424,7 @@ export const CreateLeia: React.FC = () => {
             leiaConfigSnapShot,
             customizations,
           },
+          problemDescription: generatedLeia.spec.problem.spec.description,
         },
       });
     } catch (error) {
@@ -828,18 +830,9 @@ export const CreateLeia: React.FC = () => {
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1 flex items-center justify-center">
-                      <p className="text-xs text-gray-500 italic">
-                        Not enough permissions to edit this resource
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="w-full px-4 py-2 bg-gray-300 text-gray-500 rounded-lg text-sm text-center cursor-not-allowed">
-                        Edit
-                      </div>
-                    </div>
-                  </>
+                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1 flex items-center justify-center">
+                    <CpuChipIcon className="w-10 h-10 text-gray-400 mx-auto" />
+                  </div>
                 )}
               </div>
             ) : (
@@ -906,11 +899,7 @@ export const CreateLeia: React.FC = () => {
                     onClick={() =>
                       setEditingResource({
                         resource: "problem",
-                        content: JSON.stringify(
-                          leiaConfig.problem?.spec,
-                          null,
-                          2
-                        ),
+                        content: null,
                         apiVersion: leiaConfig.problem?.apiVersion || "v1",
                       })
                     }
@@ -986,11 +975,7 @@ export const CreateLeia: React.FC = () => {
                     onClick={() =>
                       setEditingResource({
                         resource: "persona",
-                        content: JSON.stringify(
-                          leiaConfig.persona?.spec,
-                          null,
-                          2
-                        ),
+                        content: null,
                         apiVersion: leiaConfig.persona?.apiVersion || "v1",
                       })
                     }
@@ -1009,18 +994,51 @@ export const CreateLeia: React.FC = () => {
         </div>
       </div>
 
-      {/* Editor Monaco */}
-      {editingResource.content && editingResource.resource && (
+      {/* Resource Editor */}
+      {editingResource.resource &&
+        (editingResource.resource === "persona" ||
+          editingResource.resource === "problem") && (
+          <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
+            <ResourceEditor
+              resourceType={editingResource.resource}
+              initialData={leiaConfig[editingResource.resource] || undefined}
+              apiVersion={editingResource.apiVersion}
+              onSave={(data, apiVersion) => {
+                setLeiaConfig((prev) => ({
+                  ...prev,
+                  [editingResource.resource!]: {
+                    ...prev[editingResource.resource!],
+                    spec: data,
+                    apiVersion: apiVersion,
+                    edited: true,
+                  },
+                }));
+                setEditingResource({
+                  resource: null,
+                  content: null,
+                  apiVersion: "v1",
+                });
+              }}
+              onCancel={() =>
+                setEditingResource({
+                  resource: null,
+                  content: null,
+                  apiVersion: "v1",
+                })
+              }
+            />
+          </div>
+        )}
+
+      {/* Fallback Editor Monaco for Behaviour */}
+      {editingResource.content && editingResource.resource === "behaviour" && (
         <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
           <div className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
             <div className="space-y-4">
               {/* Header with title and API version selector */}
               <div className="flex justify-between items-center pb-4">
                 <h4 className="text-lg font-semibold text-gray-900">
-                  Edit{" "}
-                  {editingResource.resource?.charAt(0).toUpperCase() +
-                    editingResource.resource?.slice(1)}{" "}
-                  Spec
+                  Edit Behaviour Spec
                 </h4>
                 <div className="flex items-center space-x-2">
                   <label className="text-sm font-medium text-gray-700">

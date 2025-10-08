@@ -26,6 +26,7 @@ interface NavigationState {
       behaviour?: { name: string; version: string };
     };
   };
+  problemDescription?: string;
 }
 
 const TypingAnimation = () => (
@@ -58,6 +59,8 @@ export const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessageText, setNewMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [problemDescription, setProblemDescription] = useState<string>("");
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -78,6 +81,13 @@ export const Chat = () => {
       setMessages([]);
     }
   }, [sessionId]);
+
+  useEffect(() => {
+    const navigationState = location.state as NavigationState;
+    if (navigationState?.problemDescription) {
+      setProblemDescription(navigationState.problemDescription);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     scrollToBottom();
@@ -157,14 +167,31 @@ export const Chat = () => {
         description="Test and interact with a LEIA configuration"
         showNavigation={false}
         rightContent={
-          <button
-            onClick={handleFinishConversation}
-            className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            Finish Conversation
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="px-4 py-1.5 text-sm text-blue-600 bg-white border border-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {showInstructions ? "Hide Instructions" : "Instructions"}
+            </button>
+            <button
+              onClick={handleFinishConversation}
+              className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              Finish Conversation
+            </button>
+          </div>
         }
       />
+
+      {showInstructions && problemDescription && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-4">
+          <div className="max-w-3xl mx-auto">
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">Problem Instructions</h3>
+            <p className="text-sm text-blue-800 whitespace-pre-wrap">{problemDescription}</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth">
         <div ref={chatMessagesRef} className="max-w-3xl mx-auto space-y-4 py-4">

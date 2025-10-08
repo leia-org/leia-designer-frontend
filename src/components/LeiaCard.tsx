@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Editor, loader } from "@monaco-editor/react";
-import type { User } from "../models/Leia";
+import type { User } from "../models/User";
 
 // Ensure YAML language support is loaded
 loader.init().then((monaco) => {
@@ -88,10 +88,10 @@ export default function LeiaCard({
             <span className="flex items-center gap-1">
               <span
                 className={`inline-block w-2 h-2 rounded-full ${
-                  user.role === "admin" ? "bg-purple-500" : "bg-green-500"
+                  user.role === "admin" ? "bg-purple-500" : user.role === "advance" ? "bg-blue-500" : "bg-green-500"
                 }`}
               ></span>
-              {user.role === "admin" ? "Administrator" : "Instructor"}
+              {user.role === "admin" ? "Administrator" : user.role === "advance" ? "Advanced" : "Instructor"}
             </span>
           </div>
         ) : null}
