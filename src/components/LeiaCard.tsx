@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Editor, loader } from "@monaco-editor/react";
+import { TrashIcon } from "@heroicons/react/24/outline";
+import { useAuth } from "../context";
 import type { User } from "../models/User";
 
 // Ensure YAML language support is loaded
@@ -20,6 +22,8 @@ interface LeiaCardProps {
   user?: User;
   isPublished?: boolean;
   hideContentForInstructor?: boolean;
+  onDelete?: () => void;
+  resourceId?: string;
 }
 
 export default function LeiaCard({
@@ -32,10 +36,20 @@ export default function LeiaCard({
   user,
   isPublished = false,
   hideContentForInstructor = false,
+  onDelete,
+  resourceId,
 }: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
+  const { user: currentUser } = useAuth();
+
+  // Determinar si el usuario puede eliminar este recurso
+  const canDelete =
+    currentUser &&
+    onDelete &&
+    resourceId &&
+    (currentUser.role === "admin" || (user && currentUser.id === user.id));
 
   useEffect(() => {
     if (showPopup && cardRef.current) {
@@ -79,6 +93,18 @@ export default function LeiaCard({
                 {isPublished ? "Published" : "Unpublished"}
               </span>
             )}
+            {canDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete?.();
+                }}
+                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                title="Delete resource"
+              >
+                <TrashIcon className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
         {/* User information */}
@@ -88,10 +114,18 @@ export default function LeiaCard({
             <span className="flex items-center gap-1">
               <span
                 className={`inline-block w-2 h-2 rounded-full ${
-                  user.role === "admin" ? "bg-purple-500" : user.role === "advance" ? "bg-blue-500" : "bg-green-500"
+                  user.role === "admin"
+                    ? "bg-purple-500"
+                    : user.role === "advance"
+                    ? "bg-blue-500"
+                    : "bg-green-500"
                 }`}
               ></span>
-              {user.role === "admin" ? "Administrator" : user.role === "advance" ? "Advanced" : "Instructor"}
+              {user.role === "admin"
+                ? "Administrator"
+                : user.role === "advance"
+                ? "Advanced"
+                : "Instructor"}
             </span>
           </div>
         ) : null}
