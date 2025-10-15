@@ -788,7 +788,7 @@ export const CreateLeia: React.FC = () => {
                   <span className="text-sm font-medium text-gray-900">
                     {leiaConfig.behaviour.metadata.name}
                   </span>
-                  <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
                     v{leiaConfig.behaviour.metadata.version}
                   </span>
                 </div>
@@ -890,7 +890,7 @@ export const CreateLeia: React.FC = () => {
                   <span className="text-sm font-medium text-gray-900">
                     {leiaConfig.problem.metadata.name}
                   </span>
-                  <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
                     v{leiaConfig.problem.metadata.version}
                   </span>
                 </div>
