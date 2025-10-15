@@ -101,6 +101,14 @@ export const CreateLeia: React.FC = () => {
     "all" | "requirements-elicitation" | "game"
   >("all");
 
+  // Estado para controlar la visibilidad/publicación de la LEIA
+  const [leiaPublish, setLeiaPublish] = useState<boolean>(true);
+
+  // Estados para controlar la visibilidad de los recursos individuales
+  const [behaviourPublish, setBehaviourPublish] = useState<boolean>(true);
+  const [problemPublish, setProblemPublish] = useState<boolean>(true);
+  const [personaPublish, setPersonaPublish] = useState<boolean>(true);
+
   const [editingResource, setEditingResource] = useState<{
     resource: keyof LeiaConfig | null;
     content: string | null;
@@ -486,7 +494,24 @@ export const CreateLeia: React.FC = () => {
           newResource.metadata.name =
             customizations[key as keyof LeiaConfig]?.name;
           try {
-            const response = await api.post(`/api/v1/${key}s`, newResource);
+            // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
+            let publishParam = "";
+            if (currentUser?.role === "admin") {
+              const resourcePublishState = leiaPublish
+                ? leiaPublish
+                : key === "behaviour"
+                ? behaviourPublish
+                : key === "problem"
+                ? problemPublish
+                : key === "persona"
+                ? personaPublish
+                : false;
+              publishParam = `?publish=${resourcePublishState}`;
+            }
+            const response = await api.post(
+              `/api/v1/${key}s${publishParam}`,
+              newResource
+            );
             leia.spec[key] = response.data.id;
             leiaConfig[key as keyof LeiaConfig] = response.data;
             if (leiaConfigSnapShot) {
@@ -503,7 +528,10 @@ export const CreateLeia: React.FC = () => {
         }
       }
       try {
-        const response = await api.post("/api/v1/leias", leia);
+        // Construir la URL con el query parameter publish
+        const publishParam =
+          currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
+        const response = await api.post(`/api/v1/leias${publishParam}`, leia);
         console.log("LEIA created successfully:", response.data);
         navigate("/leias");
       } catch (error) {
@@ -1360,10 +1388,10 @@ export const CreateLeia: React.FC = () => {
         </p>
       </div>
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900">LEIA</h3>
+        <h3 className="font-semibold text-gray-900 mb-4">LEIA</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-small text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               A new LEIA will be created with the following name:
             </label>
             <input
@@ -1382,8 +1410,8 @@ export const CreateLeia: React.FC = () => {
                   }));
                 }
               }}
-              placeholder={"leia-name"}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              placeholder="Enter LEIA name"
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
                 validationErrors?.leia
                   ? "border-red-300 focus:ring-red-500 focus:border-red-500"
                   : "border-gray-300"
@@ -1395,6 +1423,39 @@ export const CreateLeia: React.FC = () => {
               </p>
             )}
           </div>
+
+          {/* Selector de visibilidad - solo para usuarios admin */}
+          {currentUser?.role === "admin" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Visibility:
+              </label>
+              <select
+                value={leiaPublish ? "public" : "private"}
+                onChange={(e) => {
+                  const isPublic = e.target.value === "public";
+                  setLeiaPublish(isPublic);
+                  // Si se selecciona public para la LEIA, forzar todos los recursos a public
+                  if (isPublic) {
+                    setBehaviourPublish(true);
+                    setProblemPublish(true);
+                    setPersonaPublish(true);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
+              >
+                <option value="public">
+                  Public - All resources will be published as well
+                </option>
+                <option value="private">Private</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                {leiaPublish
+                  ? "This LEIA will be published and visible to all users. All resources will also be public."
+                  : "This LEIA will remain private and only visible to you"}
+              </p>
+            </div>
+          )}
         </div>
       </div>
       <div
@@ -1405,38 +1466,69 @@ export const CreateLeia: React.FC = () => {
         {/* Comportamiento */}
         {customizations.behaviour && !isCurrentUserInstructor && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900">Behaviour</h3>
-            <div>
-              <label className="block text-sm font-small text-gray-700 mb-2">
-                A new behaviour will be created with the following name:
-              </label>
-              <input
-                type="text"
-                value={customizations.behaviour.name}
-                onChange={(e) => {
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    behaviour: { ...prev.behaviour, name: e.target.value },
-                  }));
-                  // Limpiar error cuando el usuario escriba
-                  if (validationErrors?.behaviour) {
-                    setValidationErrors((prev) => ({
+            <h3 className="font-semibold text-gray-900 mb-4">Behaviour</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  A new behaviour will be created with the following name:
+                </label>
+                <input
+                  type="text"
+                  value={customizations.behaviour.name}
+                  onChange={(e) => {
+                    setCustomizations((prev) => ({
                       ...prev,
-                      behaviour: undefined,
+                      behaviour: { ...prev.behaviour, name: e.target.value },
                     }));
-                  }
-                }}
-                placeholder={"resource-name"}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  validationErrors?.behaviour
-                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                    : "border-gray-300"
-                }`}
-              />
-              {validationErrors?.behaviour && (
-                <p className="mt-1 text-sm text-red-600">
-                  {validationErrors.behaviour}
-                </p>
+                    // Limpiar error cuando el usuario escriba
+                    if (validationErrors?.behaviour) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        behaviour: undefined,
+                      }));
+                    }
+                  }}
+                  placeholder="Enter behaviour name"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                    validationErrors?.behaviour
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {validationErrors?.behaviour && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {validationErrors.behaviour}
+                  </p>
+                )}
+              </div>
+
+              {/* Selector de visibilidad - solo para usuarios admin */}
+              {currentUser?.role === "admin" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Visibility:
+                  </label>
+                  <select
+                    value={behaviourPublish ? "public" : "private"}
+                    onChange={(e) =>
+                      setBehaviourPublish(e.target.value === "public")
+                    }
+                    disabled={leiaPublish}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {leiaPublish
+                      ? "Visibility is locked to public because the LEIA is public"
+                      : behaviourPublish
+                      ? "This behaviour will be published and visible to all users"
+                      : "This behaviour will remain private and only visible to you"}
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -1448,7 +1540,7 @@ export const CreateLeia: React.FC = () => {
             <h3 className="font-semibold text-gray-900 mb-4">Problem</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-small text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   A new problem will be created with the following name:
                 </label>
                 <input
@@ -1467,8 +1559,8 @@ export const CreateLeia: React.FC = () => {
                       }));
                     }
                   }}
-                  placeholder={"resource-name"}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  placeholder="Enter problem name"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
                     validationErrors?.problem
                       ? "border-red-300 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300"
@@ -1480,6 +1572,35 @@ export const CreateLeia: React.FC = () => {
                   </p>
                 )}
               </div>
+
+              {/* Selector de visibilidad - solo para usuarios admin */}
+              {currentUser?.role === "admin" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Visibility:
+                  </label>
+                  <select
+                    value={problemPublish ? "public" : "private"}
+                    onChange={(e) =>
+                      setProblemPublish(e.target.value === "public")
+                    }
+                    disabled={leiaPublish}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {leiaPublish
+                      ? "Visibility is locked to public because the LEIA is public"
+                      : problemPublish
+                      ? "This problem will be published and visible to all users"
+                      : "This problem will remain private and only visible to you"}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1489,37 +1610,68 @@ export const CreateLeia: React.FC = () => {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900 mb-4">Persona</h3>
 
-            <div>
-              <label className="block text-sm font-small text-gray-700 mb-2">
-                A new persona will be created with the following name:
-              </label>
-              <input
-                type="text"
-                value={customizations.persona.name}
-                onChange={(e) => {
-                  setCustomizations((prev) => ({
-                    ...prev,
-                    persona: { ...prev.persona, name: e.target.value },
-                  }));
-                  // Limpiar error cuando el usuario escriba
-                  if (validationErrors?.persona) {
-                    setValidationErrors((prev) => ({
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  A new persona will be created with the following name:
+                </label>
+                <input
+                  type="text"
+                  value={customizations.persona.name}
+                  onChange={(e) => {
+                    setCustomizations((prev) => ({
                       ...prev,
-                      persona: undefined,
+                      persona: { ...prev.persona, name: e.target.value },
                     }));
-                  }
-                }}
-                placeholder={"resource-name"}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  validationErrors?.persona
-                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                    : "border-gray-300"
-                }`}
-              />
-              {validationErrors?.persona && (
-                <p className="mt-1 text-sm text-red-600">
-                  {validationErrors.persona}
-                </p>
+                    // Limpiar error cuando el usuario escriba
+                    if (validationErrors?.persona) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        persona: undefined,
+                      }));
+                    }
+                  }}
+                  placeholder="Enter persona name"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                    validationErrors?.persona
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {validationErrors?.persona && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {validationErrors.persona}
+                  </p>
+                )}
+              </div>
+
+              {/* Selector de visibilidad - solo para usuarios admin */}
+              {currentUser?.role === "admin" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Visibility:
+                  </label>
+                  <select
+                    value={personaPublish ? "public" : "private"}
+                    onChange={(e) =>
+                      setPersonaPublish(e.target.value === "public")
+                    }
+                    disabled={leiaPublish}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {leiaPublish
+                      ? "Visibility is locked to public because the LEIA is public"
+                      : personaPublish
+                      ? "This persona will be published and visible to all users"
+                      : "This persona will remain private and only visible to you"}
+                  </p>
+                </div>
               )}
             </div>
           </div>
