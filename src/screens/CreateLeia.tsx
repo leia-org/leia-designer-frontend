@@ -755,32 +755,44 @@ export const CreateLeia: React.FC = () => {
         <div className="space-y-4 flex flex-col">
           <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">
-                Behaviour
-                {leiaConfig.behaviour?.edited ? (
-                  <span className="text-xs text-gray-500 font-normal ml-2">
-                    (edited)
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="font-semibold text-gray-900">
+                  Behaviour
+                  {leiaConfig.behaviour?.edited ? (
+                    <span className="text-xs text-gray-500 font-normal ml-2">
+                      (edited)
+                    </span>
+                  ) : (
+                    leiaConfig.behaviour?.user && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                        <span>by {leiaConfig.behaviour.user.email}</span>
+                        <span className="flex items-center gap-1">
+                          <span
+                            className={`inline-block w-2 h-2 rounded-full ${
+                              leiaConfig.behaviour.user.role === "admin"
+                                ? "bg-purple-500"
+                                : "bg-green-500"
+                            }`}
+                          ></span>
+                          {leiaConfig.behaviour.user.role === "admin"
+                            ? "Administrator"
+                            : "Instructor"}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </h3>
+              </div>
+              {leiaConfig.behaviour && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {leiaConfig.behaviour.metadata.name}
                   </span>
-                ) : (
-                  leiaConfig.behaviour?.user && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
-                      <span>by {leiaConfig.behaviour.user.email}</span>
-                      <span className="flex items-center gap-1">
-                        <span
-                          className={`inline-block w-2 h-2 rounded-full ${
-                            leiaConfig.behaviour.user.role === "admin"
-                              ? "bg-purple-500"
-                              : "bg-green-500"
-                          }`}
-                        ></span>
-                        {leiaConfig.behaviour.user.role === "admin"
-                          ? "Administrator"
-                          : "Instructor"}
-                      </span>
-                    </div>
-                  )
-                )}
-              </h3>
+                  <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                    v{leiaConfig.behaviour.metadata.version}
+                  </span>
+                </div>
+              )}
             </div>
             {leiaConfig.behaviour ? (
               <div className="space-y-3 flex-1 flex flex-col">
@@ -845,32 +857,44 @@ export const CreateLeia: React.FC = () => {
         <div className="space-y-4 flex flex-col">
           <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">
-                Problem
-                {leiaConfig.problem?.edited ? (
-                  <span className="text-xs text-gray-500 font-normal ml-2">
-                    (edited)
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="font-semibold text-gray-900">
+                  Problem
+                  {leiaConfig.problem?.edited ? (
+                    <span className="text-xs text-gray-500 font-normal ml-2">
+                      (edited)
+                    </span>
+                  ) : (
+                    leiaConfig.problem?.user && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                        <span>by {leiaConfig.problem.user.email}</span>
+                        <span className="flex items-center gap-1">
+                          <span
+                            className={`inline-block w-2 h-2 rounded-full ${
+                              leiaConfig.problem.user.role === "admin"
+                                ? "bg-purple-500"
+                                : "bg-green-500"
+                            }`}
+                          ></span>
+                          {leiaConfig.problem.user.role === "admin"
+                            ? "Administrator"
+                            : "Instructor"}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </h3>
+              </div>
+              {leiaConfig.problem && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {leiaConfig.problem.metadata.name}
                   </span>
-                ) : (
-                  leiaConfig.problem?.user && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
-                      <span>by {leiaConfig.problem.user.email}</span>
-                      <span className="flex items-center gap-1">
-                        <span
-                          className={`inline-block w-2 h-2 rounded-full ${
-                            leiaConfig.problem.user.role === "admin"
-                              ? "bg-purple-500"
-                              : "bg-green-500"
-                          }`}
-                        ></span>
-                        {leiaConfig.problem.user.role === "admin"
-                          ? "Administrator"
-                          : "Instructor"}
-                      </span>
-                    </div>
-                  )
-                )}
-              </h3>
+                  <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                    v{leiaConfig.problem.metadata.version}
+                  </span>
+                </div>
+              )}
             </div>
             {leiaConfig.problem ? (
               <div className="space-y-3">
@@ -921,32 +945,44 @@ export const CreateLeia: React.FC = () => {
         <div className="space-y-4 flex flex-col">
           <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">
-                Persona
-                {leiaConfig.persona?.edited ? (
-                  <span className="text-xs text-gray-500 font-normal ml-2">
-                    (edited)
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="font-semibold text-gray-900">
+                  Persona
+                  {leiaConfig.persona?.edited ? (
+                    <span className="text-xs text-gray-500 font-normal ml-2">
+                      (edited)
+                    </span>
+                  ) : (
+                    leiaConfig.persona?.user && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
+                        <span>by {leiaConfig.persona.user.email}</span>
+                        <span className="flex items-center gap-1">
+                          <span
+                            className={`inline-block w-2 h-2 rounded-full ${
+                              leiaConfig.persona.user.role === "admin"
+                                ? "bg-purple-500"
+                                : "bg-green-500"
+                            }`}
+                          ></span>
+                          {leiaConfig.persona.user.role === "admin"
+                            ? "Administrator"
+                            : "Instructor"}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </h3>
+              </div>
+              {leiaConfig.persona && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {leiaConfig.persona.metadata.name}
                   </span>
-                ) : (
-                  leiaConfig.persona?.user && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
-                      <span>by {leiaConfig.persona.user.email}</span>
-                      <span className="flex items-center gap-1">
-                        <span
-                          className={`inline-block w-2 h-2 rounded-full ${
-                            leiaConfig.persona.user.role === "admin"
-                              ? "bg-purple-500"
-                              : "bg-green-500"
-                          }`}
-                        ></span>
-                        {leiaConfig.persona.user.role === "admin"
-                          ? "Administrator"
-                          : "Instructor"}
-                      </span>
-                    </div>
-                  )
-                )}
-              </h3>
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                    v{leiaConfig.persona.metadata.version}
+                  </span>
+                </div>
+              )}
             </div>
             {leiaConfig.persona ? (
               <div className="space-y-3">
