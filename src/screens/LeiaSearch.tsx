@@ -69,7 +69,10 @@ export const LeiaSearch: React.FC = () => {
     leia: null,
   });
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<{
+    message: string;
+    data?: Array<{ id: string; name: string }>;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -158,7 +161,7 @@ export const LeiaSearch: React.FC = () => {
       );
       setDraftExperiments(response.data);
     } catch {
-      setErrorLoadingDraftExperiments("Could not load draft experiments");
+      setErrorLoadingDraftExperiments("Could not load draft activities");
     } finally {
       setLoadingDraftExperiments(false);
     }
@@ -263,25 +266,39 @@ export const LeiaSearch: React.FC = () => {
 
       toast.success("LEIA deleted successfully");
     } catch (error: unknown) {
-      let errorMessage = "An error occurred while deleting the LEIA";
+      const err = {
+        message: "An error occurred while deleting the resource",
+        data: [] as Array<{ id: string; name: string }>,
+      };
 
       if (error && typeof error === "object" && "response" in error) {
         const axiosError = error as {
-          response?: { status?: number; data?: { message?: string } };
+          response?: {
+            status?: number;
+            data?: {
+              message?: string;
+              data?: Array<{ id: string; name: string }>;
+            };
+          };
         };
 
         if (axiosError.response?.status === 403) {
-          errorMessage = "You don't have permission to delete this LEIA";
+          err.message = "You do not have permission to delete this LEIA";
         } else if (axiosError.response?.status === 404) {
-          errorMessage = "LEIA not found";
+          err.message = "LEIA not found";
         } else if (axiosError.response?.status === 400) {
-          errorMessage = "Cannot delete LEIA: it is being used in an Activity";
+          err.message = `Cannot delete LEIA: it is being used in ${
+            axiosError.response.data?.data?.length
+          } activi${
+            axiosError.response.data?.data?.length === 1 ? "ty" : "ties"
+          }.`;
+          err.data = axiosError.response.data?.data || [];
         } else if (axiosError.response?.data?.message) {
-          errorMessage = axiosError.response.data.message;
+          err.message = axiosError.response.data.message;
         }
       }
 
-      setDeleteError(errorMessage);
+      setDeleteError(err);
     } finally {
       setIsDeleting(false);
     }

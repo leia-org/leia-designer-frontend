@@ -11,7 +11,10 @@ interface DeleteLeiaModalProps {
   onClose: () => void;
   onConfirm: (leia: Leia) => void;
   isDeleting?: boolean;
-  error?: string | null;
+  error?: {
+    message: string;
+    data?: Array<{ id: string; name: string }>;
+  } | null;
 }
 
 export const DeleteLeiaModal: React.FC<DeleteLeiaModalProps> = ({
@@ -71,7 +74,18 @@ export const DeleteLeiaModal: React.FC<DeleteLeiaModalProps> = ({
             className="p-4 mb-4 rounded-md text-sm bg-red-100 text-red-700"
             role="alert"
           >
-            {error}
+            <div className="font-medium mb-2">{error.message}</div>
+            {error.data && error.data.length > 0 && (
+              <div>
+                <ul className="list-disc list-inside space-y-1">
+                  {error.data.map((experiment) => (
+                    <li key={experiment.id} className="text-xs">
+                      <strong>{experiment.name}</strong> (ID: {experiment.id})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

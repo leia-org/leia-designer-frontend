@@ -15,7 +15,10 @@ interface DeleteResourceModalProps {
     resourceType: "persona" | "problem" | "behaviour"
   ) => void;
   isDeleting?: boolean;
-  error?: string | null;
+  error?: {
+    message: string;
+    data?: Array<{ id: string; name: string }>;
+  } | null;
 }
 
 export const DeleteResourceModal: React.FC<DeleteResourceModalProps> = ({
@@ -77,7 +80,18 @@ export const DeleteResourceModal: React.FC<DeleteResourceModalProps> = ({
             className="p-4 mb-4 rounded-md text-sm bg-red-100 text-red-700"
             role="alert"
           >
-            {error}
+            <div className="font-medium mb-2">{error.message}</div>
+            {error.data && error.data.length > 0 && (
+              <div>
+                <ul className="list-disc list-inside space-y-1">
+                  {error.data.map((leia) => (
+                    <li key={leia.id} className="text-xs">
+                      <strong>{leia.name}</strong> (ID: {leia.id})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

@@ -123,7 +123,10 @@ export const CreateLeia: React.FC = () => {
     resourceType: null,
   });
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<{
+    message: string;
+    data?: Array<{ id: string; name: string }>;
+  } | null>(null);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -447,25 +450,39 @@ export const CreateLeia: React.FC = () => {
         resourceType: null,
       });
     } catch (error: unknown) {
-      let errorMessage = "An error occurred while deleting the resource";
+      const err = {
+        message: "An error occurred while deleting the resource",
+        data: [] as Array<{ id: string; name: string }>,
+      };
 
       if (error && typeof error === "object" && "response" in error) {
         const axiosError = error as {
-          response?: { status?: number; data?: { message?: string } };
+          response?: {
+            status?: number;
+            data?: {
+              message?: string;
+              data?: Array<{ id: string; name: string }>;
+            };
+          };
         };
 
+        console.log(axiosError?.response?.data);
+
         if (axiosError.response?.status === 403) {
-          errorMessage = "You don't have permission to delete this resource";
+          err.message = "You don't have permission to delete this resource";
         } else if (axiosError.response?.status === 404) {
-          errorMessage = "Resource not found";
+          err.message = "Resource not found";
         } else if (axiosError.response?.status === 400) {
-          errorMessage = "Cannot delete resource: it is being used in a LEIA";
+          err.message = `Cannot delete resource: it is being used in ${
+            axiosError.response?.data?.data?.length
+          } LEIA${axiosError.response?.data?.data?.length === 1 ? "" : "s"}.`;
+          err.data = axiosError.response?.data?.data || [];
         } else if (axiosError.response?.data?.message) {
-          errorMessage = axiosError.response.data.message;
+          err.message = axiosError.response.data.message;
         }
       }
 
-      setDeleteError(errorMessage);
+      setDeleteError(err);
     } finally {
       setIsDeleting(false);
     }
