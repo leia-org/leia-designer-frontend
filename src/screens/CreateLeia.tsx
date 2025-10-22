@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
-import { LightBulbIcon, CpuChipIcon } from "@heroicons/react/24/outline";
+import {
+  LightBulbIcon,
+  CpuChipIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
@@ -1444,9 +1448,7 @@ export const CreateLeia: React.FC = () => {
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
               >
-                <option value="public">
-                  Public - All resources will be published as well
-                </option>
+                <option value="public">Public</option>
                 <option value="private">Private</option>
               </select>
               <p className="mt-1 text-xs text-gray-500">
@@ -1454,6 +1456,49 @@ export const CreateLeia: React.FC = () => {
                   ? "This LEIA will be published and visible to all users. All resources will also be public."
                   : "This LEIA will remain private and only visible to you"}
               </p>
+            </div>
+          )}
+
+          {/* Alerta de recursos que se van a publicar */}
+          {currentUser?.role === "admin" && leiaPublish && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <InformationCircleIcon className="h-5 w-5 text-blue-400" />
+                </div>
+                <div className="ml-3">
+                  <h4 className="text-sm font-medium text-blue-800">
+                    The state of the following resources will change from
+                    private to public:
+                  </h4>
+                  <div className="mt-1 text-sm text-blue-700">
+                    <ul className="list-disc list-inside space-y-1">
+                      {customizations.behaviour && (
+                        <li>
+                          <strong>Behaviour:</strong>{" "}
+                          {customizations.behaviour.name || "New behaviour"}
+                        </li>
+                      )}
+                      {customizations.problem && (
+                        <li>
+                          <strong>Problem:</strong>{" "}
+                          {customizations.problem.name || "New problem"}
+                        </li>
+                      )}
+                      {customizations.persona && (
+                        <li>
+                          <strong>Persona:</strong>{" "}
+                          {customizations.persona.name || "New persona"}
+                        </li>
+                      )}
+                      <li>
+                        <strong>LEIA:</strong>{" "}
+                        {customizations.leia.name || "New LEIA"}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
