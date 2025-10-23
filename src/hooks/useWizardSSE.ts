@@ -9,7 +9,7 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 export interface WizardEvent {
-  type: 'connected' | 'thinking' | 'function_call_start' | 'function_call_complete' | 'message' | 'complete' | 'error' | 'stream_end';
+  type: 'connected' | 'thinking' | 'function_call_start' | 'function_call_complete' | 'message' | 'complete' | 'error' | 'stream_end' | 'user_message';
   functionName?: string;
   functionTitle?: string;
   functionDescription?: string;
@@ -91,6 +91,9 @@ export function useWizardSSE(): UseWizardSSEReturn {
     // Pass token as query parameter for EventSource compatibility
     const url = `${API_BASE_URL}/api/v1/wizard/sessions/${sessionId}/stream?token=${encodeURIComponent(token)}`;
 
+    // Track if stream ended gracefully
+    let streamEndedGracefully = false;
+
     // Create EventSource with authorization via query param
     const eventSource = new EventSource(url, {
       withCredentials: true,
@@ -108,6 +111,7 @@ export function useWizardSSE(): UseWizardSSEReturn {
 
           if (data.type === 'connected') {
             updates.isConnected = true;
+            updates.error = null; // Clear any previous errors
           } else if (data.type === 'complete') {
             updates.isComplete = true;
             updates.leia = data.leia || null;
@@ -115,6 +119,7 @@ export function useWizardSSE(): UseWizardSSEReturn {
             updates.error = data.message || 'Unknown error';
           } else if (data.type === 'stream_end') {
             updates.isConnected = false;
+            streamEndedGracefully = true;
           }
 
           return { ...prev, ...updates };
@@ -126,10 +131,12 @@ export function useWizardSSE(): UseWizardSSEReturn {
 
     eventSource.onerror = (error) => {
       console.error('SSE error:', error);
+
+      // Only set error state if the stream didn't end gracefully
       setState((prev) => ({
         ...prev,
         isConnected: false,
-        error: 'Connection error',
+        error: streamEndedGracefully ? prev.error : 'Connection error',
       }));
       closeConnection();
     };
@@ -142,9 +149,13 @@ export function useWizardSSE(): UseWizardSSEReturn {
    */
   const createSession = useCallback(async (userPrompt: string) => {
     try {
+      // Add user message to events
       setState((prev) => ({
         ...prev,
-        events: [],
+        events: [{
+          type: 'user_message' as const,
+          content: userPrompt,
+        }],
         isComplete: false,
         error: null,
         leia: null,
@@ -185,6 +196,15 @@ export function useWizardSSE(): UseWizardSSEReturn {
     }
 
     try {
+      // Add user message to events
+      setState((prev) => ({
+        ...prev,
+        events: [...prev.events, {
+          type: 'user_message' as const,
+          content: message,
+        }],
+      }));
+
       const token = localStorage.getItem('token');
       await axios.post(
         `${API_BASE_URL}/api/v1/wizard/sessions/${state.sessionId}/message`,
