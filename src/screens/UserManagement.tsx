@@ -16,7 +16,7 @@ import { Header } from "../components/shared/Header";
 interface UserResponse {
   id: string;
   email: string;
-  role: "admin" | "instructor" | "advance";
+  role: "admin" | "instructor" | "advanced";
   createdAt: string;
   updatedAt: string;
 }
@@ -36,7 +36,7 @@ export const UserManagement = () => {
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
-    role: "instructor" as "admin" | "instructor" | "advance",
+    role: "instructor" as "admin" | "instructor" | "advanced",
     password: "",
     confirmPassword: "",
   });
@@ -85,7 +85,7 @@ export const UserManagement = () => {
     if (role === "instructor") {
       return `${baseClasses} bg-green-100 text-green-800`;
     }
-    if (role === "advance") {
+    if (role === "advanced") {
       return `${baseClasses} bg-blue-100 text-blue-800`;
     }
     return `${baseClasses} bg-gray-100 text-gray-800`;
@@ -489,7 +489,7 @@ export const UserManagement = () => {
                           role: e.target.value as
                             | "admin"
                             | "instructor"
-                            | "advance",
+                            | "advanced",
                         })
                       }
                       className="block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
@@ -497,7 +497,7 @@ export const UserManagement = () => {
                     >
                       <option value="instructor">Instructor</option>
                       <option value="admin">Administrator</option>
-                      <option value="advance">Advance</option>
+                      <option value="advanced">Advanced</option>
                     </select>
                   </div>
 
