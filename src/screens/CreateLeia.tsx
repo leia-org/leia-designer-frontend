@@ -9,6 +9,7 @@ import {
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
+import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { useAuth } from "../context";
 import type { Persona, Behaviour, Problem } from "../models/Leia";
 import api from "../lib/axios";
@@ -122,6 +123,22 @@ export const CreateLeia: React.FC = () => {
     content: null,
     apiVersion: "v1",
   });
+
+  // Estados para eliminación de recursos
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    resource: Persona | Problem | Behaviour | null;
+    resourceType: "persona" | "problem" | "behaviour" | null;
+  }>({
+    isOpen: false,
+    resource: null,
+    resourceType: null,
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<{
+    message: string;
+    data?: Array<{ id: string; name: string }>;
+  } | null>(null);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -389,6 +406,107 @@ export const CreateLeia: React.FC = () => {
       ...prev,
       apiVersion: value,
     }));
+  };
+
+  // Funciones de eliminación de recursos
+  const handleDeleteResource = (
+    resource: Persona | Problem | Behaviour,
+    resourceType: "persona" | "problem" | "behaviour"
+  ) => {
+    setDeleteModal({
+      isOpen: true,
+      resource,
+      resourceType,
+    });
+    setDeleteError(null);
+  };
+
+  const confirmDeleteResource = async (
+    resource: Persona | Problem | Behaviour,
+    resourceType: "persona" | "problem" | "behaviour"
+  ) => {
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const endpoint = `${resourceType}s`; // personas, problems, behaviours
+      await api.delete(`/api/v1/${endpoint}/${resource.id}`);
+
+      // Refrescar la lista correspondiente
+      switch (resourceType) {
+        case "persona":
+          await loadPersonas(personaVisibility);
+          // Si el recurso eliminado estaba seleccionado, deseleccionarlo
+          if (leiaConfig.persona?.id === resource.id) {
+            setLeiaConfig((prev) => ({ ...prev, persona: null }));
+          }
+          break;
+        case "problem":
+          await loadProblems(problemVisibility, problemProcess);
+          if (leiaConfig.problem?.id === resource.id) {
+            setLeiaConfig((prev) => ({ ...prev, problem: null }));
+          }
+          break;
+        case "behaviour":
+          await loadBehaviours(behaviourVisibility, behaviourProcess);
+          if (leiaConfig.behaviour?.id === resource.id) {
+            setLeiaConfig((prev) => ({ ...prev, behaviour: null }));
+          }
+          break;
+      }
+
+      // Cerrar modal
+      setDeleteModal({
+        isOpen: false,
+        resource: null,
+        resourceType: null,
+      });
+    } catch (error: unknown) {
+      const err = {
+        message: "An error occurred while deleting the resource",
+        data: [] as Array<{ id: string; name: string }>,
+      };
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: {
+            status?: number;
+            data?: {
+              message?: string;
+              data?: Array<{ id: string; name: string }>;
+            };
+          };
+        };
+
+        console.log(axiosError?.response?.data);
+
+        if (axiosError.response?.status === 403) {
+          err.message = "You don't have permission to delete this resource";
+        } else if (axiosError.response?.status === 404) {
+          err.message = "Resource not found";
+        } else if (axiosError.response?.status === 400) {
+          err.message = `Cannot delete resource: it is being used in ${
+            axiosError.response?.data?.data?.length
+          } LEIA${axiosError.response?.data?.data?.length === 1 ? "" : "s"}.`;
+          err.data = axiosError.response?.data?.data || [];
+        } else if (axiosError.response?.data?.message) {
+          err.message = axiosError.response.data.message;
+        }
+      }
+
+      setDeleteError(err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      resource: null,
+      resourceType: null,
+    });
+    setDeleteError(null);
   };
 
   const cleanObjectForPreview = (
@@ -711,6 +829,7 @@ export const CreateLeia: React.FC = () => {
               selectedItem={leiaConfig.behaviour}
               onSelect={(item) => handleSelect("behaviour", item)}
               placeholder="Search behaviours..."
+              onDelete={handleDeleteResource}
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
                   <VisibilitySelector
@@ -734,6 +853,7 @@ export const CreateLeia: React.FC = () => {
               selectedItem={leiaConfig.problem}
               onSelect={(item) => handleSelect("problem", item)}
               placeholder="Search problems..."
+              onDelete={handleDeleteResource}
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
                   <VisibilitySelector
@@ -757,6 +877,7 @@ export const CreateLeia: React.FC = () => {
               selectedItem={leiaConfig.persona}
               onSelect={(item) => handleSelect("persona", item)}
               placeholder="Search personas..."
+              onDelete={handleDeleteResource}
               rightHeaderElement={
                 <VisibilitySelector
                   value={personaVisibility}
@@ -2086,6 +2207,17 @@ export const CreateLeia: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Modal de eliminación de recursos */}
+      <DeleteResourceModal
+        isOpen={deleteModal.isOpen}
+        resource={deleteModal.resource}
+        resourceType={deleteModal.resourceType}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteResource}
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
     </div>
   );
 };
