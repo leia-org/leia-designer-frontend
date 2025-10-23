@@ -443,7 +443,7 @@ export const MyActivities: React.FC = () => {
                                     ? leiaConfig.leia
                                     : null;
                                 return (
-                                  <div key={leia?.id || index} className="p-4">
+                                  <div key={index} className="p-4">
                                     <div className="flex items-start justify-between">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
