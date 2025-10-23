@@ -9,6 +9,7 @@ import { ForbiddenPage } from "../screens/ForbiddenPage";
 import { LeiaSearch } from "../screens/LeiaSearch";
 import { UserManagement } from "../screens/UserManagement";
 import { MyActivities } from "../screens/MyActivities";
+import { AIWizard } from "../screens/AIWizard";
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -79,6 +80,14 @@ export const AppRoutes = () => {
         element={
           <AuthenticatedRoute>
             <CreateLeia />
+          </AuthenticatedRoute>
+        }
+      />
+      <Route
+        path="/wizard"
+        element={
+          <AuthenticatedRoute>
+            <AIWizard />
           </AuthenticatedRoute>
         }
       />

@@ -6,3 +6,24 @@
     cursor: pointer;
   }
 }
+
+@layer utilities {
+  /* Radial gradient for glow effect */
+  .bg-gradient-radial {
+    background-image: radial-gradient(circle at center, var(--tw-gradient-stops));
+  }
+
+  /* Slow rotation animation for glow */
+  .animate-spin-slow {
+    animation: spin-slow 3s linear infinite;
+  }
+
+  @keyframes spin-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}

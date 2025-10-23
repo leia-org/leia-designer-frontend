@@ -5,6 +5,7 @@ import {
   LightBulbIcon,
   PuzzlePieceIcon,
   EyeIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
@@ -370,13 +371,28 @@ export const LeiaSearch: React.FC = () => {
       )}
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
         <div className="flex items-end justify-between mb-6">
-          <div className="flex-1">
+          <div className="flex-1 flex items-end gap-4">
             <SearchFilter
               placeholder="Search by name or description"
               value={queryText}
               onChange={setQueryText}
               className="max-w-xl"
             />
+            <button
+              onClick={() => navigate('/wizard')}
+              className="relative px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-md transition-all duration-200 flex items-center gap-2 font-medium overflow-hidden group"
+            >
+              {/* Animated rotating glow background */}
+              <div className="absolute inset-0 opacity-75 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="absolute inset-0 animate-spin-slow bg-gradient-radial from-purple-400 via-blue-500 to-transparent blur-md"></div>
+              </div>
+
+              {/* Button content */}
+              <div className="relative flex items-center gap-2">
+                <SparklesIcon className="w-5 h-5" />
+                <span>LEIA Wizard</span>
+              </div>
+            </button>
           </div>
           <div className="flex gap-4">
             <div className="min-w-[140px]">
