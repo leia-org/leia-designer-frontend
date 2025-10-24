@@ -12,9 +12,11 @@ export interface Experiment {
 }
 
 interface LeiaConfig {
+  id: string;
   leia: Leia | string;
   configuration: {
     mode: string;
     data: Record<string, unknown>;
+    link: string;
   };
 }

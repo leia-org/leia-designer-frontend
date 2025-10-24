@@ -15,6 +15,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   EyeIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 
 export const MyActivities: React.FC = () => {
@@ -141,8 +142,22 @@ export const MyActivities: React.FC = () => {
         position: "bottom-right",
         autoClose: 3000,
       });
-    } catch {
-      toast.error("Failed to publish activity", {
+    } catch (error) {
+      let errorMessage = "Failed to publish activity";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
         position: "bottom-right",
         autoClose: 3000,
       });
@@ -151,6 +166,88 @@ export const MyActivities: React.FC = () => {
         const newSet = new Set([...prev]);
         newSet.delete(experiment.id);
         return newSet;
+      });
+    }
+  };
+
+  const handleDeleteExperimentLeia = async (
+    experimentId: string,
+    leiaConfigId: string
+  ) => {
+    try {
+      await api.delete(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`
+      );
+
+      setExperiments(
+        (prev) =>
+          prev?.map((exp) => {
+            if (exp.id === experimentId) {
+              return {
+                ...exp,
+                leias: exp.leias.filter(
+                  (leiaConfig) => leiaConfig.id !== leiaConfigId
+                ),
+              };
+            }
+            return exp;
+          }) || null
+      );
+      toast.success("LEIA deleted from activity", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    } catch (error) {
+      let errorMessage = "Failed to delete LEIA from activity";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
+  const handleDeleteExperiment = async (experimentId: string) => {
+    try {
+      await api.delete(`/api/v1/experiments/${experimentId}`);
+
+      setExperiments(
+        (prev) => prev?.filter((exp) => exp.id !== experimentId) || null
+      );
+      toast.success("Activity deleted successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    } catch (error) {
+      let errorMessage = "Failed to delete activity";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
       });
     }
   };
@@ -401,22 +498,33 @@ export const MyActivities: React.FC = () => {
                               </span>
                             )}
                             {!experiment.isPublished && (
-                              <button
-                                onClick={() => publishExperiment(experiment)}
-                                disabled={publishingExperiments.has(
-                                  experiment.id
-                                )}
-                                className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
-                              >
-                                {publishingExperiments.has(experiment.id) ? (
-                                  <div className="flex items-center gap-1">
-                                    <ArrowPathIcon className="w-3 h-3 animate-spin" />
-                                    Publishing...
-                                  </div>
-                                ) : (
-                                  "Publish"
-                                )}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => publishExperiment(experiment)}
+                                  disabled={publishingExperiments.has(
+                                    experiment.id
+                                  )}
+                                  className="h-8 px-3 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-1"
+                                >
+                                  {publishingExperiments.has(experiment.id) ? (
+                                    <>
+                                      <ArrowPathIcon className="w-3 h-3 animate-spin" />
+                                      Publishing...
+                                    </>
+                                  ) : (
+                                    "Publish"
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleDeleteExperiment(experiment.id)
+                                  }
+                                  className="h-8 w-8 flex items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors duration-200"
+                                  title="Delete activity"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              </div>
                             )}
                             <button
                               onClick={() => toggleExperiment(experiment.id)}
@@ -443,7 +551,10 @@ export const MyActivities: React.FC = () => {
                                     ? leiaConfig.leia
                                     : null;
                                 return (
-                                  <div key={leia?.id || index} className="p-4">
+                                  <div
+                                    key={leiaConfig.id || index}
+                                    className="p-4"
+                                  >
                                     <div className="flex items-start justify-between">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
@@ -499,6 +610,23 @@ export const MyActivities: React.FC = () => {
                                             )}
                                         </div>
                                       </div>
+
+                                      {experiment.isPublished == false && (
+                                        <div className="mr-10 flex items-center justify-center my-auto">
+                                          <button
+                                            className="h-8 px-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 text-xs font-medium gap-1"
+                                            onClick={() =>
+                                              handleDeleteExperimentLeia(
+                                                experiment.id,
+                                                leiaConfig.id
+                                              )
+                                            }
+                                            title="Delete LEIA from activity"
+                                          >
+                                            Delete LEIA
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );
