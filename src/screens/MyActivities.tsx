@@ -1,7 +1,7 @@
 import type React from "react";
 import { Header } from "../components/shared/Header";
 import { useEffect, useState, useCallback } from "react";
-import type { Experiment } from "../models/Experiment";
+import type { Experiment, LeiaConfig } from "../models/Experiment";
 import type { Leia } from "../models/Leia";
 import api from "../lib/axios";
 import { ToastContainer, toast } from "react-toastify";
@@ -16,7 +16,13 @@ import {
   ChevronUpIcon,
   EyeIcon,
   TrashIcon,
+  LinkIcon,
+  PencilIcon,
+  SparklesIcon,
+  ExclamationTriangleIcon,
+  DocumentIcon,
 } from "@heroicons/react/24/outline";
+import Select from "react-select";
 
 export const MyActivities: React.FC = () => {
   const [experiments, setExperiments] = useState<Experiment[] | null>(null);
@@ -39,6 +45,12 @@ export const MyActivities: React.FC = () => {
   const [publishingExperiments, setPublishingExperiments] = useState<
     Set<string>
   >(new Set());
+
+  // Transcription state
+  const [showUrlInput, setShowUrlInput] = useState<Set<string>>(new Set());
+  const [urlInputValues, setUrlInputValues] = useState<{
+    [key: string]: string;
+  }>({});
 
   // Fetch experiments for the current user
 
@@ -252,6 +264,155 @@ export const MyActivities: React.FC = () => {
     }
   };
 
+  const handleUpdateExperimentLeiaMode = async (
+    experimentId: string,
+    leiaConfigId: string,
+    leiaConfig: LeiaConfig,
+    mode: string
+  ) => {
+    try {
+      const update = {
+        leia:
+          typeof leiaConfig.leia === "string"
+            ? leiaConfig.leia
+            : leiaConfig.leia.id,
+        configuration: { ...leiaConfig.configuration, mode },
+      };
+      const response = await api.put<Experiment>(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+        update
+      );
+
+      setExperiments((prev) => {
+        if (!prev) return null;
+        return prev.map((exp) => {
+          if (exp.id === experimentId) {
+            return response.data;
+          }
+          return exp;
+        });
+      });
+    } catch (error) {
+      let errorMessage = "Failed to update LEIA mode";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
+  const handleAddTranscriptionLink = async (
+    experimentId: string,
+    leiaConfigId: string,
+    leiaConfig: LeiaConfig,
+    url: string
+  ) => {
+    const update = {
+      leia:
+        typeof leiaConfig.leia === "string"
+          ? leiaConfig.leia
+          : leiaConfig.leia.id,
+      configuration: {
+        mode: leiaConfig.configuration.mode,
+        data: {
+          ...leiaConfig.configuration.data,
+          link: url,
+          messages: undefined,
+        },
+      },
+    };
+    try {
+      const response = await api.put(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+        update
+      );
+      setExperiments((prev) => {
+        if (!prev) return null;
+        return prev.map((exp) => {
+          if (exp.id === experimentId) {
+            return response.data;
+          }
+          return exp;
+        });
+      });
+      toast.success("Transcription link added successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    } catch (error) {
+      let errorMessage = "Failed to add transcription link";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
+  const handleCreateTranscriptionManually = async (
+    experimentId: string,
+    leiaConfigId: string,
+    leiaConfig: LeiaConfig
+  ) => {
+    // TODO: Implementar la lógica para crear transcripción manualmente
+  };
+
+  const handleGenerateTranscriptionAutomatically = async (
+    experimentId: string,
+    leiaConfigId: string,
+    leiaConfig: LeiaConfig
+  ) => {
+    // TODO: Implementar la lógica para generar transcripción automáticamente
+  };
+
+  const handleViewTranscription = (data: {
+    link?: string;
+    messages?: unknown;
+  }) => {
+    if (data?.link) {
+      // Abrir enlace en nueva pestaña
+      window.open(data.link, "_blank", "noopener,noreferrer");
+    } else if (data?.messages) {
+      // TODO: Implementar visualización de mensajes de chat
+      console.log("View chat messages:", data.messages);
+    }
+  };
+
+  const isValidUrl = (string: string): boolean => {
+    try {
+      new URL(string);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   return (
     <div className="flex flex-col h-screen bg-white">
       <Header
@@ -512,17 +673,21 @@ export const MyActivities: React.FC = () => {
                                       Publishing...
                                     </>
                                   ) : (
-                                    "Publish"
+                                    <>
+                                      <PlusIcon className="w-4 h-4" />
+                                      Publish
+                                    </>
                                   )}
                                 </button>
                                 <button
                                   onClick={() =>
                                     handleDeleteExperiment(experiment.id)
                                   }
-                                  className="h-8 w-8 flex items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors duration-200"
+                                  className="h-8 px-3 flex items-center gap-2 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors duration-200 text-xs font-medium"
                                   title="Delete activity"
                                 >
                                   <TrashIcon className="w-4 h-4" />
+                                  Delete Activity
                                 </button>
                               </div>
                             )}
@@ -555,66 +720,86 @@ export const MyActivities: React.FC = () => {
                                     key={leiaConfig.id || index}
                                     className="p-4"
                                   >
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <h4 className="font-medium text-gray-900">
-                                            {leia?.metadata?.name ||
-                                              `LEIA ${index + 1}`}
-                                          </h4>
-                                          {leia && (
-                                            <button
-                                              onClick={() =>
-                                                viewLeiaContent(leia)
-                                              }
-                                              onMouseEnter={() =>
-                                                setPreloadModal(true)
-                                              }
-                                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                              title="View LEIA content"
-                                            >
-                                              <EyeIcon className="w-4 h-4" />
-                                            </button>
-                                          )}
-                                        </div>
-                                        <div className="space-y-2 text-sm">
+                                    <div className="p-2">
+                                      {/* First row: LEIA name, mode selector, delete button */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                          <div className="flex items-center gap-2">
+                                            <h4 className="font-medium text-gray-900">
+                                              {leia?.metadata?.name ||
+                                                `LEIA ${index + 1}`}
+                                            </h4>
+                                            {leia && (
+                                              <button
+                                                onClick={() =>
+                                                  viewLeiaContent(leia)
+                                                }
+                                                onMouseEnter={() =>
+                                                  setPreloadModal(true)
+                                                }
+                                                className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                                title="View LEIA content"
+                                              >
+                                                <EyeIcon className="w-4 h-4" />
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {/* Mode selector */}
                                           {leiaConfig.configuration?.mode && (
                                             <div className="flex items-center gap-2">
-                                              <span className="font-medium text-gray-600">
+                                              <span className="font-medium text-gray-600 text-sm">
                                                 Mode:
                                               </span>
-                                              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
-                                                {leiaConfig.configuration.mode}
-                                              </span>
+                                              {experiment.isPublished ? (
+                                                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                                                  {
+                                                    leiaConfig.configuration
+                                                      .mode
+                                                  }
+                                                </span>
+                                              ) : (
+                                                <Select
+                                                  value={{
+                                                    value:
+                                                      leiaConfig.configuration
+                                                        .mode,
+                                                    label:
+                                                      leiaConfig.configuration
+                                                        .mode,
+                                                  }}
+                                                  options={[
+                                                    {
+                                                      value: "standard",
+                                                      label: "standard",
+                                                    },
+                                                    {
+                                                      value: "transcription",
+                                                      label: "transcription",
+                                                    },
+                                                  ]}
+                                                  onChange={(
+                                                    selectedOption
+                                                  ) => {
+                                                    if (selectedOption) {
+                                                      handleUpdateExperimentLeiaMode(
+                                                        experiment.id,
+                                                        leiaConfig.id,
+                                                        leiaConfig,
+                                                        selectedOption.value
+                                                      );
+                                                    }
+                                                  }}
+                                                />
+                                              )}
                                             </div>
                                           )}
-                                          {leiaConfig.configuration?.data &&
-                                            Object.keys(
-                                              leiaConfig.configuration.data
-                                            ).length > 0 && (
-                                              <div className="flex items-start gap-2">
-                                                <span className="font-medium text-gray-600">
-                                                  Config:
-                                                </span>
-                                                <span className="text-gray-700 text-xs bg-gray-50 px-2 py-1 rounded">
-                                                  {JSON.stringify(
-                                                    leiaConfig.configuration
-                                                      .data
-                                                  ).substring(0, 100)}
-                                                  {JSON.stringify(
-                                                    leiaConfig.configuration
-                                                      .data
-                                                  ).length > 100 && "..."}
-                                                </span>
-                                              </div>
-                                            )}
                                         </div>
-                                      </div>
 
-                                      {experiment.isPublished == false && (
-                                        <div className="mr-10 flex items-center justify-center my-auto">
+                                        {/* Delete button */}
+                                        {experiment.isPublished == false && (
                                           <button
-                                            className="h-8 px-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 text-xs font-medium gap-1"
+                                            className="h-8 px-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 text-xs font-medium flex items-center gap-1"
                                             onClick={() =>
                                               handleDeleteExperimentLeia(
                                                 experiment.id,
@@ -623,10 +808,226 @@ export const MyActivities: React.FC = () => {
                                             }
                                             title="Delete LEIA from activity"
                                           >
+                                            <TrashIcon className="w-4 h-4" />
                                             Delete LEIA
                                           </button>
+                                        )}
+                                      </div>
+
+                                      {/* Second row: Transcription section */}
+                                      {leiaConfig.configuration?.mode ===
+                                        "transcription" && (
+                                        <div className="flex items-center justify-between mt-3">
+                                          <div className="flex items-center gap-4">
+                                            {leiaConfig.configuration?.data
+                                              ?.messages ||
+                                            leiaConfig.configuration?.data
+                                              ?.link ? (
+                                              <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-2 text-sm">
+                                                  <span className="font-medium text-gray-600">
+                                                    Transcription Type:
+                                                  </span>
+                                                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                                                    {leiaConfig.configuration
+                                                      ?.data?.link
+                                                      ? "External Link"
+                                                      : "Chat Messages"}
+                                                  </span>
+                                                </div>
+                                                <button
+                                                  onClick={() =>
+                                                    handleViewTranscription(
+                                                      leiaConfig.configuration
+                                                        ?.data
+                                                    )
+                                                  }
+                                                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                  title="View transcription content"
+                                                >
+                                                  <DocumentIcon className="w-5 h-5" />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2 text-amber-700 bg-amber-100 px-3 py-2 rounded-md text-sm font-medium border border-amber-200">
+                                                <ExclamationTriangleIcon className="w-4 h-4" />
+                                                No Transcription Available
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {!experiment.isPublished && (
+                                            <div className="flex items-center gap-2 ml-4">
+                                              <button
+                                                onClick={() => {
+                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
+                                                  setShowUrlInput((prev) => {
+                                                    const newSet = new Set(
+                                                      prev
+                                                    );
+                                                    if (newSet.has(leiaKey)) {
+                                                      newSet.delete(leiaKey);
+                                                    } else {
+                                                      newSet.add(leiaKey);
+                                                    }
+                                                    return newSet;
+                                                  });
+                                                }}
+                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 text-sm font-medium"
+                                                title="Add transcription link"
+                                              >
+                                                <LinkIcon className="w-4 h-4" />
+                                                Add Link
+                                              </button>
+
+                                              <button
+                                                onClick={() =>
+                                                  handleCreateTranscriptionManually(
+                                                    experiment.id,
+                                                    leiaConfig.id,
+                                                    leiaConfig
+                                                  )
+                                                }
+                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 text-sm font-medium"
+                                                title="Create transcription manually"
+                                              >
+                                                <PencilIcon className="w-4 h-4" />
+                                                Generate
+                                              </button>
+
+                                              <button
+                                                onClick={() =>
+                                                  handleGenerateTranscriptionAutomatically(
+                                                    experiment.id,
+                                                    leiaConfig.id,
+                                                    leiaConfig
+                                                  )
+                                                }
+                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 transition-colors duration-200 text-sm font-medium"
+                                                title="Generate transcription automatically"
+                                              >
+                                                <SparklesIcon className="w-4 h-4" />
+                                                Auto Generate
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                       )}
+
+                                      {/* URL Input */}
+                                      {showUrlInput.has(
+                                        `${experiment.id}-${leiaConfig.id}`
+                                      ) &&
+                                        !experiment.isPublished && (
+                                          <div className="space-y-2 mt-3">
+                                            <div className="flex gap-3">
+                                              <input
+                                                type="url"
+                                                placeholder="Enter transcription URL..."
+                                                value={
+                                                  urlInputValues[
+                                                    `${experiment.id}-${leiaConfig.id}`
+                                                  ] || ""
+                                                }
+                                                onChange={(e) => {
+                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
+                                                  setUrlInputValues((prev) => ({
+                                                    ...prev,
+                                                    [leiaKey]: e.target.value,
+                                                  }));
+                                                }}
+                                                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                                                  urlInputValues[
+                                                    `${experiment.id}-${leiaConfig.id}`
+                                                  ] &&
+                                                  !isValidUrl(
+                                                    urlInputValues[
+                                                      `${experiment.id}-${leiaConfig.id}`
+                                                    ]
+                                                  )
+                                                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                                                    : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                                                }`}
+                                              />
+                                              <button
+                                                onClick={() => {
+                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
+                                                  const url =
+                                                    urlInputValues[leiaKey];
+                                                  if (
+                                                    url &&
+                                                    url.trim() &&
+                                                    isValidUrl(url.trim())
+                                                  ) {
+                                                    handleAddTranscriptionLink(
+                                                      experiment.id,
+                                                      leiaConfig.id,
+                                                      leiaConfig,
+                                                      url.trim()
+                                                    );
+                                                    setUrlInputValues(
+                                                      (prev) => ({
+                                                        ...prev,
+                                                        [leiaKey]: "",
+                                                      })
+                                                    );
+                                                    setShowUrlInput((prev) => {
+                                                      const newSet = new Set(
+                                                        prev
+                                                      );
+                                                      newSet.delete(leiaKey);
+                                                      return newSet;
+                                                    });
+                                                  }
+                                                }}
+                                                disabled={
+                                                  !urlInputValues[
+                                                    `${experiment.id}-${leiaConfig.id}`
+                                                  ] ||
+                                                  !isValidUrl(
+                                                    urlInputValues[
+                                                      `${experiment.id}-${leiaConfig.id}`
+                                                    ] || ""
+                                                  )
+                                                }
+                                                className="h-8 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
+                                              >
+                                                Add
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
+                                                  setUrlInputValues((prev) => ({
+                                                    ...prev,
+                                                    [leiaKey]: "",
+                                                  }));
+                                                  setShowUrlInput((prev) => {
+                                                    const newSet = new Set(
+                                                      prev
+                                                    );
+                                                    newSet.delete(leiaKey);
+                                                    return newSet;
+                                                  });
+                                                }}
+                                                className="h-8 px-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200 text-sm font-medium"
+                                              >
+                                                Cancel
+                                              </button>
+                                            </div>
+                                            {urlInputValues[
+                                              `${experiment.id}-${leiaConfig.id}`
+                                            ] &&
+                                              !isValidUrl(
+                                                urlInputValues[
+                                                  `${experiment.id}-${leiaConfig.id}`
+                                                ]
+                                              ) && (
+                                                <p className="text-red-500 text-xs">
+                                                  Please enter a valid URL
+                                                </p>
+                                              )}
+                                          </div>
+                                        )}
                                     </div>
                                   </div>
                                 );
