@@ -88,10 +88,18 @@ export default function LeiaCard({
             <span className="flex items-center gap-1">
               <span
                 className={`inline-block w-2 h-2 rounded-full ${
-                  user.role === "admin" ? "bg-purple-500" : user.role === "advanced" ? "bg-blue-500" : "bg-green-500"
+                  user.role === "admin"
+                    ? "bg-purple-500"
+                    : user.role === "advanced"
+                    ? "bg-blue-500"
+                    : "bg-green-500"
                 }`}
               ></span>
-              {user.role === "admin" ? "Administrator" : user.role === "advanced" ? "Advanced" : "Instructor"}
+              {user.role === "admin"
+                ? "Administrator"
+                : user.role === "advanced"
+                ? "Advanced"
+                : "Instructor"}
             </span>
           </div>
         ) : null}

@@ -97,6 +97,8 @@ export const UserManagement = () => {
         return "Administrator";
       case "instructor":
         return "Instructor";
+      case "advanced":
+        return "Advanced";
       default:
         return role;
     }
