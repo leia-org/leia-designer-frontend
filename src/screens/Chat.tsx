@@ -1,9 +1,12 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
+import { ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
 import api from "../lib/axios";
+import { toast, ToastContainer } from "react-toastify";
+import type { LeiaConfig } from "../models/Experiment";
 
 interface NavigationState {
   preset?: {
@@ -27,6 +30,11 @@ interface NavigationState {
     };
   };
   problemDescription?: string;
+  experimentTranscription?: {
+    experimentId: string;
+    leiaConfigId: string;
+    leiaConfig: LeiaConfig;
+  };
 }
 
 const TypingAnimation = () => (
@@ -59,14 +67,43 @@ export const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessageText, setNewMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(true);
   const [problemDescription, setProblemDescription] = useState<string>("");
+  const [savingTranscription, setSavingTranscription] = useState(false);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [transcription, setTranscription] = useState(false);
+  const [experimentId, setExperimentId] = useState<string | null>(null);
+  const [leiaConfigId, setLeiaConfigId] = useState<string | null>(null);
+  const [leiaConfig, setLeiaConfig] = useState<LeiaConfig | null>(null);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback((smooth = true) => {
     if (chatMessagesRef.current) {
-      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+      chatMessagesRef.current.scrollTo({
+        top: chatMessagesRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
+  }, []);
+
+  const handleTextareaResize = () => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      const newHeight = Math.min(textarea.scrollHeight, 150);
+      textarea.style.height = `${newHeight}px`;
+    }
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNewMessageText(e.target.value);
+    handleTextareaResize();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as any);
     }
   };
 
@@ -87,11 +124,30 @@ export const Chat = () => {
     if (navigationState?.problemDescription) {
       setProblemDescription(navigationState.problemDescription);
     }
+
+    if (navigationState?.experimentTranscription) {
+      setTranscription(true);
+      setExperimentId(navigationState.experimentTranscription.experimentId);
+      setLeiaConfigId(navigationState.experimentTranscription.leiaConfigId);
+      setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
+    }
   }, [location.state]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Usar requestAnimationFrame para asegurar que el DOM se haya actualizado
+    requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    // Hacer scroll cuando aparece el indicador de "typing"
+    if (sendingMessage) {
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [sendingMessage, scrollToBottom]);
 
   const addMessage = (newMessage: Message) => {
     setMessages((prev) => {
@@ -111,6 +167,9 @@ export const Chat = () => {
     if (!messageText) return;
 
     setNewMessageText("");
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
     const newMessage: Message = {
       text: messageText,
       timestamp: new Date(),
@@ -149,6 +208,74 @@ export const Chat = () => {
     }
   };
 
+  const handleSaveTranscription = async () => {
+    console.log("Saving transcription...", messages);
+    // Validar que existan mensajes
+    if (messages.length === 0) {
+      toast.error("No messages to save as transcription");
+      return;
+    }
+
+    if (!transcription) {
+      toast.error("Transcription option is not enabled");
+      return;
+    }
+
+    if (!experimentId || !leiaConfigId || !leiaConfig) {
+      toast.error("Missing experiment or LEIA configuration information");
+      return;
+    }
+
+    const update = {
+      leia:
+        typeof leiaConfig.leia === "string"
+          ? leiaConfig.leia
+          : leiaConfig.leia.id,
+      configuration: {
+        mode: leiaConfig.configuration.mode,
+        data: {
+          ...leiaConfig.configuration.data,
+          link: undefined,
+          messages: messages,
+        },
+      },
+    };
+
+    try {
+      setSavingTranscription(true);
+      await api.put(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+        update
+      );
+      toast.success("Transcription added successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    } catch (error) {
+      let errorMessage = "Failed to add transcription";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    } finally {
+      setSavingTranscription(false);
+    }
+  };
+
   const handleFinishConversation = async () => {
     const navigationState = location.state as NavigationState;
     if (navigationState?.save) {
@@ -174,6 +301,25 @@ export const Chat = () => {
             >
               {showInstructions ? "Hide Instructions" : "Instructions"}
             </button>
+            {transcription && (
+              <button
+                onClick={handleSaveTranscription}
+                disabled={savingTranscription || messages.length === 0}
+                className="px-4 py-1.5 text-sm text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {savingTranscription ? (
+                  <>
+                    <ArrowPathIcon className="animate-spin h-4 w-4" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                    Save Transcription
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={handleFinishConversation}
               className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -183,18 +329,26 @@ export const Chat = () => {
           </div>
         }
       />
+      <ToastContainer />
 
       {showInstructions && problemDescription && (
         <div className="bg-blue-50 border-b border-blue-200 px-4 py-4">
           <div className="max-w-3xl mx-auto">
-            <h3 className="text-lg font-semibold text-blue-900 mb-2">Problem Instructions</h3>
-            <p className="text-sm text-blue-800 whitespace-pre-wrap">{problemDescription}</p>
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">
+              Instructions
+            </h3>
+            <p className="text-sm text-blue-800 whitespace-pre-wrap">
+              {problemDescription}
+            </p>
           </div>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth">
-        <div ref={chatMessagesRef} className="max-w-3xl mx-auto space-y-4 py-4">
+      <div
+        ref={chatMessagesRef}
+        className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth"
+      >
+        <div className="max-w-3xl mx-auto space-y-4 py-4">
           {messages.map((msg, index) => (
             <div
               key={index}
@@ -227,7 +381,9 @@ export const Chat = () => {
                     : "bg-blue-600 text-white rounded-t-2xl rounded-l-2xl rounded-br-md"
                 }`}
               >
-                <p className="text-[15px] leading-relaxed">{msg.text}</p>
+                <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {msg.text}
+                </p>
               </div>
             </div>
           ))}
@@ -252,13 +408,15 @@ export const Chat = () => {
             onSubmit={handleSubmit}
             className="flex gap-2 bg-white rounded-lg p-3 shadow-[0_0_10px_rgba(0,0,0,0.1)] hover:shadow-[0_0_15px_rgba(0,0,0,0.15)] transition-all"
           >
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={newMessageText}
-              onChange={(e) => setNewMessageText(e.target.value)}
-              placeholder="Type a message..."
-              className="flex-1 px-2 py-1.5 bg-transparent border-none focus:outline-none text-[15px]"
+              onChange={handleTextareaChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message... (Shift+Enter for new line)"
+              className="flex-1 px-2 py-1.5 bg-transparent border-none focus:outline-none text-[15px] resize-none overflow-y-auto"
+              style={{ minHeight: "40px", maxHeight: "150px" }}
+              rows={1}
             />
             <button
               type="submit"

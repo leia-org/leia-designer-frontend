@@ -116,14 +116,14 @@ export default function LeiaCard({
                 className={`inline-block w-2 h-2 rounded-full ${
                   user.role === "admin"
                     ? "bg-purple-500"
-                    : user.role === "advance"
+                    : user.role === "advanced"
                     ? "bg-blue-500"
                     : "bg-green-500"
                 }`}
               ></span>
               {user.role === "admin"
                 ? "Administrator"
-                : user.role === "advance"
+                : user.role === "advanced"
                 ? "Advanced"
                 : "Instructor"}
             </span>
