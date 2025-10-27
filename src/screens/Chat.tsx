@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
+import { ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
 import api from "../lib/axios";
-import { toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
+import type { LeiaConfig } from "../models/Experiment";
 
 interface NavigationState {
   preset?: {
@@ -28,6 +30,11 @@ interface NavigationState {
     };
   };
   problemDescription?: string;
+  experimentTranscription?: {
+    experimentId: string;
+    leiaConfigId: string;
+    leiaConfig: LeiaConfig;
+  };
 }
 
 const TypingAnimation = () => (
@@ -65,12 +72,16 @@ export const Chat = () => {
   const [savingTranscription, setSavingTranscription] = useState(false);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [transcription, setTranscription] = useState(false);
+  const [experimentId, setExperimentId] = useState<string | null>(null);
+  const [leiaConfigId, setLeiaConfigId] = useState<string | null>(null);
+  const [leiaConfig, setLeiaConfig] = useState<LeiaConfig | null>(null);
 
   const scrollToBottom = useCallback((smooth = true) => {
     if (chatMessagesRef.current) {
       chatMessagesRef.current.scrollTo({
         top: chatMessagesRef.current.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto'
+        behavior: smooth ? "smooth" : "auto",
       });
     }
   }, []);
@@ -78,7 +89,7 @@ export const Chat = () => {
   const handleTextareaResize = () => {
     const textarea = inputRef.current;
     if (textarea) {
-      textarea.style.height = 'auto';
+      textarea.style.height = "auto";
       const newHeight = Math.min(textarea.scrollHeight, 150);
       textarea.style.height = `${newHeight}px`;
     }
@@ -90,7 +101,7 @@ export const Chat = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e as any);
     }
@@ -112,6 +123,13 @@ export const Chat = () => {
     const navigationState = location.state as NavigationState;
     if (navigationState?.problemDescription) {
       setProblemDescription(navigationState.problemDescription);
+    }
+
+    if (navigationState?.experimentTranscription) {
+      setTranscription(true);
+      setExperimentId(navigationState.experimentTranscription.experimentId);
+      setLeiaConfigId(navigationState.experimentTranscription.leiaConfigId);
+      setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
     }
   }, [location.state]);
 
@@ -150,7 +168,7 @@ export const Chat = () => {
 
     setNewMessageText("");
     if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = "auto";
     }
     const newMessage: Message = {
       text: messageText,
@@ -190,74 +208,69 @@ export const Chat = () => {
     }
   };
 
-  const handleSaveAsTranscription = async () => {
-    const navigationState = location.state as NavigationState;
-
+  const handleSaveTranscription = async () => {
+    console.log("Saving transcription...", messages);
     // Validar que existan mensajes
     if (messages.length === 0) {
       toast.error("No messages to save as transcription");
       return;
     }
 
-    // Validar que exista la información de guardado necesaria
-    if (!navigationState?.save?.customizations?.leia) {
-      toast.error("Missing LEIA configuration information");
+    if (!transcription) {
+      toast.error("Transcription option is not enabled");
       return;
     }
 
+    if (!experimentId || !leiaConfigId || !leiaConfig) {
+      toast.error("Missing experiment or LEIA configuration information");
+      return;
+    }
+
+    const update = {
+      leia:
+        typeof leiaConfig.leia === "string"
+          ? leiaConfig.leia
+          : leiaConfig.leia.id,
+      configuration: {
+        mode: leiaConfig.configuration.mode,
+        data: {
+          ...leiaConfig.configuration.data,
+          link: undefined,
+          messages: messages,
+        },
+      },
+    };
+
     try {
       setSavingTranscription(true);
-
-      // Obtener el LEIA ID actual
-      const leiaName = navigationState.save.customizations.leia.name;
-      const leiaVersion = navigationState.save.customizations.leia.version;
-
-      // Buscar el LEIA por nombre y versión para obtener su ID
-      const leiaResponse = await api.get(
-        `/api/v1/leias/name/${leiaName}/version/${leiaVersion}`
+      await api.put(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+        update
       );
-      const leiaId = leiaResponse.data.id;
-
-      // Formatear los mensajes para la transcripción
-      const transcriptionData = {
-        messages: messages.map((msg) => ({
-          text: msg.text,
-          timestamp: msg.timestamp,
-          isLeia: msg.isLeia,
-        })),
-        problemDescription,
-      };
-
-      // Crear o actualizar el experimento con la transcripción
-      // Por ahora, vamos a crear un nuevo experimento con nombre auto-generado
-      const experimentName = `Transcription - ${leiaName} - ${new Date().toISOString().split('T')[0]}`;
-
-      const experimentResponse = await api.post("/api/v1/experiments", {
-        name: experimentName,
+      toast.success("Transcription added successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
       });
+    } catch (error) {
+      let errorMessage = "Failed to add transcription";
 
-      const experimentId = experimentResponse.data.id;
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
 
-      // Añadir la configuración LEIA con modo transcription al experimento
-      await api.post(`/api/v1/experiments/${experimentId}/leias`, {
-        leia: leiaId,
-        configuration: {
-          mode: "transcription",
-          data: transcriptionData,
-        },
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
       });
-
-      toast.success("Transcription saved successfully!");
-
-      // Navegar de vuelta con delay para que se vea el toast
-      setTimeout(() => {
-        navigate("/");
-      }, 1500);
-    } catch (error: any) {
-      console.error("Error saving transcription:", error);
-      toast.error(
-        error.response?.data?.message || "Failed to save transcription"
-      );
     } finally {
       setSavingTranscription(false);
     }
@@ -288,29 +301,25 @@ export const Chat = () => {
             >
               {showInstructions ? "Hide Instructions" : "Instructions"}
             </button>
-            <button
-              onClick={handleSaveAsTranscription}
-              disabled={savingTranscription || messages.length === 0}
-              className="px-4 py-1.5 text-sm text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {savingTranscription ? (
-                <>
-                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
-                    <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
-                  </svg>
-                  Save as Transcription
-                </>
-              )}
-            </button>
+            {transcription && (
+              <button
+                onClick={handleSaveTranscription}
+                disabled={savingTranscription || messages.length === 0}
+                className="px-4 py-1.5 text-sm text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {savingTranscription ? (
+                  <>
+                    <ArrowPathIcon className="animate-spin h-4 w-4" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                    Save Transcription
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={handleFinishConversation}
               className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -320,17 +329,25 @@ export const Chat = () => {
           </div>
         }
       />
+      <ToastContainer />
 
       {showInstructions && problemDescription && (
         <div className="bg-blue-50 border-b border-blue-200 px-4 py-4">
           <div className="max-w-3xl mx-auto">
-            <h3 className="text-lg font-semibold text-blue-900 mb-2">Instructions</h3>
-            <p className="text-sm text-blue-800 whitespace-pre-wrap">{problemDescription}</p>
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">
+              Instructions
+            </h3>
+            <p className="text-sm text-blue-800 whitespace-pre-wrap">
+              {problemDescription}
+            </p>
           </div>
         </div>
       )}
 
-      <div ref={chatMessagesRef} className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth">
+      <div
+        ref={chatMessagesRef}
+        className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth"
+      >
         <div className="max-w-3xl mx-auto space-y-4 py-4">
           {messages.map((msg, index) => (
             <div
@@ -364,7 +381,9 @@ export const Chat = () => {
                     : "bg-blue-600 text-white rounded-t-2xl rounded-l-2xl rounded-br-md"
                 }`}
               >
-                <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {msg.text}
+                </p>
               </div>
             </div>
           ))}
@@ -396,7 +415,7 @@ export const Chat = () => {
               onKeyDown={handleKeyDown}
               placeholder="Type a message... (Shift+Enter for new line)"
               className="flex-1 px-2 py-1.5 bg-transparent border-none focus:outline-none text-[15px] resize-none overflow-y-auto"
-              style={{ minHeight: '40px', maxHeight: '150px' }}
+              style={{ minHeight: "40px", maxHeight: "150px" }}
               rows={1}
             />
             <button

@@ -6,6 +6,7 @@ import type { Leia } from "../models/Leia";
 import api from "../lib/axios";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
+import { TranscriptionViewModal } from "../components/TranscriptionViewModal";
 import {
   ExclamationCircleIcon,
   ArrowPathIcon,
@@ -23,8 +24,16 @@ import {
   DocumentIcon,
 } from "@heroicons/react/24/outline";
 import Select from "react-select";
+import { useNavigate } from "react-router-dom";
+
+interface TranscriptionMessage {
+  text: string;
+  timestamp: Date | string;
+  isLeia: boolean;
+}
 
 export const MyActivities: React.FC = () => {
+  const navigate = useNavigate();
   const [experiments, setExperiments] = useState<Experiment[] | null>(null);
   const [loadingExperiments, setLoadingExperiments] = useState(false);
   const [errorLoadingExperiments, setErrorLoadingExperiments] = useState("");
@@ -51,6 +60,16 @@ export const MyActivities: React.FC = () => {
   const [urlInputValues, setUrlInputValues] = useState<{
     [key: string]: string;
   }>({});
+
+  // Transcription modal state
+  const [showTranscriptionModal, setShowTranscriptionModal] = useState(false);
+  const [transcriptionMessages, setTranscriptionMessages] = useState<
+    TranscriptionMessage[]
+  >([]);
+
+  // Transcription loading state
+  const [initializingTranscriptionChat, setInitializingTranscriptionChat] =
+    useState<string | null>(null);
 
   // Fetch experiments for the current user
 
@@ -381,16 +400,48 @@ export const MyActivities: React.FC = () => {
     leiaConfigId: string,
     leiaConfig: LeiaConfig
   ) => {
-    // TODO: Implementar la lógica para crear transcripción manualmente
+    if (typeof leiaConfig.leia !== "object") {
+      return;
+    }
+
+    const transcriptionKey = `${experimentId}-${leiaConfigId}`;
+    setInitializingTranscriptionChat(transcriptionKey);
+
+    try {
+      const response = await api.post("/api/v1/runner/initialize", {
+        spec: leiaConfig.leia.spec,
+      });
+      const { sessionId } = response.data || {};
+      if (sessionId) {
+        navigate(`/chat/${sessionId}`, {
+          state: {
+            problemDescription:
+              leiaConfig.leia.spec?.problem?.spec?.description || "",
+            experimentTranscription: {
+              experimentId,
+              leiaConfigId,
+              leiaConfig,
+            },
+          },
+        });
+      }
+    } catch {
+      toast.error("Failed to create transcription session", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    } finally {
+      setInitializingTranscriptionChat(null);
+    }
   };
 
-  const handleGenerateTranscriptionAutomatically = async (
-    experimentId: string,
-    leiaConfigId: string,
-    leiaConfig: LeiaConfig
-  ) => {
-    // TODO: Implementar la lógica para generar transcripción automáticamente
-  };
+  // const handleGenerateTranscriptionAutomatically = async () =>
+  //   experimentId: string,
+  //   leiaConfigId: string,
+  //   leiaConfig: LeiaConfig
+  // ) => {
+  //   // TODO: Implementar la lógica para generar transcripción automáticamente
+  // };
 
   const handleViewTranscription = (data: {
     link?: string;
@@ -399,9 +450,10 @@ export const MyActivities: React.FC = () => {
     if (data?.link) {
       // Abrir enlace en nueva pestaña
       window.open(data.link, "_blank", "noopener,noreferrer");
-    } else if (data?.messages) {
-      // TODO: Implementar visualización de mensajes de chat
-      console.log("View chat messages:", data.messages);
+    } else if (data?.messages && Array.isArray(data.messages)) {
+      // Abrir modal con mensajes de transcripción
+      setTranscriptionMessages(data.messages);
+      setShowTranscriptionModal(true);
     }
   };
 
@@ -511,6 +563,14 @@ export const MyActivities: React.FC = () => {
           onClose={() => setShowLeiaModal(false)}
         />
       )}
+
+      {/* Transcription View Modal */}
+      <TranscriptionViewModal
+        isOpen={showTranscriptionModal}
+        onClose={() => setShowTranscriptionModal(false)}
+        messages={transcriptionMessages}
+        title="Transcription Messages"
+      />
 
       {/* Activities Header with Search and Create */}
       <div className="border-b border-gray-200 bg-white">
@@ -873,7 +933,10 @@ export const MyActivities: React.FC = () => {
                                                     return newSet;
                                                   });
                                                 }}
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 text-sm font-medium"
+                                                disabled={
+                                                  !!initializingTranscriptionChat
+                                                }
+                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
                                                 title="Add transcription link"
                                               >
                                                 <LinkIcon className="w-4 h-4" />
@@ -888,22 +951,38 @@ export const MyActivities: React.FC = () => {
                                                     leiaConfig
                                                   )
                                                 }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 text-sm font-medium"
+                                                disabled={
+                                                  !!initializingTranscriptionChat
+                                                }
+                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
                                                 title="Create transcription manually"
                                               >
-                                                <PencilIcon className="w-4 h-4" />
-                                                Generate
+                                                {initializingTranscriptionChat ===
+                                                `${experiment.id}-${leiaConfig.id}` ? (
+                                                  <>
+                                                    <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                                                    Initializing...
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <PencilIcon className="w-4 h-4" />
+                                                    Generate
+                                                  </>
+                                                )}
                                               </button>
 
                                               <button
-                                                onClick={() =>
-                                                  handleGenerateTranscriptionAutomatically(
-                                                    experiment.id,
-                                                    leiaConfig.id,
-                                                    leiaConfig
-                                                  )
+                                                // onClick={() =>
+                                                //   handleGenerateTranscriptionAutomatically(
+                                                //     experiment.id,
+                                                //     leiaConfig.id,
+                                                //     leiaConfig
+                                                //   )
+                                                // }
+                                                disabled={
+                                                  !!initializingTranscriptionChat
                                                 }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 transition-colors duration-200 text-sm font-medium"
+                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:bg-orange-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
                                                 title="Generate transcription automatically"
                                               >
                                                 <SparklesIcon className="w-4 h-4" />
@@ -981,6 +1060,7 @@ export const MyActivities: React.FC = () => {
                                                   }
                                                 }}
                                                 disabled={
+                                                  !!initializingTranscriptionChat ||
                                                   !urlInputValues[
                                                     `${experiment.id}-${leiaConfig.id}`
                                                   ] ||
@@ -1028,6 +1108,24 @@ export const MyActivities: React.FC = () => {
                                               )}
                                           </div>
                                         )}
+
+                                      {/* Transcription Warning */}
+                                      {leiaConfig.configuration?.mode ===
+                                        "transcription" && (
+                                        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                          <div className="flex items-start gap-2">
+                                            <ExclamationTriangleIcon className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                                            <p className="text-sm text-yellow-800">
+                                              <span className="font-medium">
+                                                Important:
+                                              </span>{" "}
+                                              Any form of transcription update
+                                              will result in overwriting
+                                              previous data.
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );
