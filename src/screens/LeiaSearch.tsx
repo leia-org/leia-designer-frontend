@@ -5,6 +5,7 @@ import {
   LightBulbIcon,
   PuzzlePieceIcon,
   EyeIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
@@ -14,6 +15,7 @@ import type { Experiment } from "../models/Experiment";
 import { ToastContainer, toast } from "react-toastify";
 import CreatableSelect from "react-select/creatable";
 import { LeiaViewModal } from "../components/LeiaViewModal";
+import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
 import { useAuth } from "../context";
 
 type VersionFilter = "" | "latest";
@@ -57,6 +59,20 @@ export const LeiaSearch: React.FC = () => {
 
   // Estados para el modal de visualización de LEIA
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  // Estados para eliminación de LEIAs
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    leia: Leia | null;
+  }>({
+    isOpen: false,
+    leia: null,
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<{
+    message: string;
+    data?: Array<{ id: string; name: string }>;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -145,7 +161,7 @@ export const LeiaSearch: React.FC = () => {
       );
       setDraftExperiments(response.data);
     } catch {
-      setErrorLoadingDraftExperiments("Could not load draft experiments");
+      setErrorLoadingDraftExperiments("Could not load draft activities");
     } finally {
       setLoadingDraftExperiments(false);
     }
@@ -221,6 +237,91 @@ export const LeiaSearch: React.FC = () => {
     setSelectedLeia(leia);
     setIsViewModalOpen(true);
   }, []);
+
+  // Funciones de eliminación de LEIAs
+  const handleDeleteLeia = useCallback((leia: Leia) => {
+    setDeleteModal({
+      isOpen: true,
+      leia,
+    });
+    setDeleteError(null);
+  }, []);
+
+  const confirmDeleteLeia = async (leia: Leia) => {
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await api.delete(`/api/v1/leias/${leia.id}`);
+
+      // Refrescar la lista de LEIAs
+      const response = await api.get<Leia[]>("/api/v1/leias", { params });
+      setLeias(response.data || []);
+
+      // Cerrar modal
+      setDeleteModal({
+        isOpen: false,
+        leia: null,
+      });
+
+      toast.success("LEIA deleted successfully");
+    } catch (error: unknown) {
+      const err = {
+        message: "An error occurred while deleting the resource",
+        data: [] as Array<{ id: string; name: string }>,
+      };
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: {
+            status?: number;
+            data?: {
+              message?: string;
+              data?: Array<{ id: string; name: string }>;
+            };
+          };
+        };
+
+        if (axiosError.response?.status === 403) {
+          err.message = "You do not have permission to delete this LEIA";
+        } else if (axiosError.response?.status === 404) {
+          err.message = "LEIA not found";
+        } else if (axiosError.response?.status === 400) {
+          err.message = `Cannot delete LEIA: it is being used in ${
+            axiosError.response.data?.data?.length
+          } activi${
+            axiosError.response.data?.data?.length === 1 ? "ty" : "ties"
+          }.`;
+          err.data = axiosError.response.data?.data || [];
+        } else if (axiosError.response?.data?.message) {
+          err.message = axiosError.response.data.message;
+        }
+      }
+
+      setDeleteError(err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const closeDeleteModal = useCallback(() => {
+    setDeleteModal({
+      isOpen: false,
+      leia: null,
+    });
+    setDeleteError(null);
+  }, []);
+
+  // Función para determinar si el usuario puede eliminar una LEIA
+  const canDeleteLeia = useCallback(
+    (leia: Leia) => {
+      return (
+        user &&
+        (user.role === "admin" || (leia.user && user.id === leia.user.id))
+      );
+    },
+    [user]
+  );
 
   return (
     <div className="flex flex-col h-screen bg-white">
@@ -553,6 +654,18 @@ export const LeiaSearch: React.FC = () => {
                             </span>
                           </button>
                         )}
+                        {canDeleteLeia(leia) && (
+                          <button
+                            className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-22"
+                            onClick={() => handleDeleteLeia(leia)}
+                            title="Delete LEIA"
+                          >
+                            <TrashIcon className="w-4 h-4 flex-shrink-0" />
+                            <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                              Delete
+                            </span>
+                          </button>
+                        )}
                       </div>
                     </li>
                   );
@@ -575,6 +688,16 @@ export const LeiaSearch: React.FC = () => {
           }}
         />
       )}
+
+      {/* LEIA Delete Modal */}
+      <DeleteLeiaModal
+        isOpen={deleteModal.isOpen}
+        leia={deleteModal.leia}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteLeia}
+        isDeleting={isDeleting}
+        error={deleteError}
+      />
     </div>
   );
 };
