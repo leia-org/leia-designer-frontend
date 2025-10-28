@@ -12,6 +12,10 @@ interface SelectionColumnProps {
   onSelect: (item: Persona | Behaviour | Problem) => void;
   placeholder: string;
   rightHeaderElement?: React.ReactNode;
+  onDelete?: (
+    item: Persona | Behaviour | Problem,
+    resourceType: "persona" | "problem" | "behaviour"
+  ) => void;
 }
 
 export const SelectionColumn: React.FC<SelectionColumnProps> = ({
@@ -21,6 +25,7 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
   onSelect,
   placeholder,
   rightHeaderElement,
+  onDelete,
 }) => {
   const [filterValue, setFilterValue] = useState("");
   const { user: currentUser } = useAuth();
@@ -30,6 +35,14 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
 
   // Determinar si el usuario actual es instructor
   const isCurrentUserInstructor = currentUser?.role === "instructor";
+
+  // Determinar el tipo de recurso basado en el título
+  const getResourceType = (): "persona" | "problem" | "behaviour" => {
+    const titleLower = title.toLowerCase();
+    if (titleLower === "persona") return "persona";
+    if (titleLower === "problem") return "problem";
+    return "behaviour";
+  };
 
   const filteredItems = useMemo(() => {
     if (!filterValue.trim()) return items;
@@ -99,6 +112,10 @@ spec:
                 hideContentForInstructor={
                   isBehaviourColumn && isCurrentUserInstructor
                 }
+                onDelete={
+                  onDelete ? () => onDelete(item, getResourceType()) : undefined
+                }
+                resourceId={item.id}
               />
             ))
           ) : (

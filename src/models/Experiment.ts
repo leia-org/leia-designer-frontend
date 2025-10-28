@@ -11,7 +11,8 @@ export interface Experiment {
   updatedAt: string;
 }
 
-interface LeiaConfig {
+export interface LeiaConfig {
+  id: string;
   leia: Leia | string;
   configuration: {
     mode: string;
