@@ -6,7 +6,7 @@ import type { Leia } from "../models/Leia";
 import api from "../lib/axios";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
-import { TranscriptionViewModal } from "../components/TranscriptionViewModal";
+import { TranscriptionView } from "../components/TranscriptionView";
 import {
   ExclamationCircleIcon,
   ArrowPathIcon,
@@ -22,6 +22,7 @@ import {
   SparklesIcon,
   ExclamationTriangleIcon,
   DocumentIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import Select from "react-select";
 import { useNavigate } from "react-router-dom";
@@ -70,6 +71,18 @@ export const MyActivities: React.FC = () => {
   // Transcription loading state
   const [initializingTranscriptionChat, setInitializingTranscriptionChat] =
     useState<string | null>(null);
+
+  // Auto-generation preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewMessages, setPreviewMessages] = useState<
+    TranscriptionMessage[]
+  >([]);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
+  const [previewContext, setPreviewContext] = useState<{
+    experimentId: string;
+    leiaConfigId: string;
+    leiaConfig: LeiaConfig;
+  } | null>(null);
 
   // Fetch experiments for the current user
 
@@ -435,13 +448,48 @@ export const MyActivities: React.FC = () => {
     }
   };
 
-  // const handleGenerateTranscriptionAutomatically = async () =>
-  //   experimentId: string,
-  //   leiaConfigId: string,
-  //   leiaConfig: LeiaConfig
-  // ) => {
-  //   // TODO: Implementar la lógica para generar transcripción automáticamente
-  // };
+  const handleGenerateTranscriptionAutomatically = async (
+    experimentId: string,
+    leiaConfigId: string,
+    leiaConfig: LeiaConfig
+  ) => {
+    const leia = typeof leiaConfig.leia === "object" ? leiaConfig.leia : null;
+
+    if (!leia) {
+      toast.error("LEIA data is not available", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
+    // Set preview context and show modal
+    setPreviewContext({ experimentId, leiaConfigId, leiaConfig });
+    setShowPreviewModal(true);
+    setGeneratingPreview(true);
+    setPreviewMessages([]);
+
+    try {
+      const response = await api.post(
+        "/api/v1/runner/transcriptions/generate",
+        {
+          spec: leia.spec,
+        }
+      );
+      const messages = response.data;
+      if (messages && Array.isArray(messages)) {
+        setPreviewMessages(messages);
+      }
+    } catch {
+      toast.error("Failed to generate transcription", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      setShowPreviewModal(false);
+    } finally {
+      setGeneratingPreview(false);
+    }
+  };
 
   const handleViewTranscription = (data: {
     link?: string;
@@ -464,6 +512,77 @@ export const MyActivities: React.FC = () => {
     } catch {
       return false;
     }
+  };
+
+  const handleSavePreviewTranscription = async () => {
+    if (!previewContext || !previewMessages.length) return;
+
+    const { experimentId, leiaConfigId, leiaConfig } = previewContext;
+
+    const update = {
+      leia:
+        typeof leiaConfig.leia === "string"
+          ? leiaConfig.leia
+          : leiaConfig.leia.id,
+      configuration: {
+        mode: leiaConfig.configuration.mode,
+        data: {
+          ...leiaConfig.configuration.data,
+          messages: previewMessages,
+          link: undefined,
+        },
+      },
+    };
+
+    try {
+      const response = await api.put(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+        update
+      );
+      setExperiments((prev) => {
+        if (!prev) return null;
+        return prev.map((exp) => {
+          if (exp.id === experimentId) {
+            return response.data;
+          }
+          return exp;
+        });
+      });
+      toast.success("Transcription saved successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      setShowPreviewModal(false);
+      setPreviewMessages([]);
+      setPreviewContext(null);
+    } catch (error) {
+      let errorMessage = "Failed to save transcription";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
+  const handleCancelPreviewTranscription = () => {
+    setShowPreviewModal(false);
+    setPreviewMessages([]);
+    setPreviewContext(null);
+    setGeneratingPreview(false);
   };
   return (
     <div className="flex flex-col h-screen bg-white">
@@ -565,12 +684,128 @@ export const MyActivities: React.FC = () => {
       )}
 
       {/* Transcription View Modal */}
-      <TranscriptionViewModal
-        isOpen={showTranscriptionModal}
-        onClose={() => setShowTranscriptionModal(false)}
-        messages={transcriptionMessages}
-        title="Transcription Messages"
-      />
+      {showTranscriptionModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowTranscriptionModal(false);
+              setTranscriptionMessages([]);
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl mx-4 h-[80vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Transcription Messages
+              </h2>
+              <button
+                onClick={() => {
+                  setShowTranscriptionModal(false);
+                  setTranscriptionMessages([]);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content - TranscriptionView */}
+            <div className="flex-1 overflow-hidden">
+              <TranscriptionView messages={transcriptionMessages} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transcription Preview Modal */}
+      {showPreviewModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !generatingPreview) {
+              handleCancelPreviewTranscription();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl mx-4 h-[80vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Transcription Preview
+              </h2>
+              <button
+                onClick={handleCancelPreviewTranscription}
+                disabled={generatingPreview}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-hidden">
+              {generatingPreview ? (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                  <p className="text-gray-600 text-lg mb-2">
+                    Generating transcription...
+                  </p>
+                  <p className="text-gray-500 text-sm">
+                    This may take a few moments
+                  </p>
+                </div>
+              ) : previewMessages.length > 0 ? (
+                <TranscriptionView messages={previewMessages} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className="text-gray-400 mb-4">
+                    <ExclamationCircleIcon className="w-12 h-12 mx-auto" />
+                  </div>
+                  <p className="text-gray-600 text-lg mb-2">
+                    No messages generated
+                  </p>
+                  <p className="text-gray-500 text-sm">
+                    Something went wrong during generation
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            {!generatingPreview && previewMessages.length > 0 && (
+              <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200">
+                <button
+                  onClick={handleCancelPreviewTranscription}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSavePreviewTranscription}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  Save Transcription
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Activities Header with Search and Create */}
       <div className="border-b border-gray-200 bg-white">
@@ -972,13 +1207,13 @@ export const MyActivities: React.FC = () => {
                                               </button>
 
                                               <button
-                                                // onClick={() =>
-                                                //   handleGenerateTranscriptionAutomatically(
-                                                //     experiment.id,
-                                                //     leiaConfig.id,
-                                                //     leiaConfig
-                                                //   )
-                                                // }
+                                                onClick={() =>
+                                                  handleGenerateTranscriptionAutomatically(
+                                                    experiment.id,
+                                                    leiaConfig.id,
+                                                    leiaConfig
+                                                  )
+                                                }
                                                 disabled={
                                                   !!initializingTranscriptionChat
                                                 }
