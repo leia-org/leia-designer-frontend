@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { Experiment, LeiaConfig } from "../models/Experiment";
 import type { Leia } from "../models/Leia";
 import api from "../lib/axios";
+import { z } from "zod";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
@@ -26,12 +27,26 @@ import {
 } from "@heroicons/react/24/outline";
 import Select from "react-select";
 import { useNavigate } from "react-router-dom";
+import Editor from "@monaco-editor/react";
+import * as Tabs from "@radix-ui/react-tabs";
+import "../styles/monaco-tooltip-fix.css";
 
 interface TranscriptionMessage {
   text: string;
   timestamp: Date | string;
   isLeia: boolean;
 }
+
+// Zod schema for manual validation (tab switching and save)
+const TranscriptionMessageSchema = z.object({
+  text: z.string().min(1, "Message text cannot be empty"),
+  timestamp: z.iso.datetime(),
+  isLeia: z.boolean(),
+});
+
+const TranscriptionArraySchema = z
+  .array(TranscriptionMessageSchema)
+  .min(1, "At least one message is required");
 
 export const MyActivities: React.FC = () => {
   const navigate = useNavigate();
@@ -78,6 +93,20 @@ export const MyActivities: React.FC = () => {
     TranscriptionMessage[]
   >([]);
   const [generatingPreview, setGeneratingPreview] = useState(false);
+
+  // JSON Edit modal state
+  const [showJsonEditModal, setShowJsonEditModal] = useState(false);
+  const [jsonEditText, setJsonEditText] = useState("");
+  const [jsonEditTab, setJsonEditTab] = useState<"editor" | "preview">(
+    "editor"
+  );
+  const [jsonEditError, setJsonEditError] = useState<string | null>(null);
+  const [currentEditingLeia, setCurrentEditingLeia] = useState<{
+    experimentId: string;
+    leiaConfigId: string;
+    leiaConfig: LeiaConfig;
+  } | null>(null);
+
   const [previewContext, setPreviewContext] = useState<{
     experimentId: string;
     leiaConfigId: string;
@@ -584,6 +613,209 @@ export const MyActivities: React.FC = () => {
     setPreviewContext(null);
     setGeneratingPreview(false);
   };
+
+  // JSON Edit modal handlers
+  const handleOpenJsonEdit = (
+    experimentId: string,
+    leiaConfigId: string,
+    leiaConfig: LeiaConfig
+  ) => {
+    const existingMessages = leiaConfig.configuration?.data?.messages || [];
+    setJsonEditText(JSON.stringify(existingMessages, null, 2));
+    setCurrentEditingLeia({ experimentId, leiaConfigId, leiaConfig });
+    setJsonEditError(null);
+    setJsonEditTab("editor");
+    setShowJsonEditModal(true);
+  };
+
+  const validateTranscriptionMessages = (
+    text: string
+  ): {
+    isValid: boolean;
+    error?: string;
+    messages?: TranscriptionMessage[];
+  } => {
+    try {
+      const parsed = JSON.parse(text);
+      const result = TranscriptionArraySchema.safeParse(parsed);
+
+      if (!result.success) {
+        const firstError = result.error.issues[0];
+        if (firstError.path.length === 0) {
+          // Array-level error
+          return { isValid: false, error: firstError.message };
+        } else {
+          // Message-level error
+          const [index, field] = firstError.path;
+          return {
+            isValid: false,
+            error: `Message at index ${String(index)}, field "${String(
+              field
+            )}": ${firstError.message}`,
+          };
+        }
+      }
+
+      return { isValid: true, messages: result.data };
+    } catch {
+      return { isValid: false, error: "Invalid JSON format" };
+    }
+  };
+
+  const handleJsonEditTabChange = (tab: "editor" | "preview") => {
+    if (tab === "preview") {
+      const validation = validateTranscriptionMessages(jsonEditText);
+      if (!validation.isValid) {
+        setJsonEditError(validation.error || "Invalid JSON");
+        return;
+      }
+      setJsonEditError(null);
+    }
+    setJsonEditTab(tab);
+  };
+
+  const handleJsonEditorChange = (value: string | undefined) => {
+    const newValue = value || "";
+    setJsonEditText(newValue);
+    setJsonEditError(null);
+  };
+
+  const handleMonacoEditorMount = (_editor: unknown, monaco: unknown) => {
+    // Configure Monaco Editor JSON schema validation
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const monacoInstance = monaco as any;
+
+      // Configure JSON validation
+      monacoInstance.languages.json.jsonDefaults.setDiagnosticsOptions({
+        validate: true,
+        allowComments: false,
+        schemas: [
+          {
+            uri: "http://transcription-schema.json",
+            fileMatch: ["*"],
+            schema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  text: {
+                    type: "string",
+                    minLength: 1,
+                    description: "Message text content",
+                  },
+                  timestamp: {
+                    type: "string",
+                    minLength: 1,
+                    format: "date-time",
+                    description:
+                      "Message timestamp (ISO date: YYYY-MM-DDTHH:MM:SSZ)",
+                  },
+                  isLeia: {
+                    type: "boolean",
+                    description: "Whether this message is from LEIA",
+                  },
+                },
+                required: ["text", "timestamp", "isLeia"],
+                additionalProperties: false,
+              },
+              minItems: 1,
+              description: "Array of transcription messages",
+            },
+          },
+        ],
+      });
+
+      monacoInstance.editor.setTheme("vs");
+
+      setJsonEditError(null);
+    } catch (error) {
+      console.warn("Could not configure Monaco JSON schema:", error);
+    }
+  };
+
+  const handleSaveJsonEdit = async () => {
+    if (!currentEditingLeia) return;
+
+    const validation = validateTranscriptionMessages(jsonEditText);
+    if (!validation.isValid) {
+      setJsonEditError(validation.error || "Invalid JSON");
+      return;
+    }
+
+    try {
+      const messages = validation.messages;
+      const { experimentId, leiaConfigId, leiaConfig } = currentEditingLeia;
+
+      const update = {
+        leia:
+          typeof leiaConfig.leia === "string"
+            ? leiaConfig.leia
+            : leiaConfig.leia.id,
+        configuration: {
+          mode: leiaConfig.configuration.mode,
+          data: {
+            ...leiaConfig.configuration.data,
+            messages: messages,
+            link: undefined,
+          },
+        },
+      };
+
+      const response = await api.put(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+        update
+      );
+
+      setExperiments((prev) => {
+        if (!prev) return null;
+        return prev.map((exp) => {
+          if (exp.id === experimentId) {
+            return response.data;
+          }
+          return exp;
+        });
+      });
+
+      toast.success("Transcription updated successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+
+      setShowJsonEditModal(false);
+      setCurrentEditingLeia(null);
+      setJsonEditText("");
+      setJsonEditError(null);
+    } catch (error) {
+      let errorMessage = "Failed to save transcription";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
+  const handleCancelJsonEdit = () => {
+    setShowJsonEditModal(false);
+    setCurrentEditingLeia(null);
+    setJsonEditText("");
+    setJsonEditError(null);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-white">
       <Header
@@ -803,6 +1035,197 @@ export const MyActivities: React.FC = () => {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* JSON Edit Modal */}
+      {showJsonEditModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCancelJsonEdit();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-5xl mx-4 h-[85vh] flex flex-col relative">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                JSON Editor
+              </h2>
+              <button
+                onClick={handleCancelJsonEdit}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Tabs Container */}
+            <Tabs.Root
+              value={jsonEditTab}
+              onValueChange={(value) =>
+                handleJsonEditTabChange(value as "editor" | "preview")
+              }
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              {/* Tab Header */}
+              <Tabs.List className="flex border-b border-gray-200">
+                <Tabs.Trigger
+                  value="editor"
+                  className="px-4 py-2 text-sm font-medium transition-colors data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-blue-50 text-gray-600 hover:text-gray-800"
+                >
+                  Editor
+                </Tabs.Trigger>
+                <Tabs.Trigger
+                  value="preview"
+                  className="px-4 py-2 text-sm font-medium transition-colors data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-blue-50 text-gray-600 hover:text-gray-800"
+                >
+                  Preview
+                </Tabs.Trigger>
+              </Tabs.List>
+
+              {/* Editor Tab Content */}
+              <Tabs.Content value="editor" className="flex-1 overflow-hidden">
+                <div className="h-full relative" style={{ paddingTop: "8px" }}>
+                  <Editor
+                    height="calc(100% - 8px)"
+                    defaultLanguage="json"
+                    value={jsonEditText}
+                    onChange={handleJsonEditorChange}
+                    onMount={handleMonacoEditorMount}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      wordWrap: "on",
+                      formatOnPaste: true,
+                      formatOnType: true,
+                      automaticLayout: true,
+                      scrollBeyondLastLine: false,
+                      tabSize: 2,
+                      insertSpaces: true,
+                      renderLineHighlight: "line",
+                      renderWhitespace: "boundary",
+                      bracketPairColorization: { enabled: true },
+                      suggest: {
+                        showKeywords: true,
+                        showSnippets: true,
+                      },
+                      quickSuggestions: true,
+                      // Tooltip and hover configuration
+                      hover: {
+                        enabled: true,
+                        delay: 100,
+                        sticky: true,
+                      },
+                      // Fix tooltip positioning issues
+                      fixedOverflowWidgets: true,
+                    }}
+                    theme="vs"
+                  />
+                </div>
+              </Tabs.Content>
+
+              {/* Preview Tab Content */}
+              <Tabs.Content value="preview" className="flex-1 overflow-hidden">
+                <div className="h-full">
+                  {jsonEditError ? (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <div className="text-red-400 mb-4">
+                        <ExclamationTriangleIcon className="w-12 h-12 mx-auto" />
+                      </div>
+                      <p className="text-red-600 text-lg mb-2">Invalid JSON</p>
+                      <p className="text-red-500 text-sm text-center max-w-md">
+                        {jsonEditError}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="h-full">
+                      {(() => {
+                        try {
+                          const messages = JSON.parse(jsonEditText || "[]");
+                          return Array.isArray(messages) &&
+                            messages.length > 0 ? (
+                            <TranscriptionView messages={messages} />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center h-full">
+                              <div className="text-gray-400 mb-4">
+                                <DocumentIcon className="w-12 h-12 mx-auto" />
+                              </div>
+                              <p className="text-gray-600 text-lg mb-2">
+                                No messages
+                              </p>
+                              <p className="text-gray-500 text-sm">
+                                Add messages in the editor to see the preview
+                              </p>
+                            </div>
+                          );
+                        } catch {
+                          return (
+                            <div className="flex flex-col items-center justify-center h-full">
+                              <div className="text-red-400 mb-4">
+                                <ExclamationTriangleIcon className="w-12 h-12 mx-auto" />
+                              </div>
+                              <p className="text-red-600 text-lg mb-2">
+                                Invalid JSON
+                              </p>
+                              <p className="text-red-500 text-sm">
+                                Check the syntax in the editor
+                              </p>
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </Tabs.Content>
+            </Tabs.Root>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-4 border-t border-gray-200">
+              {/* Error message on the left */}
+              <div className="flex-1">
+                {jsonEditError && (
+                  <div className="flex items-center gap-2 text-red-700 text-sm">
+                    <ExclamationTriangleIcon className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    <span className="truncate">{jsonEditError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Buttons on the right */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCancelJsonEdit}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveJsonEdit}
+                  disabled={!!jsonEditError}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  Save Changes
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1222,6 +1645,24 @@ export const MyActivities: React.FC = () => {
                                               >
                                                 <SparklesIcon className="w-4 h-4" />
                                                 Auto Generate
+                                              </button>
+
+                                              <button
+                                                onClick={() =>
+                                                  handleOpenJsonEdit(
+                                                    experiment.id,
+                                                    leiaConfig.id,
+                                                    leiaConfig
+                                                  )
+                                                }
+                                                disabled={
+                                                  !!initializingTranscriptionChat
+                                                }
+                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
+                                                title="Edit transcription JSON"
+                                              >
+                                                <DocumentIcon className="w-4 h-4" />
+                                                JSON Edit
                                               </button>
                                             </div>
                                           )}

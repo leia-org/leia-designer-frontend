@@ -1,0 +1,22 @@
+/* Monaco Editor Tooltip Fix */
+/* Ensure tooltips appear above modal headers */
+.monaco-editor .monaco-hover {
+  z-index: 9999 !important;
+}
+
+.monaco-editor .monaco-hover-content {
+  max-width: 400px;
+  word-wrap: break-word;
+}
+
+.monaco-editor .overflowingContentWidgets {
+  z-index: 9999 !important;
+}
+
+.monaco-editor .suggest-widget {
+  z-index: 9999 !important;
+}
+
+.monaco-hover-content .hover-row {
+  padding: 4px 8px;
+}
