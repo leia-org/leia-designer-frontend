@@ -376,6 +376,81 @@ export const MyActivities: React.FC = () => {
     }
   };
 
+  const handleUpdateExperimentLeiaAudioMode = async (
+    experimentId: string,
+    leiaConfigId: string,
+    leiaConfig: LeiaConfig,
+    enabled: boolean
+  ) => {
+    try {
+      const update = {
+        leia:
+          typeof leiaConfig.leia === "string"
+            ? leiaConfig.leia
+            : leiaConfig.leia.id,
+        configuration: {
+          ...leiaConfig.configuration,
+          audioMode: enabled ? "realtime" : null,
+          realtimeConfig: enabled
+            ? {
+                model: "gpt-4o-realtime-preview",
+                voice: "marin",
+                instructions: "",
+                turnDetection: {
+                  type: "server_vad",
+                  threshold: 0.5,
+                  prefix_padding_ms: 300,
+                  silence_duration_ms: 500,
+                },
+              }
+            : undefined,
+        },
+      };
+      const response = await api.put<Experiment>(
+        `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+        update
+      );
+
+      setExperiments((prev) => {
+        if (!prev) return null;
+        return prev.map((exp) => {
+          if (exp.id === experimentId) {
+            return response.data;
+          }
+          return exp;
+        });
+      });
+
+      toast.success(
+        enabled ? "Audio mode enabled" : "Audio mode disabled",
+        {
+          position: "bottom-right",
+          autoClose: 2000,
+        }
+      );
+    } catch (error) {
+      let errorMessage = "Failed to update audio mode";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: { message?: string } };
+        };
+        if (
+          axiosError.response?.status === 409 ||
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
+        ) {
+          errorMessage = axiosError.response.data?.message || errorMessage;
+        }
+      }
+
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  };
+
   const handleAddTranscriptionLink = async (
     experimentId: string,
     leiaConfigId: string,
@@ -1512,6 +1587,47 @@ export const MyActivities: React.FC = () => {
                                               )}
                                             </div>
                                           )}
+
+                                          {/* Audio Mode Toggle */}
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium text-gray-600 text-sm">
+                                              Audio Mode:
+                                            </span>
+                                            {experiment.isPublished ? (
+                                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                leiaConfig.configuration?.audioMode === 'realtime'
+                                                  ? 'bg-purple-100 text-purple-800'
+                                                  : 'bg-gray-100 text-gray-800'
+                                              }`}>
+                                                {leiaConfig.configuration?.audioMode === 'realtime' ? 'Enabled' : 'Disabled'}
+                                              </span>
+                                            ) : (
+                                              <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                  type="checkbox"
+                                                  className="sr-only peer"
+                                                  checked={leiaConfig.configuration?.audioMode === 'realtime'}
+                                                  onChange={(e) => {
+                                                    handleUpdateExperimentLeiaAudioMode(
+                                                      experiment.id,
+                                                      leiaConfig.id,
+                                                      leiaConfig,
+                                                      e.target.checked
+                                                    );
+                                                  }}
+                                                />
+                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                              </label>
+                                            )}
+                                            {leiaConfig.configuration?.audioMode === 'realtime' && (
+                                              <span className="text-xs text-purple-600 flex items-center gap-1">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                                </svg>
+                                                Voice: {leiaConfig.configuration?.realtimeConfig?.voice || 'marin'}
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
 
                                         {/* Delete button */}
