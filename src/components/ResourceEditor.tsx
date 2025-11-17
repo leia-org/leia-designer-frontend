@@ -1,13 +1,161 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Editor } from "@monaco-editor/react";
 import * as Tabs from "@radix-ui/react-tabs";
-import type { Persona, Problem } from "../models/Leia";
+import type { Persona, Problem, Behaviour } from "../models/Leia";
 
-type ResourceType = "persona" | "problem";
+type ResourceType = "persona" | "problem" | "behaviour";
+
+type HighlightSegment = {
+  text: string;
+  highlight: boolean;
+};
+
+const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
+  const segments: HighlightSegment[] = [];
+  if (!text) {
+    return segments;
+  }
+
+  const regex = /\{\{[^}]+\}\}/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({
+        text: text.slice(lastIndex, match.index),
+        highlight: false,
+      });
+    }
+
+    segments.push({ text: match[0], highlight: true });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({
+      text: text.slice(lastIndex),
+      highlight: false,
+    });
+  }
+
+  return segments.length ? segments : [{ text, highlight: false }];
+};
+
+const HighlightableInput: React.FC<
+  React.InputHTMLAttributes<HTMLInputElement>
+> = ({ value, className = "", placeholder, ...rest }) => {
+  const normalizedValue =
+    value === undefined || value === null
+      ? ""
+      : Array.isArray(value)
+      ? value.join(", ")
+      : String(value);
+
+  const segments = useMemo(
+    () => splitPlaceholderSegments(normalizedValue),
+    [normalizedValue]
+  );
+  const showPlaceholder = normalizedValue.length === 0;
+
+  return (
+    <div className="relative w-full">
+      <input
+        {...rest}
+        value={normalizedValue}
+        className={`${className} relative z-10 bg-transparent text-transparent caret-blue-600`}
+        placeholder={placeholder}
+      />
+      <div
+        className="pointer-events-none absolute inset-[3px] z-0 flex items-center px-3 py-2 text-gray-900 whitespace-pre break-words overflow-hidden rounded-md"
+        aria-hidden="true"
+        style={{ font: "inherit" }}
+      >
+        {showPlaceholder ? (
+          placeholder ? (
+            <span className="text-gray-400">{placeholder}</span>
+          ) : null
+        ) : (
+          segments.map((segment, index) =>
+            segment.highlight ? (
+              <span
+                key={`placeholder-${index}`}
+                className="rounded bg-purple-100 inline text-purple-700"
+              >
+                {segment.text}
+              </span>
+            ) : (
+              <span key={`text-${index}`}>{segment.text}</span>
+            )
+          )
+        )}
+      </div>
+    </div>
+  );
+};
+
+const HighlightableTextarea: React.FC<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+> = ({ value, className = "", placeholder, onScroll, ...rest }) => {
+  const normalizedValue =
+    value === undefined || value === null ? "" : String(value);
+
+  const segments = useMemo(
+    () => splitPlaceholderSegments(normalizedValue),
+    [normalizedValue]
+  );
+  const showPlaceholder = normalizedValue.length === 0;
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll: React.UIEventHandler<HTMLTextAreaElement> = (event) => {
+    if (overlayRef.current) {
+      overlayRef.current.scrollTop = event.currentTarget.scrollTop;
+      overlayRef.current.scrollLeft = event.currentTarget.scrollLeft;
+    }
+    onScroll?.(event);
+  };
+
+  return (
+    <div className="relative w-full">
+      <textarea
+        {...rest}
+        value={normalizedValue}
+        onScroll={handleScroll}
+        className={`${className} relative z-10 bg-transparent text-transparent caret-blue-600`}
+        placeholder={placeholder}
+      />
+      <div
+        ref={overlayRef}
+        className="pointer-events-none absolute inset-[3px] z-0 overflow-auto px-3 py-2 text-gray-900 whitespace-pre-wrap break-words rounded-md"
+        aria-hidden="true"
+        style={{ font: "inherit" }}
+      >
+        {showPlaceholder ? (
+          placeholder ? (
+            <span className="text-gray-400">{placeholder}</span>
+          ) : null
+        ) : (
+          segments.map((segment, index) =>
+            segment.highlight ? (
+              <span
+                key={`placeholder-${index}`}
+                className="rounded bg-purple-100 text-purple-700"
+              >
+                {segment.text}
+              </span>
+            ) : (
+              <span key={`text-${index}`}>{segment.text}</span>
+            )
+          )
+        )}
+      </div>
+    </div>
+  );
+};
 
 interface ResourceEditorProps {
   resourceType: ResourceType;
-  initialData?: Partial<Persona> | Partial<Problem>;
+  initialData?: Partial<Persona> | Partial<Problem> | Partial<Behaviour>;
   apiVersion?: string;
   onSave: (data: any, apiVersion: string) => void;
   onCancel: () => void;
@@ -25,6 +173,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const [jsonContent, setJsonContent] = useState("");
   const [visualData, setVisualData] = useState<any>({});
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const processOptions = [
+    { value: "requirements-elicitation", label: "Requirements Elicitation" },
+    { value: "game", label: "Game" },
+  ];
 
   // Inicializar datos
   useEffect(() => {
@@ -32,9 +184,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
       setVisualData(initialData.spec);
       setJsonContent(JSON.stringify(initialData.spec, null, 2));
     } else {
-      const emptySpec =
-        resourceType === "persona"
-          ? {
+      const emptySpec = (() => {
+        switch (resourceType) {
+          case "persona":
+            return {
               fullName: "",
               firstName: "",
               description: "",
@@ -43,8 +196,9 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               objectPronoum: "",
               possesivePronoum: "",
               possesiveAdjective: "",
-            }
-          : {
+            };
+          case "problem":
+            return {
               description: "",
               personaBackground: "",
               details: "",
@@ -55,6 +209,16 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               overrides: {},
               constrainedTo: {},
             };
+          case "behaviour":
+            return {
+              description: "",
+              role: "",
+              process: [],
+            };
+          default:
+            return {};
+        }
+      })();
       setVisualData(emptySpec);
       setJsonContent(JSON.stringify(emptySpec, null, 2));
     }
@@ -108,11 +272,11 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Full Name
         </label>
-        <input
+        <HighlightableInput
           type="text"
           value={visualData.fullName || ""}
           onChange={(e) => handleVisualChange("fullName", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           placeholder="e.g., Dr. Alice Johnson"
         />
       </div>
@@ -121,11 +285,11 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           First Name
         </label>
-        <input
+        <HighlightableInput
           type="text"
           value={visualData.firstName || ""}
           onChange={(e) => handleVisualChange("firstName", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           placeholder="e.g., Alice"
         />
       </div>
@@ -134,10 +298,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Description
         </label>
-        <textarea
+        <HighlightableTextarea
           value={visualData.description || ""}
           onChange={(e) => handleVisualChange("description", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           rows={3}
           placeholder="Describe the persona..."
         />
@@ -147,10 +311,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Personality
         </label>
-        <textarea
+        <HighlightableTextarea
           value={visualData.personality || ""}
           onChange={(e) => handleVisualChange("personality", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           rows={3}
           placeholder="Describe personality traits..."
         />
@@ -161,13 +325,13 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Subject Pronoun
           </label>
-          <input
+          <HighlightableInput
             type="text"
             value={visualData.subjectPronoum || ""}
             onChange={(e) =>
               handleVisualChange("subjectPronoum", e.target.value)
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
             placeholder="e.g., she, he, they"
           />
         </div>
@@ -176,13 +340,13 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Object Pronoun
           </label>
-          <input
+          <HighlightableInput
             type="text"
             value={visualData.objectPronoum || ""}
             onChange={(e) =>
               handleVisualChange("objectPronoum", e.target.value)
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
             placeholder="e.g., her, him, them"
           />
         </div>
@@ -193,13 +357,13 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Possessive Pronoun
           </label>
-          <input
+          <HighlightableInput
             type="text"
             value={visualData.possesivePronoum || ""}
             onChange={(e) =>
               handleVisualChange("possesivePronoum", e.target.value)
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
             placeholder="e.g., hers, his, theirs"
           />
         </div>
@@ -208,17 +372,43 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Possessive Adjective
           </label>
-          <input
+          <HighlightableInput
             type="text"
             value={visualData.possesiveAdjective || ""}
             onChange={(e) =>
               handleVisualChange("possesiveAdjective", e.target.value)
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
             placeholder="e.g., her, his, their"
           />
         </div>
       </div>
+    </div>
+  );
+
+  const renderProcessCheckboxes = () => (
+    <div className="space-y-2">
+      {processOptions.map(({ value, label }) => (
+        <label className="flex items-center" key={value}>
+          <input
+            type="checkbox"
+            checked={visualData.process?.includes(value) || false}
+            onChange={(e) => {
+              const newProcess = visualData.process || [];
+              if (e.target.checked) {
+                handleVisualChange("process", [...newProcess, value]);
+              } else {
+                handleVisualChange(
+                  "process",
+                  newProcess.filter((p: string) => p !== value)
+                );
+              }
+            }}
+            className="mr-2"
+          />
+          {label}
+        </label>
+      ))}
     </div>
   );
 
@@ -228,10 +418,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Description
         </label>
-        <textarea
+        <HighlightableTextarea
           value={visualData.description || ""}
           onChange={(e) => handleVisualChange("description", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           rows={3}
           placeholder="Describe the problem..."
         />
@@ -241,12 +431,12 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Persona Background
         </label>
-        <textarea
+        <HighlightableTextarea
           value={visualData.personaBackground || ""}
           onChange={(e) =>
             handleVisualChange("personaBackground", e.target.value)
           }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           rows={2}
           placeholder="Background context for the persona..."
         />
@@ -256,10 +446,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Details
         </label>
-        <textarea
+        <HighlightableTextarea
           value={visualData.details || ""}
           onChange={(e) => handleVisualChange("details", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           rows={3}
           placeholder="Additional details..."
         />
@@ -269,10 +459,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Solution
         </label>
-        <textarea
+        <HighlightableTextarea
           value={visualData.solution || ""}
           onChange={(e) => handleVisualChange("solution", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
           rows={3}
           placeholder="Expected solution..."
         />
@@ -285,7 +475,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <select
           value={visualData.solutionFormat || "text"}
           onChange={(e) => handleVisualChange("solutionFormat", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
         >
           <option value="text">Plain Text</option>
           <option value="mermaid">Mermaid Diagram</option>
@@ -301,57 +491,60 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Process
         </label>
-        <div className="space-y-2">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={
-                visualData.process?.includes("requirements-elicitation") ||
-                false
-              }
-              onChange={(e) => {
-                const newProcess = visualData.process || [];
-                if (e.target.checked) {
-                  handleVisualChange("process", [
-                    ...newProcess,
-                    "requirements-elicitation",
-                  ]);
-                } else {
-                  handleVisualChange(
-                    "process",
-                    newProcess.filter(
-                      (p: string) => p !== "requirements-elicitation"
-                    )
-                  );
-                }
-              }}
-              className="mr-2"
-            />
-            Requirements Elicitation
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={visualData.process?.includes("game") || false}
-              onChange={(e) => {
-                const newProcess = visualData.process || [];
-                if (e.target.checked) {
-                  handleVisualChange("process", [...newProcess, "game"]);
-                } else {
-                  handleVisualChange(
-                    "process",
-                    newProcess.filter((p: string) => p !== "game")
-                  );
-                }
-              }}
-              className="mr-2"
-            />
-            Game
-          </label>
-        </div>
+        {renderProcessCheckboxes()}
       </div>
     </div>
   );
+
+  const renderBehaviourForm = () => (
+    <div className="space-y-4 p-4 max-h-[400px] overflow-y-auto">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Description
+        </label>
+        <HighlightableTextarea
+          value={visualData.description || ""}
+          onChange={(e) => handleVisualChange("description", e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          rows={3}
+          placeholder="Describe the behaviour..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Role
+        </label>
+        <HighlightableInput
+          type="text"
+          value={visualData.role || ""}
+          onChange={(e) => handleVisualChange("role", e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          placeholder="e.g., Facilitator"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Process
+        </label>
+        {renderProcessCheckboxes()}
+      </div>
+    </div>
+  );
+
+  const renderForm = () => {
+    switch (resourceType) {
+      case "persona":
+        return renderPersonaForm();
+      case "problem":
+        return renderProblemForm();
+      case "behaviour":
+        return renderBehaviourForm();
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
@@ -368,7 +561,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             <select
               value={currentApiVersion}
               onChange={(e) => setCurrentApiVersion(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm"
             >
               <option value="v1">v1</option>
             </select>
@@ -396,9 +589,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           </Tabs.List>
 
           <Tabs.Content value="visual" className="pt-4">
-            {resourceType === "persona"
-              ? renderPersonaForm()
-              : renderProblemForm()}
+            {renderForm()}
           </Tabs.Content>
 
           <Tabs.Content value="code" className="pt-4">
