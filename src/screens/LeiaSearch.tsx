@@ -56,7 +56,6 @@ export const LeiaSearch: React.FC = () => {
 
   const [creatingNewExperiment, setCreatingNewExperiment] = useState(false);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
-  const [enableAudioMode, setEnableAudioMode] = useState(false);
 
   // Estados para el modal de visualización de LEIA
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -179,7 +178,6 @@ export const LeiaSearch: React.FC = () => {
     setShowExperimentsModal(false);
     setSelectedDraftExperimentId(null);
     setSelectedLeia(null);
-    setEnableAudioMode(false);
   };
 
   const handleCreateExperiment = async (inputValue: string) => {
@@ -216,28 +214,9 @@ export const LeiaSearch: React.FC = () => {
     try {
       setAddingLeiaToExperiment(true);
 
-      const payload: any = {
+      const payload = {
         leia: selectedLeia.id,
       };
-
-      // Add audio mode configuration if enabled
-      if (enableAudioMode) {
-        payload.configuration = {
-          mode: 'standard',
-          audioMode: 'realtime',
-          realtimeConfig: {
-            model: 'gpt-4o-realtime-preview',
-            voice: 'marin',
-            instructions: '',
-            turnDetection: {
-              type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500,
-            },
-          },
-        };
-      }
 
       await api.post(`/api/v1/experiments/${selectedDraftExperimentId}/leias`, payload);
       toast.success("LEIA added to activity successfully", {
@@ -460,36 +439,6 @@ export const LeiaSearch: React.FC = () => {
                     Creating new activity...
                   </div>
                 )}
-              </div>
-
-              {/* Audio Mode Toggle */}
-              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={enableAudioMode}
-                        onChange={(e) => setEnableAudioMode(e.target.checked)}
-                        className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500"
-                      />
-                      <span className="text-sm font-medium text-gray-900">
-                        Enable Audio Mode (Voice Conversation)
-                      </span>
-                    </label>
-                    <p className="text-xs text-gray-600 mt-1 ml-6">
-                      Enable real-time voice conversations with LEIA using OpenAI Realtime API
-                    </p>
-                  </div>
-                  {enableAudioMode && (
-                    <div className="flex items-center gap-1 text-xs text-purple-600 ml-4">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                      </svg>
-                      Voice: Marin
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Action Buttons */}
