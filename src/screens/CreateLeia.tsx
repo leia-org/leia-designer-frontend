@@ -1184,131 +1184,36 @@ export const CreateLeia: React.FC = () => {
       </div>
 
       {/* Resource Editor */}
-      {editingResource.resource &&
-        (editingResource.resource === "persona" ||
-          editingResource.resource === "problem") && (
-          <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
-            <ResourceEditor
-              resourceType={editingResource.resource}
-              initialData={leiaConfig[editingResource.resource] || undefined}
-              apiVersion={editingResource.apiVersion}
-              onSave={(data, apiVersion) => {
-                setLeiaConfig((prev) => ({
-                  ...prev,
-                  [editingResource.resource!]: {
-                    ...prev[editingResource.resource!],
-                    spec: data,
-                    apiVersion: apiVersion,
-                    edited: true,
-                  },
-                }));
-                setEditingResource({
-                  resource: null,
-                  content: null,
-                  apiVersion: "v1",
-                });
-              }}
-              onCancel={() =>
-                setEditingResource({
-                  resource: null,
-                  content: null,
-                  apiVersion: "v1",
-                })
-              }
-            />
-          </div>
-        )}
-
-      {/* Fallback Editor Monaco for Behaviour */}
-      {editingResource.content && editingResource.resource === "behaviour" && (
+      {editingResource.resource && (
         <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
-          <div className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
-            <div className="space-y-4">
-              {/* Header with title and API version selector */}
-              <div className="flex justify-between items-center pb-4">
-                <h4 className="text-lg font-semibold text-gray-900">
-                  Edit Behaviour Spec
-                </h4>
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-gray-700">
-                    API Version:
-                  </label>
-                  <select
-                    value={editingResource.apiVersion}
-                    onChange={(e) => handleApiVersionChange(e.target.value)}
-                    className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="v1">v1</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Editor container with rounded borders */}
-              <div className="border border-gray-300 rounded-lg overflow-hidden">
-                <Editor
-                  height="300px"
-                  language="json"
-                  theme="vs-light"
-                  value={editingResource.content}
-                  onChange={handleEditorChange}
-                  options={{
-                    readOnly: false,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 12,
-                    lineNumbers: "on",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-
-              {/* Buttons container */}
-              <div className="flex justify-end space-x-3 pt-2">
-                {/* Cancel button */}
-                <button
-                  onClick={() =>
-                    setEditingResource({
-                      resource: null,
-                      content: null,
-                      apiVersion: "v1",
-                    })
-                  }
-                  className="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition-colors text-sm"
-                >
-                  Cancel
-                </button>
-                {/* Save button */}
-                <button
-                  onClick={() => {
-                    if (editingResource.resource && editingResource.content) {
-                      handleEditResource(
-                        editingResource.resource,
-                        editingResource.content,
-                        editingResource.apiVersion
-                      );
-                    }
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
+          <ResourceEditor
+            resourceType={editingResource.resource}
+            initialData={leiaConfig[editingResource.resource] || undefined}
+            apiVersion={editingResource.apiVersion}
+            onSave={(data, apiVersion) => {
+              setLeiaConfig((prev) => ({
+                ...prev,
+                [editingResource.resource!]: {
+                  ...prev[editingResource.resource!],
+                  spec: data,
+                  apiVersion: apiVersion,
+                  edited: true,
+                },
+              }));
+              setEditingResource({
+                resource: null,
+                content: null,
+                apiVersion: "v1",
+              });
+            }}
+            onCancel={() =>
+              setEditingResource({
+                resource: null,
+                content: null,
+                apiVersion: "v1",
+              })
+            }
+          />
         </div>
       )}
 

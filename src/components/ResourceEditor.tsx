@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Editor } from "@monaco-editor/react";
 import * as Tabs from "@radix-ui/react-tabs";
-import type { Persona, Problem } from "../models/Leia";
+import type { Persona, Problem, Behaviour } from "../models/Leia";
 
-type ResourceType = "persona" | "problem";
+type ResourceType = "persona" | "problem" | "behaviour";
 
 interface ResourceEditorProps {
   resourceType: ResourceType;
-  initialData?: Partial<Persona> | Partial<Problem>;
+  initialData?: Partial<Persona> | Partial<Problem> | Partial<Behaviour>;
   apiVersion?: string;
   onSave: (data: any, apiVersion: string) => void;
   onCancel: () => void;
@@ -25,6 +25,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const [jsonContent, setJsonContent] = useState("");
   const [visualData, setVisualData] = useState<any>({});
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const processOptions = [
+    { value: "requirements-elicitation", label: "Requirements Elicitation" },
+    { value: "game", label: "Game" },
+  ];
 
   // Inicializar datos
   useEffect(() => {
@@ -32,9 +36,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
       setVisualData(initialData.spec);
       setJsonContent(JSON.stringify(initialData.spec, null, 2));
     } else {
-      const emptySpec =
-        resourceType === "persona"
-          ? {
+      const emptySpec = (() => {
+        switch (resourceType) {
+          case "persona":
+            return {
               fullName: "",
               firstName: "",
               description: "",
@@ -43,8 +48,9 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               objectPronoum: "",
               possesivePronoum: "",
               possesiveAdjective: "",
-            }
-          : {
+            };
+          case "problem":
+            return {
               description: "",
               personaBackground: "",
               details: "",
@@ -55,6 +61,16 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               overrides: {},
               constrainedTo: {},
             };
+          case "behaviour":
+            return {
+              description: "",
+              role: "",
+              process: [],
+            };
+          default:
+            return {};
+        }
+      })();
       setVisualData(emptySpec);
       setJsonContent(JSON.stringify(emptySpec, null, 2));
     }
@@ -222,6 +238,32 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     </div>
   );
 
+  const renderProcessCheckboxes = () => (
+    <div className="space-y-2">
+      {processOptions.map(({ value, label }) => (
+        <label className="flex items-center" key={value}>
+          <input
+            type="checkbox"
+            checked={visualData.process?.includes(value) || false}
+            onChange={(e) => {
+              const newProcess = visualData.process || [];
+              if (e.target.checked) {
+                handleVisualChange("process", [...newProcess, value]);
+              } else {
+                handleVisualChange(
+                  "process",
+                  newProcess.filter((p: string) => p !== value)
+                );
+              }
+            }}
+            className="mr-2"
+          />
+          {label}
+        </label>
+      ))}
+    </div>
+  );
+
   const renderProblemForm = () => (
     <div className="space-y-4 p-4 max-h-[400px] overflow-y-auto">
       <div>
@@ -301,57 +343,60 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Process
         </label>
-        <div className="space-y-2">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={
-                visualData.process?.includes("requirements-elicitation") ||
-                false
-              }
-              onChange={(e) => {
-                const newProcess = visualData.process || [];
-                if (e.target.checked) {
-                  handleVisualChange("process", [
-                    ...newProcess,
-                    "requirements-elicitation",
-                  ]);
-                } else {
-                  handleVisualChange(
-                    "process",
-                    newProcess.filter(
-                      (p: string) => p !== "requirements-elicitation"
-                    )
-                  );
-                }
-              }}
-              className="mr-2"
-            />
-            Requirements Elicitation
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={visualData.process?.includes("game") || false}
-              onChange={(e) => {
-                const newProcess = visualData.process || [];
-                if (e.target.checked) {
-                  handleVisualChange("process", [...newProcess, "game"]);
-                } else {
-                  handleVisualChange(
-                    "process",
-                    newProcess.filter((p: string) => p !== "game")
-                  );
-                }
-              }}
-              className="mr-2"
-            />
-            Game
-          </label>
-        </div>
+        {renderProcessCheckboxes()}
       </div>
     </div>
   );
+
+  const renderBehaviourForm = () => (
+    <div className="space-y-4 p-4 max-h-[400px] overflow-y-auto">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Description
+        </label>
+        <textarea
+          value={visualData.description || ""}
+          onChange={(e) => handleVisualChange("description", e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          rows={3}
+          placeholder="Describe the behaviour..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Role
+        </label>
+        <input
+          type="text"
+          value={visualData.role || ""}
+          onChange={(e) => handleVisualChange("role", e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="e.g., Facilitator"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Process
+        </label>
+        {renderProcessCheckboxes()}
+      </div>
+    </div>
+  );
+
+  const renderForm = () => {
+    switch (resourceType) {
+      case "persona":
+        return renderPersonaForm();
+      case "problem":
+        return renderProblemForm();
+      case "behaviour":
+        return renderBehaviourForm();
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
@@ -396,9 +441,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           </Tabs.List>
 
           <Tabs.Content value="visual" className="pt-4">
-            {resourceType === "persona"
-              ? renderPersonaForm()
-              : renderProblemForm()}
+            {renderForm()}
           </Tabs.Content>
 
           <Tabs.Content value="code" className="pt-4">
