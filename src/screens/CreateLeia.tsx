@@ -370,44 +370,6 @@ export const CreateLeia: React.FC = () => {
     }));
   };
 
-  const handleEditResource = (
-    resource: keyof LeiaConfig,
-    content: string,
-    apiVersion: string
-  ) => {
-    try {
-      const parsedSpec = JSON.parse(content);
-
-      setLeiaConfig((prev) => ({
-        ...prev,
-        [resource]: {
-          ...prev[resource],
-          spec: parsedSpec,
-          apiVersion: apiVersion,
-          edited: true,
-        },
-      }));
-
-      setEditingResource({ resource: null, content: null, apiVersion: "v1" });
-    } catch (error) {
-      console.error("Error parsing JSON content:", error);
-    }
-  };
-
-  const handleEditorChange = (value: string | undefined) => {
-    setEditingResource((prev) => ({
-      ...prev,
-      content: value || "",
-    }));
-  };
-
-  const handleApiVersionChange = (value: string) => {
-    setEditingResource((prev) => ({
-      ...prev,
-      apiVersion: value,
-    }));
-  };
-
   // Funciones de eliminación de recursos
   const handleDeleteResource = (
     resource: Persona | Problem | Behaviour,
