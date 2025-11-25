@@ -5,7 +5,9 @@ import {
   LightBulbIcon,
   CpuChipIcon,
   InformationCircleIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
+import { WizardModal } from "../components/WizardModal";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
@@ -73,8 +75,8 @@ export const CreateLeia: React.FC = () => {
 
   const [validationErrors, setValidationErrors] = useState<
     | {
-        [key in keyof typeof customizations]?: string;
-      }
+      [key in keyof typeof customizations]?: string;
+    }
     | null
   >(null);
 
@@ -139,6 +141,8 @@ export const CreateLeia: React.FC = () => {
     message: string;
     data?: Array<{ id: string; name: string }>;
   } | null>(null);
+
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -485,9 +489,8 @@ export const CreateLeia: React.FC = () => {
         } else if (axiosError.response?.status === 404) {
           err.message = "Resource not found";
         } else if (axiosError.response?.status === 400) {
-          err.message = `Cannot delete resource: it is being used in ${
-            axiosError.response?.data?.data?.length
-          } LEIA${axiosError.response?.data?.data?.length === 1 ? "" : "s"}.`;
+          err.message = `Cannot delete resource: it is being used in ${axiosError.response?.data?.data?.length
+            } LEIA${axiosError.response?.data?.data?.length === 1 ? "" : "s"}.`;
           err.data = axiosError.response?.data?.data || [];
         } else if (axiosError.response?.data?.message) {
           err.message = axiosError.response.data.message;
@@ -622,12 +625,12 @@ export const CreateLeia: React.FC = () => {
               const resourcePublishState = leiaPublish
                 ? leiaPublish
                 : key === "behaviour"
-                ? behaviourPublish
-                : key === "problem"
-                ? problemPublish
-                : key === "persona"
-                ? personaPublish
-                : false;
+                  ? behaviourPublish
+                  : key === "problem"
+                    ? problemPublish
+                    : key === "persona"
+                      ? personaPublish
+                      : false;
               publishParam = `?publish=${resourcePublishState}`;
             }
             const response = await api.post(
@@ -721,64 +724,56 @@ export const CreateLeia: React.FC = () => {
     <div className="flex items-center justify-center space-x-8 mb-8">
       <div className="flex items-center space-x-2">
         <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            currentStep >= 1
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-600"
-          }`}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 1
+            ? "bg-blue-600 text-white"
+            : "bg-gray-200 text-gray-600"
+            }`}
         >
           1
         </div>
         <span
-          className={`text-sm font-medium ${
-            currentStep >= 1 ? "text-blue-600" : "text-gray-600"
-          }`}
+          className={`text-sm font-medium ${currentStep >= 1 ? "text-blue-600" : "text-gray-600"
+            }`}
         >
           Selection
         </span>
       </div>
       <div
-        className={`h-px w-12 ${
-          currentStep >= 2 ? "bg-blue-300" : "bg-gray-300"
-        }`}
+        className={`h-px w-12 ${currentStep >= 2 ? "bg-blue-300" : "bg-gray-300"
+          }`}
       />
       <div className="flex items-center space-x-2">
         <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            currentStep >= 2
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-600"
-          }`}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 2
+            ? "bg-blue-600 text-white"
+            : "bg-gray-200 text-gray-600"
+            }`}
         >
           2
         </div>
         <span
-          className={`text-sm font-medium ${
-            currentStep >= 2 ? "text-blue-600" : "text-gray-600"
-          }`}
+          className={`text-sm font-medium ${currentStep >= 2 ? "text-blue-600" : "text-gray-600"
+            }`}
         >
           Edit
         </span>
       </div>
       <div
-        className={`h-px w-12 ${
-          currentStep >= 3 ? "bg-blue-300" : "bg-gray-300"
-        }`}
+        className={`h-px w-12 ${currentStep >= 3 ? "bg-blue-300" : "bg-gray-300"
+          }`}
       />
       <div className="flex items-center space-x-2">
         <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            currentStep >= 3
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-600"
-          }`}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 3
+            ? "bg-blue-600 text-white"
+            : "bg-gray-200 text-gray-600"
+            }`}
         >
           3
         </div>
         <span
-          className={`text-sm font-medium ${
-            currentStep >= 3 ? "text-blue-600" : "text-gray-600"
-          }`}
+          className={`text-sm font-medium ${currentStep >= 3 ? "text-blue-600" : "text-gray-600"
+            }`}
         >
           Create
         </span>
@@ -856,6 +851,13 @@ export const CreateLeia: React.FC = () => {
               onDelete={handleDeleteResource}
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
+                  <button
+                    onClick={() => setIsWizardOpen(true)}
+                    className="p-1 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-full transition-colors"
+                    title="Open LEIA Wizard"
+                  >
+                    <SparklesIcon className="w-5 h-5" />
+                  </button>
                   <VisibilitySelector
                     value={problemVisibility}
                     onChange={handleProblemVisibilityChange}
@@ -888,6 +890,41 @@ export const CreateLeia: React.FC = () => {
           </div>
         </div>
       )}
+      <WizardModal
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        context={{
+          persona: leiaConfig.persona,
+          behaviour: leiaConfig.behaviour
+        }}
+        onSelectProblem={async (problem) => {
+          let selectedProblem = problem;
+          if (!problem.id) {
+            try {
+              // It's a generated problem, persist it first
+              const response = await api.post('/api/v1/problems', {
+                ...problem,
+                apiVersion: "v1",
+                metadata: {
+                  ...problem.metadata,
+                  name: problem.metadata.name || "Generated Problem",
+                  version: "1.0.0"
+                }
+              });
+              selectedProblem = response.data;
+            } catch (error) {
+              console.error("Error persisting generated problem:", error);
+              // Fallback to using the unpersisted problem, but ideally show an error
+            }
+          }
+
+          setLeiaConfig((prev) => ({ ...prev, problem: selectedProblem }));
+          setProblems((prev) => {
+            if (prev.find((p) => p.id === selectedProblem.id)) return prev;
+            return [selectedProblem, ...prev];
+          });
+        }}
+      />
     </div>
   );
 
@@ -921,11 +958,10 @@ export const CreateLeia: React.FC = () => {
                         <span>by {leiaConfig.behaviour.user.email}</span>
                         <span className="flex items-center gap-1">
                           <span
-                            className={`inline-block w-2 h-2 rounded-full ${
-                              leiaConfig.behaviour.user.role === "admin"
-                                ? "bg-purple-500"
-                                : "bg-green-500"
-                            }`}
+                            className={`inline-block w-2 h-2 rounded-full ${leiaConfig.behaviour.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                              }`}
                           ></span>
                           {leiaConfig.behaviour.user.role === "admin"
                             ? "Administrator"
@@ -986,9 +1022,8 @@ export const CreateLeia: React.FC = () => {
                               leiaConfig.behaviour?.apiVersion || "v1",
                           })
                         }
-                        className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                          leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
-                        }`}
+                        className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
+                          }`}
                       >
                         Edit
                       </button>
@@ -1023,11 +1058,10 @@ export const CreateLeia: React.FC = () => {
                         <span>by {leiaConfig.problem.user.email}</span>
                         <span className="flex items-center gap-1">
                           <span
-                            className={`inline-block w-2 h-2 rounded-full ${
-                              leiaConfig.problem.user.role === "admin"
-                                ? "bg-purple-500"
-                                : "bg-green-500"
-                            }`}
+                            className={`inline-block w-2 h-2 rounded-full ${leiaConfig.problem.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                              }`}
                           ></span>
                           {leiaConfig.problem.user.role === "admin"
                             ? "Administrator"
@@ -1080,9 +1114,8 @@ export const CreateLeia: React.FC = () => {
                         apiVersion: leiaConfig.problem?.apiVersion || "v1",
                       })
                     }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                      leiaConfig.problem?.edited ? "flex-1" : "w-full"
-                    }`}
+                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${leiaConfig.problem?.edited ? "flex-1" : "w-full"
+                      }`}
                   >
                     Edit
                   </button>
@@ -1111,11 +1144,10 @@ export const CreateLeia: React.FC = () => {
                         <span>by {leiaConfig.persona.user.email}</span>
                         <span className="flex items-center gap-1">
                           <span
-                            className={`inline-block w-2 h-2 rounded-full ${
-                              leiaConfig.persona.user.role === "admin"
-                                ? "bg-purple-500"
-                                : "bg-green-500"
-                            }`}
+                            className={`inline-block w-2 h-2 rounded-full ${leiaConfig.persona.user.role === "admin"
+                              ? "bg-purple-500"
+                              : "bg-green-500"
+                              }`}
                           ></span>
                           {leiaConfig.persona.user.role === "admin"
                             ? "Administrator"
@@ -1168,9 +1200,8 @@ export const CreateLeia: React.FC = () => {
                         apiVersion: leiaConfig.persona?.apiVersion || "v1",
                       })
                     }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                      leiaConfig.persona?.edited ? "flex-1" : "w-full"
-                    }`}
+                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${leiaConfig.persona?.edited ? "flex-1" : "w-full"
+                      }`}
                   >
                     Edit
                   </button>
@@ -1355,9 +1386,8 @@ export const CreateLeia: React.FC = () => {
         </div>
         {generatedLeia && !generationError ? (
           <div
-            className={`grid ${
-              isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-            } gap-4`}
+            className={`grid ${isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+              } gap-4`}
           >
             {!isCurrentUserInstructor && (
               <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
@@ -1572,11 +1602,10 @@ export const CreateLeia: React.FC = () => {
                 }
               }}
               placeholder="Enter LEIA name"
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                validationErrors?.leia
-                  ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                  : "border-gray-300"
-              }`}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.leia
+                ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                : "border-gray-300"
+                }`}
             />
             {validationErrors?.leia && (
               <p className="mt-1 text-sm text-red-600">
@@ -1661,9 +1690,8 @@ export const CreateLeia: React.FC = () => {
         </div>
       </div>
       <div
-        className={`grid gap-6 ${
-          isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-        }`}
+        className={`grid gap-6 ${isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+          }`}
       >
         {/* Comportamiento */}
         {customizations.behaviour && !isCurrentUserInstructor && (
@@ -1691,11 +1719,10 @@ export const CreateLeia: React.FC = () => {
                     }
                   }}
                   placeholder="Enter behaviour name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                    validationErrors?.behaviour
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-gray-300"
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.behaviour
+                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                    : "border-gray-300"
+                    }`}
                 />
                 {validationErrors?.behaviour && (
                   <p className="mt-1 text-sm text-red-600">
@@ -1716,9 +1743,8 @@ export const CreateLeia: React.FC = () => {
                       setBehaviourPublish(e.target.value === "public")
                     }
                     disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                      }`}
                   >
                     <option value="public">Public</option>
                     <option value="private">Private</option>
@@ -1727,8 +1753,8 @@ export const CreateLeia: React.FC = () => {
                     {leiaPublish
                       ? "Visibility is locked to public because the LEIA is public"
                       : behaviourPublish
-                      ? "This behaviour will be published and visible to all users"
-                      : "This behaviour will remain private and only visible to you"}
+                        ? "This behaviour will be published and visible to all users"
+                        : "This behaviour will remain private and only visible to you"}
                   </p>
                 </div>
               )}
@@ -1762,11 +1788,10 @@ export const CreateLeia: React.FC = () => {
                     }
                   }}
                   placeholder="Enter problem name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                    validationErrors?.problem
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-gray-300"
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.problem
+                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                    : "border-gray-300"
+                    }`}
                 />
                 {validationErrors?.problem && (
                   <p className="mt-1 text-sm text-red-600">
@@ -1787,9 +1812,8 @@ export const CreateLeia: React.FC = () => {
                       setProblemPublish(e.target.value === "public")
                     }
                     disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                      }`}
                   >
                     <option value="public">Public</option>
                     <option value="private">Private</option>
@@ -1798,8 +1822,8 @@ export const CreateLeia: React.FC = () => {
                     {leiaPublish
                       ? "Visibility is locked to public because the LEIA is public"
                       : problemPublish
-                      ? "This problem will be published and visible to all users"
-                      : "This problem will remain private and only visible to you"}
+                        ? "This problem will be published and visible to all users"
+                        : "This problem will remain private and only visible to you"}
                   </p>
                 </div>
               )}
@@ -1834,11 +1858,10 @@ export const CreateLeia: React.FC = () => {
                     }
                   }}
                   placeholder="Enter persona name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                    validationErrors?.persona
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-gray-300"
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.persona
+                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                    : "border-gray-300"
+                    }`}
                 />
                 {validationErrors?.persona && (
                   <p className="mt-1 text-sm text-red-600">
@@ -1859,9 +1882,8 @@ export const CreateLeia: React.FC = () => {
                       setPersonaPublish(e.target.value === "public")
                     }
                     disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                      }`}
                   >
                     <option value="public">Public</option>
                     <option value="private">Private</option>
@@ -1870,8 +1892,8 @@ export const CreateLeia: React.FC = () => {
                     {leiaPublish
                       ? "Visibility is locked to public because the LEIA is public"
                       : personaPublish
-                      ? "This persona will be published and visible to all users"
-                      : "This persona will remain private and only visible to you"}
+                        ? "This persona will be published and visible to all users"
+                        : "This persona will remain private and only visible to you"}
                   </p>
                 </div>
               )}
@@ -1886,9 +1908,8 @@ export const CreateLeia: React.FC = () => {
           <h3 className="text-lg w-full font-semibold">Final LEIA Preview</h3>
         </div>
         <div
-          className={`grid gap-4 ${
-            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-          }`}
+          className={`grid gap-4 ${isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+            }`}
         >
           {!isCurrentUserInstructor && (
             <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
@@ -2157,11 +2178,10 @@ export const CreateLeia: React.FC = () => {
           <button
             onClick={handlePrevStep}
             disabled={currentStep === 1}
-            className={`px-6 py-2 rounded-lg transition-colors ${
-              currentStep === 1
-                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-gray-600 text-white hover:bg-gray-700"
-            }`}
+            className={`px-6 py-2 rounded-lg transition-colors ${currentStep === 1
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-gray-600 text-white hover:bg-gray-700"
+              }`}
           >
             Previous
           </button>
@@ -2195,13 +2215,12 @@ export const CreateLeia: React.FC = () => {
               (currentStep === 2 && !isStep2Complete) ||
               (currentStep === 3 && !isStep3Complete)
             }
-            className={`px-6 py-2 rounded-lg transition-colors ${
-              (currentStep === 1 && !isStep1Complete) ||
+            className={`px-6 py-2 rounded-lg transition-colors ${(currentStep === 1 && !isStep1Complete) ||
               (currentStep === 2 && !isStep2Complete) ||
               (currentStep === 3 && !isStep3Complete)
-                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
           >
             {currentStep === 3 ? "Finish" : "Next"}
           </button>
