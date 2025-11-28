@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: leia-org/leia-workbench-front-public
+  IMAGE_NAME: leia-org/leia-workbench-frontend
 
 jobs:
   build-and-push:
@@ -43,4 +43,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
