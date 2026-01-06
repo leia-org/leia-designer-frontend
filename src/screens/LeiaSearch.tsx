@@ -9,7 +9,6 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
-import { Header } from "../components/shared/Header";
 import type { Leia, Persona, Problem, Behaviour } from "../models/Leia";
 import type { Experiment } from "../models/Experiment";
 import { ToastContainer, toast } from "react-toastify";
@@ -287,11 +286,9 @@ export const LeiaSearch: React.FC = () => {
         } else if (axiosError.response?.status === 404) {
           err.message = "LEIA not found";
         } else if (axiosError.response?.status === 400) {
-          err.message = `Cannot delete LEIA: it is being used in ${
-            axiosError.response.data?.data?.length
-          } activi${
-            axiosError.response.data?.data?.length === 1 ? "ty" : "ties"
-          }.`;
+          err.message = `Cannot delete LEIA: it is being used in ${axiosError.response.data?.data?.length
+            } activi${axiosError.response.data?.data?.length === 1 ? "ty" : "ties"
+            }.`;
           err.data = axiosError.response.data?.data || [];
         } else if (axiosError.response?.data?.message) {
           err.message = axiosError.response.data.message;
@@ -324,67 +321,60 @@ export const LeiaSearch: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-white">
-      <Header
-        title="Search"
-        description="Discover and test existing LEIA configurations"
-      />
+    <div className="h-full flex flex-col bg-white">
       <ToastContainer />
+
+      {/* Experiments Modal */}
       {showExperimentsModal && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[60]"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               handleCloseExperimentsModal();
             }
           }}
         >
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4">
-            <div
-              className="p-6"
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              <h2 className="text-xl font-semibold mb-4">
-                Add {selectedLeia?.metadata.name || ""} LEIA to an Activity
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden border border-gray-100">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Add to Activity
               </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Select an activity to add "{selectedLeia?.metadata.name}" to.
+              </p>
+            </div>
 
-              {/* Activity Selector */}
+            <div className="p-6">
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select an Activity
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Activity
                 </label>
 
                 {errorLoadingDraftExperiments ? (
                   <div className="space-y-3">
-                    <div className="border border-red-300 rounded-md px-3 py-2 bg-red-50">
+                    <div className="border border-red-200 rounded-lg px-3 py-2 bg-red-50">
                       <p className="text-sm text-red-600">
                         {errorLoadingDraftExperiments}
                       </p>
                     </div>
                     <button
                       onClick={loadDraftExperiments}
-                      className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                      className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                     >
                       Try Again
                     </button>
-                  </div>
-                ) : draftExperiments && draftExperiments.length === 0 ? (
-                  <div className="border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                    <p className="text-sm text-gray-600">No activities found</p>
                   </div>
                 ) : (
                   <CreatableSelect
                     value={
                       selectedDraftExperimentId
                         ? {
-                            value: selectedDraftExperimentId,
-                            label:
-                              draftExperiments?.find(
-                                (exp) => exp.id === selectedDraftExperimentId
-                              )?.name || "",
-                          }
+                          value: selectedDraftExperimentId,
+                          label:
+                            draftExperiments?.find(
+                              (exp) => exp.id === selectedDraftExperimentId
+                            )?.name || "",
+                        }
                         : null
                     }
                     onChange={(newValue) =>
@@ -399,8 +389,8 @@ export const LeiaSearch: React.FC = () => {
                     }
                     placeholder={
                       loadingDraftExperiments
-                        ? "Loading activities..."
-                        : "Choose or create an activity..."
+                        ? "Loading..."
+                        : "Select or create activity..."
                     }
                     isClearable
                     isDisabled={
@@ -408,41 +398,39 @@ export const LeiaSearch: React.FC = () => {
                     }
                     isLoading={creatingNewExperiment || loadingDraftExperiments}
                     formatCreateLabel={(inputValue) =>
-                      `Create activity: "${inputValue}"`
+                      `Create "${inputValue}"`
                     }
                     createOptionPosition="first"
-                    className="react-select-container"
-                    classNamePrefix="react-select"
+                    className="text-sm"
                     styles={{
                       control: (base) => ({
                         ...base,
-                        minHeight: "38px",
-                        borderColor: "#d1d5db",
+                        minHeight: "40px",
+                        borderColor: "#E5E7EB",
+                        borderRadius: "0.5rem",
+                        boxShadow: "none",
                         "&:hover": {
-                          borderColor: "#9ca3af",
+                          borderColor: "#D1D5DB",
                         },
                         "&:focus-within": {
-                          borderColor: "#3b82f6",
-                          boxShadow: "0 0 0 1px #3b82f6",
+                          borderColor: "#6366F1",
+                          boxShadow: "0 0 0 1px #6366F1",
                         },
                       }),
+                      menu: (base) => ({
+                        ...base,
+                        borderRadius: "0.5rem",
+                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                      })
                     }}
                   />
                 )}
-
-                {creatingNewExperiment && (
-                  <div className="mt-2 flex items-center text-sm text-blue-600">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-                    Creating new activity...
-                  </div>
-                )}
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-4">
                 <button
                   onClick={handleCloseExperimentsModal}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
@@ -453,228 +441,227 @@ export const LeiaSearch: React.FC = () => {
                     !selectedLeia ||
                     addingLeiaToExperiment
                   }
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
                 >
-                  {addingLeiaToExperiment ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                      Adding...
-                    </>
-                  ) : (
-                    "Add to Activity"
+                  {addingLeiaToExperiment && (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
                   )}
+                  Add to Activity
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-      <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
-        <div className="flex items-end justify-between mb-6">
-          <div className="flex-1">
-            <SearchFilter
-              placeholder="Search by name or description"
-              value={queryText}
-              onChange={setQueryText}
-              className="max-w-xl"
-            />
-          </div>
-          <div className="flex gap-4">
-            <div className="min-w-[140px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Visibility
-              </label>
-              <select
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                value={visibilityFilter}
-                onChange={(e) =>
-                  setVisibilityFilter(
-                    e.target.value as "all" | "private" | "public"
-                  )
-                }
-              >
-                <option value="all">All</option>
-                <option value="private">Private</option>
-                <option value="public">Public</option>
-              </select>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Filters Toolbar */}
+        <div className="border-b border-gray-200 bg-white px-8 py-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 max-w-lg">
+              <div className="relative">
+                <SearchFilter
+                  placeholder="Search exercises..."
+                  value={queryText}
+                  onChange={setQueryText}
+                  className="w-full"
+                />
+              </div>
             </div>
-            <div className="min-w-[180px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Version
-              </label>
-              <select
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                value={versionFilter}
-                onChange={(e) =>
-                  setVersionFilter(e.target.value as VersionFilter)
-                }
-              >
-                <option value="latest">Latest only</option>
-                <option value="">All</option>
-              </select>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Visibility</span>
+                <select
+                  className="border-gray-200 rounded-md text-sm text-gray-600 focus:ring-indigo-500 focus:border-indigo-500 py-1.5 pl-3 pr-8 bg-gray-50/50 hover:bg-gray-50"
+                  value={visibilityFilter}
+                  onChange={(e) =>
+                    setVisibilityFilter(
+                      e.target.value as "all" | "private" | "public"
+                    )
+                  }
+                >
+                  <option value="all">All View</option>
+                  <option value="private">Private</option>
+                  <option value="public">Public</option>
+                </select>
+              </div>
+
+              <div className="h-4 w-px bg-gray-200"></div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Version</span>
+                <select
+                  className="border-gray-200 rounded-md text-sm text-gray-600 focus:ring-indigo-500 focus:border-indigo-500 py-1.5 pl-3 pr-8 bg-gray-50/50 hover:bg-gray-50"
+                  value={versionFilter}
+                  onChange={(e) =>
+                    setVersionFilter(e.target.value as VersionFilter)
+                  }
+                >
+                  <option value="latest">Latest</option>
+                  <option value="">All History</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="relative flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-6 mt-6 pb-6 w-full">
+        {/* Data Table */}
+        <div className="flex-1 overflow-auto bg-gray-50/50">
+          <div className="px-8 py-6">
             {error && (
-              <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded">
-                {error}
+              <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-100 flex items-start gap-3">
+                <div className="p-1 bg-red-100 rounded-full text-red-600">
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-red-800">Error loading data</h3>
+                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                </div>
               </div>
             )}
 
-            {loading ? (
-              <div className="py-16 text-center text-gray-500">Loading…</div>
-            ) : leias.length === 0 ? (
-              <div className="py-16 text-center text-gray-500">
-                No LEIAs found
-              </div>
-            ) : (
-              <ul className="divide-y divide-gray-200 bg-white rounded-md border border-gray-200">
-                {leias.map((leia) => {
-                  const description =
-                    leia.spec?.problem?.spec?.description ||
-                    leia.spec?.persona?.spec?.description ||
-                    "";
-                  return (
-                    <li
-                      key={leia.id}
-                      className="flex items-start justify-between gap-4 p-4"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-base font-medium text-gray-900 truncate">
-                              {leia.metadata.name}
-                            </h3>
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                              v{leia.metadata.version}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                                leia.isPublished
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}
-                            >
-                              {leia.isPublished ? "Published" : "Unpublished"}
-                            </span>
-                          </div>
-                          {/* User information moved back to the right without margin */}
-                          {leia.user && leia.user.email && leia.user.role && (
-                            <div className="flex items-center gap-3 text-xs text-gray-500 flex-shrink-0">
-                              <span>{leia.user.email}</span>
-                              <span className="flex items-center gap-1">
-                                <span
-                                  className={`inline-block w-2 h-2 rounded-full ${
-                                    leia.user.role === "admin"
-                                      ? "bg-purple-500"
-                                      : "bg-green-500"
-                                  }`}
-                                ></span>
-                                {leia.user.role === "admin"
-                                  ? "Administrator"
-                                  : "Instructor"}
+            <div className="bg-white border border-gray-200 shadow-sm rounded-xl overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50/50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Exercise Name & Description
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">
+                      Status
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-48">
+                      Owner
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider w-48">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+                          <span className="text-sm text-gray-500">Loading exercises...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : leias.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-gray-500 text-sm">
+                        No exercises found matching your criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    leias.map((leia) => {
+                      const description =
+                        leia.spec?.problem?.spec?.description ||
+                        leia.spec?.persona?.spec?.description ||
+                        "";
+
+                      return (
+                        <tr key={leia.id} className="hover:bg-gray-50/80 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
+                                  {leia.metadata.name}
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+                                  v{leia.metadata.version}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 line-clamp-1 max-w-lg">
+                                {description || "No description available"}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span className={`h-1.5 w-1.5 rounded-full ${leia.isPublished ? 'bg-green-500' : 'bg-amber-400'}`}></span>
+                              <span className="text-xs text-gray-600 font-medium">
+                                {leia.isPublished ? "Published" : "Draft"}
                               </span>
                             </div>
-                          )}
-                        </div>
-                        {description && (
-                          <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                            {description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          className="group relative px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-40"
-                          onClick={() => handlePersonalize(leia)}
-                        >
-                          <SwatchIcon className="w-4 h-4 flex-shrink-0" />
-                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                            Design from this
-                          </span>
-                        </button>
-                        <button
-                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-20"
-                          onClick={() => handleViewLeiaContent(leia)}
-                          title="View LEIA content"
-                        >
-                          <EyeIcon className="w-4 h-4 flex-shrink-0" />
-                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                            View
-                          </span>
-                        </button>
-                        <button
-                          className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
-                            initializingId === leia.id
-                              ? "w-30"
-                              : "w-10 hover:w-20"
-                          }`}
-                          onClick={() => handleTest(leia)}
-                          disabled={initializingId === leia.id}
-                        >
-                          <LightBulbIcon className="w-4 h-4 flex-shrink-0" />
-                          <span
-                            className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
-                              initializingId === leia.id
-                                ? "opacity-100"
-                                : "opacity-0 group-hover:opacity-100"
-                            }`}
-                          >
-                            {initializingId === leia.id ? "Starting…" : "Try"}
-                          </span>
-                        </button>
-                        {user?.role === "admin" && (
-                          <button
-                            className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
-                              selectedLeia?.id === leia.id
-                                ? "w-42"
-                                : "w-10 hover:w-38"
-                            }`}
-                            onClick={() => {
-                              setSelectedLeia(leia);
-                              handleOpenExperimentsModal();
-                            }}
-                          >
-                            <PuzzlePieceIcon className="w-4 h-4 flex-shrink-0" />
-                            <span
-                              className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
-                                selectedLeia?.id === leia.id
-                                  ? "opacity-100"
-                                  : "opacity-0 group-hover:opacity-100"
-                              }`}
-                            >
-                              {selectedLeia?.id === leia.id
-                                ? "Adding to Activity"
-                                : "Add to Activity"}
-                            </span>
-                          </button>
-                        )}
-                        {canDeleteLeia(leia) && (
-                          <button
-                            className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-22"
-                            onClick={() => handleDeleteLeia(leia)}
-                            title="Delete LEIA"
-                          >
-                            <TrashIcon className="w-4 h-4 flex-shrink-0" />
-                            <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                              Delete
-                            </span>
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {leia.user && (
+                              <div className="flex items-center gap-2">
+                                <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600 border border-gray-200">
+                                  {leia.user.email?.[0].toUpperCase()}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-xs text-gray-900 font-medium">{leia.user.email?.split('@')[0]}</span>
+                                  <span className="text-[10px] text-gray-400 capitalize">{leia.user.role}</span>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => handlePersonalize(leia)}
+                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                title="Use as template"
+                              >
+                                <SwatchIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleViewLeiaContent(leia)}
+                                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                title="View details"
+                              >
+                                <EyeIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                className={`p-1.5 rounded transition-colors ${initializingId === leia.id
+                                  ? "text-indigo-600 bg-indigo-50"
+                                  : "text-gray-400 hover:text-green-600 hover:bg-green-50"
+                                  }`}
+                                onClick={() => handleTest(leia)}
+                                disabled={initializingId === leia.id}
+                                title="Test"
+                              >
+                                <LightBulbIcon className="w-4 h-4" />
+                              </button>
+                              {user?.role === "admin" && (
+                                <button
+                                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  onClick={() => {
+                                    setSelectedLeia(leia);
+                                    handleOpenExperimentsModal();
+                                  }}
+                                  title="Add to Activity"
+                                >
+                                  <PuzzlePieceIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canDeleteLeia(leia) && (
+                                <button
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  onClick={() => handleDeleteLeia(leia)}
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-white via-white to-transparent pointer-events-none"></div>
       </div>
 
       {/* LEIA View Modal */}

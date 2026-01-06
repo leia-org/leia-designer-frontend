@@ -1,5 +1,4 @@
 import type React from "react";
-import { Header } from "../components/shared/Header";
 import { useEffect, useState, useCallback } from "react";
 import type { Experiment, LeiaConfig } from "../models/Experiment";
 import type { Leia } from "../models/Leia";
@@ -818,10 +817,6 @@ export const MyActivities: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-white">
-      <Header
-        title="My Activities"
-        description="View and manage your activities"
-      />
       <ToastContainer />
 
       {/* Create Activity Modal */}
@@ -1320,11 +1315,10 @@ export const MyActivities: React.FC = () => {
                     />
                     <button
                       onClick={handleCreateExperiment}
-                      className={`px-4 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2 ${
-                        creatingNewExperiment
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
+                      className={`px-4 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2 ${creatingNewExperiment
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                        }`}
                       disabled={
                         creatingNewExperiment || !newExperimentName.trim()
                       }
@@ -1535,139 +1529,139 @@ export const MyActivities: React.FC = () => {
                                       {/* Second row: Transcription section */}
                                       {leiaConfig.configuration?.mode ===
                                         "transcription" && (
-                                        <div className="flex items-center justify-between mt-3">
-                                          <div className="flex items-center gap-4">
-                                            {leiaConfig.configuration?.data
-                                              ?.messages ||
-                                            leiaConfig.configuration?.data
-                                              ?.link ? (
-                                              <div className="flex items-center gap-3">
-                                                <div className="flex items-center gap-2 text-sm">
-                                                  <span className="font-medium text-gray-600">
-                                                    Transcription Type:
-                                                  </span>
-                                                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                                    {leiaConfig.configuration
-                                                      ?.data?.link
-                                                      ? "External Link"
-                                                      : "Chat Messages"}
-                                                  </span>
+                                          <div className="flex items-center justify-between mt-3">
+                                            <div className="flex items-center gap-4">
+                                              {leiaConfig.configuration?.data
+                                                ?.messages ||
+                                                leiaConfig.configuration?.data
+                                                  ?.link ? (
+                                                <div className="flex items-center gap-3">
+                                                  <div className="flex items-center gap-2 text-sm">
+                                                    <span className="font-medium text-gray-600">
+                                                      Transcription Type:
+                                                    </span>
+                                                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                                                      {leiaConfig.configuration
+                                                        ?.data?.link
+                                                        ? "External Link"
+                                                        : "Chat Messages"}
+                                                    </span>
+                                                  </div>
+                                                  <button
+                                                    onClick={() =>
+                                                      handleViewTranscription(
+                                                        leiaConfig.configuration
+                                                          ?.data
+                                                      )
+                                                    }
+                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                    title="View transcription content"
+                                                  >
+                                                    <DocumentIcon className="w-5 h-5" />
+                                                  </button>
                                                 </div>
+                                              ) : (
+                                                <div className="flex items-center gap-2 text-amber-700 bg-amber-100 px-3 py-2 rounded-md text-sm font-medium border border-amber-200">
+                                                  <ExclamationTriangleIcon className="w-4 h-4" />
+                                                  No Transcription Available
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            {!experiment.isPublished && (
+                                              <div className="flex items-center gap-2 ml-4">
+                                                <button
+                                                  onClick={() => {
+                                                    const leiaKey = `${experiment.id}-${leiaConfig.id}`;
+                                                    setShowUrlInput((prev) => {
+                                                      const newSet = new Set(
+                                                        prev
+                                                      );
+                                                      if (newSet.has(leiaKey)) {
+                                                        newSet.delete(leiaKey);
+                                                      } else {
+                                                        newSet.add(leiaKey);
+                                                      }
+                                                      return newSet;
+                                                    });
+                                                  }}
+                                                  disabled={
+                                                    !!initializingTranscriptionChat
+                                                  }
+                                                  className="h-8 px-3 flex items-center gap-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
+                                                  title="Add transcription link"
+                                                >
+                                                  <LinkIcon className="w-4 h-4" />
+                                                  Add Link
+                                                </button>
+
                                                 <button
                                                   onClick={() =>
-                                                    handleViewTranscription(
-                                                      leiaConfig.configuration
-                                                        ?.data
+                                                    handleCreateTranscriptionManually(
+                                                      experiment.id,
+                                                      leiaConfig.id,
+                                                      leiaConfig
                                                     )
                                                   }
-                                                  className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                  title="View transcription content"
+                                                  disabled={
+                                                    !!initializingTranscriptionChat
+                                                  }
+                                                  className="h-8 px-3 flex items-center gap-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
+                                                  title="Create transcription manually"
                                                 >
-                                                  <DocumentIcon className="w-5 h-5" />
+                                                  {initializingTranscriptionChat ===
+                                                    `${experiment.id}-${leiaConfig.id}` ? (
+                                                    <>
+                                                      <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                                                      Initializing...
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <PencilIcon className="w-4 h-4" />
+                                                      Generate
+                                                    </>
+                                                  )}
                                                 </button>
-                                              </div>
-                                            ) : (
-                                              <div className="flex items-center gap-2 text-amber-700 bg-amber-100 px-3 py-2 rounded-md text-sm font-medium border border-amber-200">
-                                                <ExclamationTriangleIcon className="w-4 h-4" />
-                                                No Transcription Available
+
+                                                <button
+                                                  onClick={() =>
+                                                    handleGenerateTranscriptionAutomatically(
+                                                      experiment.id,
+                                                      leiaConfig.id,
+                                                      leiaConfig
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    !!initializingTranscriptionChat
+                                                  }
+                                                  className="h-8 px-3 flex items-center gap-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:bg-orange-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
+                                                  title="Generate transcription automatically"
+                                                >
+                                                  <SparklesIcon className="w-4 h-4" />
+                                                  Auto Generate
+                                                </button>
+
+                                                <button
+                                                  onClick={() =>
+                                                    handleOpenJsonEdit(
+                                                      experiment.id,
+                                                      leiaConfig.id,
+                                                      leiaConfig
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    !!initializingTranscriptionChat
+                                                  }
+                                                  className="h-8 px-3 flex items-center gap-2 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
+                                                  title="Edit transcription JSON"
+                                                >
+                                                  <DocumentIcon className="w-4 h-4" />
+                                                  JSON Edit
+                                                </button>
                                               </div>
                                             )}
                                           </div>
-
-                                          {!experiment.isPublished && (
-                                            <div className="flex items-center gap-2 ml-4">
-                                              <button
-                                                onClick={() => {
-                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
-                                                  setShowUrlInput((prev) => {
-                                                    const newSet = new Set(
-                                                      prev
-                                                    );
-                                                    if (newSet.has(leiaKey)) {
-                                                      newSet.delete(leiaKey);
-                                                    } else {
-                                                      newSet.add(leiaKey);
-                                                    }
-                                                    return newSet;
-                                                  });
-                                                }}
-                                                disabled={
-                                                  !!initializingTranscriptionChat
-                                                }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Add transcription link"
-                                              >
-                                                <LinkIcon className="w-4 h-4" />
-                                                Add Link
-                                              </button>
-
-                                              <button
-                                                onClick={() =>
-                                                  handleCreateTranscriptionManually(
-                                                    experiment.id,
-                                                    leiaConfig.id,
-                                                    leiaConfig
-                                                  )
-                                                }
-                                                disabled={
-                                                  !!initializingTranscriptionChat
-                                                }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Create transcription manually"
-                                              >
-                                                {initializingTranscriptionChat ===
-                                                `${experiment.id}-${leiaConfig.id}` ? (
-                                                  <>
-                                                    <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                                                    Initializing...
-                                                  </>
-                                                ) : (
-                                                  <>
-                                                    <PencilIcon className="w-4 h-4" />
-                                                    Generate
-                                                  </>
-                                                )}
-                                              </button>
-
-                                              <button
-                                                onClick={() =>
-                                                  handleGenerateTranscriptionAutomatically(
-                                                    experiment.id,
-                                                    leiaConfig.id,
-                                                    leiaConfig
-                                                  )
-                                                }
-                                                disabled={
-                                                  !!initializingTranscriptionChat
-                                                }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:bg-orange-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Generate transcription automatically"
-                                              >
-                                                <SparklesIcon className="w-4 h-4" />
-                                                Auto Generate
-                                              </button>
-
-                                              <button
-                                                onClick={() =>
-                                                  handleOpenJsonEdit(
-                                                    experiment.id,
-                                                    leiaConfig.id,
-                                                    leiaConfig
-                                                  )
-                                                }
-                                                disabled={
-                                                  !!initializingTranscriptionChat
-                                                }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Edit transcription JSON"
-                                              >
-                                                <DocumentIcon className="w-4 h-4" />
-                                                JSON Edit
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
+                                        )}
 
                                       {/* URL Input */}
                                       {showUrlInput.has(
@@ -1681,7 +1675,7 @@ export const MyActivities: React.FC = () => {
                                                 placeholder="Enter transcription URL..."
                                                 value={
                                                   urlInputValues[
-                                                    `${experiment.id}-${leiaConfig.id}`
+                                                  `${experiment.id}-${leiaConfig.id}`
                                                   ] || ""
                                                 }
                                                 onChange={(e) => {
@@ -1691,18 +1685,17 @@ export const MyActivities: React.FC = () => {
                                                     [leiaKey]: e.target.value,
                                                   }));
                                                 }}
-                                                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
-                                                  urlInputValues[
-                                                    `${experiment.id}-${leiaConfig.id}`
-                                                  ] &&
+                                                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${urlInputValues[
+                                                  `${experiment.id}-${leiaConfig.id}`
+                                                ] &&
                                                   !isValidUrl(
                                                     urlInputValues[
-                                                      `${experiment.id}-${leiaConfig.id}`
+                                                    `${experiment.id}-${leiaConfig.id}`
                                                     ]
                                                   )
-                                                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                                                    : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                                                }`}
+                                                  ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                                                  : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                                                  }`}
                                               />
                                               <button
                                                 onClick={() => {
@@ -1738,11 +1731,11 @@ export const MyActivities: React.FC = () => {
                                                 disabled={
                                                   !!initializingTranscriptionChat ||
                                                   !urlInputValues[
-                                                    `${experiment.id}-${leiaConfig.id}`
+                                                  `${experiment.id}-${leiaConfig.id}`
                                                   ] ||
                                                   !isValidUrl(
                                                     urlInputValues[
-                                                      `${experiment.id}-${leiaConfig.id}`
+                                                    `${experiment.id}-${leiaConfig.id}`
                                                     ] || ""
                                                   )
                                                 }
@@ -1775,7 +1768,7 @@ export const MyActivities: React.FC = () => {
                                             ] &&
                                               !isValidUrl(
                                                 urlInputValues[
-                                                  `${experiment.id}-${leiaConfig.id}`
+                                                `${experiment.id}-${leiaConfig.id}`
                                                 ]
                                               ) && (
                                                 <p className="text-red-500 text-xs">
@@ -1788,20 +1781,20 @@ export const MyActivities: React.FC = () => {
                                       {/* Transcription Warning */}
                                       {leiaConfig.configuration?.mode ===
                                         "transcription" && (
-                                        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                          <div className="flex items-start gap-2">
-                                            <ExclamationTriangleIcon className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                                            <p className="text-sm text-yellow-800">
-                                              <span className="font-medium">
-                                                Important:
-                                              </span>{" "}
-                                              Any form of transcription update
-                                              will result in overwriting
-                                              previous data.
-                                            </p>
+                                          <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                            <div className="flex items-start gap-2">
+                                              <ExclamationTriangleIcon className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                                              <p className="text-sm text-yellow-800">
+                                                <span className="font-medium">
+                                                  Important:
+                                                </span>{" "}
+                                                Any form of transcription update
+                                                will result in overwriting
+                                                previous data.
+                                              </p>
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
+                                        )}
                                     </div>
                                   </div>
                                 );

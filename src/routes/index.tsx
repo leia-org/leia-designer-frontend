@@ -46,6 +46,11 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// ... imports
+import { Layout } from "../components/layout";
+
+// ... Routes ...
+
 export const AppRoutes = () => {
   return (
     <Routes>
@@ -53,7 +58,9 @@ export const AppRoutes = () => {
         path="/"
         element={
           <AuthenticatedRoute>
-            <LeiaSearch />
+            <Layout title="Dashboard">
+              <LeiaSearch />
+            </Layout>
           </AuthenticatedRoute>
         }
       />
@@ -61,7 +68,9 @@ export const AppRoutes = () => {
         path="/chat/:sessionId"
         element={
           <AuthenticatedRoute>
-            <Chat />
+            <Layout title="Chat Session">
+              <Chat />
+            </Layout>
           </AuthenticatedRoute>
         }
       />
@@ -70,7 +79,9 @@ export const AppRoutes = () => {
         path="/profile"
         element={
           <AuthenticatedRoute>
-            <Profile />
+            <Layout title="Profile">
+              <Profile />
+            </Layout>
           </AuthenticatedRoute>
         }
       />
@@ -78,7 +89,9 @@ export const AppRoutes = () => {
         path="/create"
         element={
           <AuthenticatedRoute>
-            <CreateLeia />
+            <Layout title="Create New Exercise">
+              <CreateLeia />
+            </Layout>
           </AuthenticatedRoute>
         }
       />
@@ -86,10 +99,12 @@ export const AppRoutes = () => {
         path="/admin"
         element={
           <AdminRoute>
-            <div className="p-8">
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p>This is an admin-only area.</p>
-            </div>
+            <Layout title="Administration">
+              <div className="p-8">
+                <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+                <p>This is an admin-only area.</p>
+              </div>
+            </Layout>
           </AdminRoute>
         }
       />
@@ -97,7 +112,9 @@ export const AppRoutes = () => {
         path="/administration/users"
         element={
           <AdminRoute>
-            <UserManagement />
+            <Layout title="User Management">
+              <UserManagement />
+            </Layout>
           </AdminRoute>
         }
       />
@@ -105,7 +122,9 @@ export const AppRoutes = () => {
         path="/users/me/activities"
         element={
           <AdminRoute>
-            <MyActivities />
+            <Layout title="My Activities">
+              <MyActivities />
+            </Layout>
           </AdminRoute>
         }
       />

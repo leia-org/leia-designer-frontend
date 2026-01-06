@@ -1,15 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../context";
-import { Header } from "../components/shared/Header";
 import api from "../lib/axios";
 import {
   UserCircleIcon,
-  EnvelopeIcon,
-  KeyIcon,
-  BookmarkIcon,
   CheckCircleIcon,
-  XCircleIcon
+  XCircleIcon,
+  KeyIcon,
+  ShieldCheckIcon
 } from "@heroicons/react/24/outline";
 
 export const Profile = () => {
@@ -19,20 +16,14 @@ export const Profile = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [isEditingEmail, setIsEditingEmail] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [loadingEmail, setLoadingEmail] = useState(false);
+  const [loadingPassword, setLoadingPassword] = useState(false);
 
   const [emailMessage, setEmailMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const [loadingEmail, setLoadingEmail] = useState(false);
-  const [loadingPassword, setLoadingPassword] = useState(false);
-
   const handleUpdateEmail = async () => {
-    if (!email || email === user?.email) {
-      setEmailMessage({ type: 'error', text: 'Please enter a different email' });
-      return;
-    }
+    if (!email || email === user?.email) return;
 
     setLoadingEmail(true);
     setEmailMessage(null);
@@ -40,8 +31,7 @@ export const Profile = () => {
     try {
       const response = await api.put('/api/v1/users/profile/update', { email });
       setUser(response.data);
-      setEmailMessage({ type: 'success', text: 'Email updated successfully!' });
-      setIsEditingEmail(false);
+      setEmailMessage({ type: 'success', text: 'Email updated successfully' });
     } catch (error: any) {
       setEmailMessage({
         type: 'error',
@@ -54,7 +44,7 @@ export const Profile = () => {
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setPasswordMessage({ type: 'error', text: 'Please fill in all password fields' });
+      setPasswordMessage({ type: 'error', text: 'All fields are required' });
       return;
     }
 
@@ -76,11 +66,10 @@ export const Profile = () => {
         currentPassword,
         newPassword,
       });
-      setPasswordMessage({ type: 'success', text: 'Password changed successfully!' });
+      setPasswordMessage({ type: 'success', text: 'Password changed successfully' });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setIsChangingPassword(false);
     } catch (error: any) {
       setPasswordMessage({
         type: 'error',
@@ -92,227 +81,144 @@ export const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        title="Profile"
-        description="View and manage your account information"
-      />
+    <div className="max-w-3xl mx-auto py-12 px-6">
+      <div className="mb-10">
+        <h1 className="text-2xl font-semibold text-gray-900">Account Settings</h1>
+        <p className="mt-1 text-sm text-gray-500">Manage your profile information and security settings.</p>
+      </div>
 
-      <main className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0 space-y-6">
+      <div className="space-y-8">
+        {/* Profile Section */}
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+            <UserCircleIcon className="w-5 h-5 text-gray-400" />
+            <h2 className="text-sm font-medium text-gray-900">Personal Information</h2>
+          </div>
 
-          {/* User Info Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="px-6 py-5 border-b border-gray-200">
-              <div className="flex items-center">
-                <UserCircleIcon className="h-12 w-12 text-gray-400 mr-4" />
-                <div>
-                  <h3 className="text-lg leading-6 font-medium text-gray-900">
-                    Account Information
-                  </h3>
-                  <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                    Personal details and settings
-                  </p>
+          <div className="p-6 space-y-6">
+            <div className="flex items-start gap-6">
+              {/* Avatar Placeholder */}
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-xl font-medium text-gray-600">
+                  {user?.email?.[0].toUpperCase()}
                 </div>
               </div>
-            </div>
 
-            <div className="px-6 py-5 space-y-4">
-              {/* Email Section */}
-              <div className="border-b border-gray-200 pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center">
-                    <EnvelopeIcon className="h-5 w-5 text-gray-400 mr-2" />
-                    <label className="block text-sm font-medium text-gray-700">
-                      Email Address
-                    </label>
-                  </div>
-                  {!isEditingEmail && (
-                    <button
-                      onClick={() => setIsEditingEmail(true)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-
-                {isEditingEmail ? (
-                  <div className="space-y-2">
+              <div className="flex-1 space-y-4 max-w-md">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Email Address</label>
+                  <div className="flex gap-3">
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="Enter new email"
+                      className="block w-full px-3 py-2 rounded-lg border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleUpdateEmail}
-                        disabled={loadingEmail}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {loadingEmail ? 'Saving...' : 'Save'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsEditingEmail(false);
-                          setEmail(user?.email || "");
-                          setEmailMessage(null);
-                        }}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    {emailMessage && (
-                      <div className={`flex items-center gap-2 text-sm ${
-                        emailMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {emailMessage.type === 'success' ? (
-                          <CheckCircleIcon className="h-4 w-4" />
-                        ) : (
-                          <XCircleIcon className="h-4 w-4" />
-                        )}
-                        {emailMessage.text}
-                      </div>
-                    )}
+                    <button
+                      onClick={handleUpdateEmail}
+                      disabled={loadingEmail || email === user?.email}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingEmail ? "Saving..." : "Save"}
+                    </button>
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-900">{user?.email}</p>
-                )}
-              </div>
-
-              {/* Role Section */}
-              <div className="border-b border-gray-200 pb-4">
-                <div className="flex items-center mb-2">
-                  <UserCircleIcon className="h-5 w-5 text-gray-400 mr-2" />
-                  <label className="block text-sm font-medium text-gray-700">
-                    Role
-                  </label>
+                  {emailMessage && (
+                    <div className={`mt-2 flex items-center gap-2 text-xs font-medium ${emailMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                      {emailMessage.type === 'success' ? <CheckCircleIcon className="w-3.5 h-3.5" /> : <XCircleIcon className="w-3.5 h-3.5" />}
+                      {emailMessage.text}
+                    </div>
+                  )}
                 </div>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
-                  {user?.role}
-                </span>
-              </div>
 
-              {/* My LEIAs Link */}
-              <div className="border-b border-gray-200 pb-4">
-                <Link
-                  to="/leias"
-                  className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
-                >
-                  <BookmarkIcon className="h-5 w-5 mr-2" />
-                  <span className="text-sm font-medium">My LEIAs</span>
-                  <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">System Role</label>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 capitalize border border-gray-200">
+                      {user?.role}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      (Read-only)
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+        </section>
 
-          {/* Change Password Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="px-6 py-5 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <KeyIcon className="h-6 w-6 text-gray-400 mr-3" />
-                  <h3 className="text-lg leading-6 font-medium text-gray-900">
-                    Change Password
-                  </h3>
-                </div>
-                {!isChangingPassword && (
-                  <button
-                    onClick={() => setIsChangingPassword(true)}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Change
-                  </button>
-                )}
-              </div>
-            </div>
+        {/* Security Section */}
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+            <ShieldCheckIcon className="w-5 h-5 text-gray-400" />
+            <h2 className="text-sm font-medium text-gray-900">Security</h2>
+          </div>
 
-            {isChangingPassword && (
-              <div className="px-6 py-5 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Password
-                  </label>
+          <div className="p-6">
+            <div className="max-w-md space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Current Password</label>
+                <div className="relative">
+                  <KeyIcon className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                   <input
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Enter current password"
+                    className="block w-full pl-10 pr-3 py-2 rounded-lg border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="••••••••"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Password
-                  </label>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">New Password</label>
+                <div className="relative">
+                  <KeyIcon className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Enter new password (min. 6 characters)"
+                    className="block w-full pl-10 pr-3 py-2 rounded-lg border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Min. 6 characters"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm New Password
-                  </label>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Confirm New Password</label>
+                <div className="relative">
+                  <KeyIcon className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Confirm new password"
+                    className="block w-full pl-10 pr-3 py-2 rounded-lg border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="••••••••"
                   />
                 </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleChangePassword}
-                    disabled={loadingPassword}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {loadingPassword ? 'Changing...' : 'Change Password'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsChangingPassword(false);
-                      setCurrentPassword("");
-                      setNewPassword("");
-                      setConfirmPassword("");
-                      setPasswordMessage(null);
-                    }}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-
-                {passwordMessage && (
-                  <div className={`flex items-center gap-2 text-sm ${
-                    passwordMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {passwordMessage.type === 'success' ? (
-                      <CheckCircleIcon className="h-4 w-4" />
-                    ) : (
-                      <XCircleIcon className="h-4 w-4" />
-                    )}
-                    {passwordMessage.text}
-                  </div>
-                )}
               </div>
-            )}
+
+              <div className="pt-2">
+                <button
+                  onClick={handleChangePassword}
+                  disabled={loadingPassword}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingPassword ? "Updating Access..." : "Change Password"}
+                </button>
+              </div>
+
+              {passwordMessage && (
+                <div className={`mt-2 flex items-center justify-center gap-2 text-xs font-medium ${passwordMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                  {passwordMessage.type === 'success' ? <CheckCircleIcon className="w-3.5 h-3.5" /> : <XCircleIcon className="w-3.5 h-3.5" />}
+                  {passwordMessage.text}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </main>
+        </section>
+      </div>
     </div>
   );
 };

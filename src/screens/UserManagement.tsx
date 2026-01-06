@@ -11,7 +11,6 @@ import {
 import api from "../lib/axios";
 import validator from "validator";
 import axios from "axios";
-import { Header } from "../components/shared/Header";
 
 interface UserResponse {
   id: string;
@@ -308,10 +307,7 @@ export const UserManagement = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header
-        title="User Management"
-        description="Manage users, roles, and permissions"
-      />
+
 
       <div className="py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -436,11 +432,10 @@ export const UserManagement = () => {
 
                 {submitMessage && (
                   <div
-                    className={`p-4 mb-4 rounded-md text-sm ${
-                      submitSuccess
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
+                    className={`p-4 mb-4 rounded-md text-sm ${submitSuccess
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                      }`}
                     role="alert"
                   >
                     {submitMessage}
@@ -462,9 +457,8 @@ export const UserManagement = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
-                      className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${
-                        formErrors.email ? "border-red-300" : "border-gray-300"
-                      }`}
+                      className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${formErrors.email ? "border-red-300" : "border-gray-300"
+                        }`}
                       placeholder="Enter email"
                       required
                     />
@@ -521,11 +515,10 @@ export const UserManagement = () => {
                             password: e.target.value,
                           })
                         }
-                        className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${
-                          formErrors.password
-                            ? "border-red-300"
-                            : "border-gray-300"
-                        }`}
+                        className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${formErrors.password
+                          ? "border-red-300"
+                          : "border-gray-300"
+                          }`}
                         placeholder="Enter password"
                         required={!editingUser}
                       />
@@ -568,11 +561,10 @@ export const UserManagement = () => {
                             confirmPassword: e.target.value,
                           })
                         }
-                        className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${
-                          formErrors.confirmPassword
-                            ? "border-red-300"
-                            : "border-gray-300"
-                        }`}
+                        className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${formErrors.confirmPassword
+                          ? "border-red-300"
+                          : "border-gray-300"
+                          }`}
                         placeholder="Confirm password"
                         required={
                           !editingUser || formData.password.trim() !== ""
@@ -612,11 +604,10 @@ export const UserManagement = () => {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className={`${
-                        isSubmitting
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-blue-600 hover:bg-blue-700"
-                      } text-white px-4 py-2 rounded-md transition-colors text-sm flex items-center`}
+                      className={`${isSubmitting
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-blue-600 hover:bg-blue-700"
+                        } text-white px-4 py-2 rounded-md transition-colors text-sm flex items-center`}
                     >
                       {isSubmitting && (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -651,11 +642,10 @@ export const UserManagement = () => {
 
                 {deleteMessage && (
                   <div
-                    className={`p-4 mb-4 rounded-md text-sm ${
-                      deleteSuccess
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
+                    className={`p-4 mb-4 rounded-md text-sm ${deleteSuccess
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                      }`}
                     role="alert"
                   >
                     {deleteMessage}
@@ -724,11 +714,10 @@ export const UserManagement = () => {
                       disabled={
                         isDeleting || deleteConfirmEmail !== deletingUser.email
                       }
-                      className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 flex items-center ${
-                        isDeleting || deleteConfirmEmail !== deletingUser.email
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-red-600 hover:bg-red-700"
-                      }`}
+                      className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 flex items-center ${isDeleting || deleteConfirmEmail !== deletingUser.email
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700"
+                        }`}
                     >
                       {isDeleting && (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

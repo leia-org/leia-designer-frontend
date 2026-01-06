@@ -6,9 +6,9 @@ import {
   CpuChipIcon,
   InformationCircleIcon,
   SparklesIcon,
+  CheckIcon,
 } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
-import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { useAuth } from "../context";
@@ -50,6 +50,50 @@ interface NavigationState {
 }
 
 type WizardStep = 1 | 2 | 3;
+
+const Stepper = ({ currentStep }: { currentStep: WizardStep }) => {
+  const steps = [
+    { id: 1, name: "Select Resources" },
+    { id: 2, name: "Edit Content" },
+    { id: 3, name: "Review & Publish" },
+  ];
+
+  return (
+    <nav aria-label="Progress" className="mb-8">
+      <ol role="list" className="space-y-4 md:flex md:space-x-8 md:space-y-0">
+        {steps.map((step) => (
+          <li key={step.name} className="md:flex-1">
+            {currentStep > step.id ? (
+              <div className="group flex flex-col border-l-4 border-blue-600 py-2 pl-4 hover:border-blue-800 md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4">
+                <span className="text-sm font-medium text-blue-600 group-hover:text-blue-800">
+                  Step {step.id}
+                </span>
+                <span className="text-sm font-medium">{step.name}</span>
+              </div>
+            ) : currentStep === step.id ? (
+              <div
+                className="flex flex-col border-l-4 border-blue-600 py-2 pl-4 md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4"
+                aria-current="step"
+              >
+                <span className="text-sm font-medium text-blue-600">
+                  Step {step.id}
+                </span>
+                <span className="text-sm font-medium">{step.name}</span>
+              </div>
+            ) : (
+              <div className="group flex flex-col border-l-4 border-gray-200 py-2 pl-4 hover:border-gray-300 md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4">
+                <span className="text-sm font-medium text-gray-500 group-hover:text-gray-700">
+                  Step {step.id}
+                </span>
+                <span className="text-sm font-medium">{step.name}</span>
+              </div>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+};
 
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
@@ -735,66 +779,7 @@ export const CreateLeia: React.FC = () => {
     return customizationsValid && noValidationErrors;
   })();
 
-  const renderStepIndicator = () => (
-    <div className="flex items-center justify-center space-x-8 mb-8">
-      <div className="flex items-center space-x-2">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 1
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-600"
-            }`}
-        >
-          1
-        </div>
-        <span
-          className={`text-sm font-medium ${currentStep >= 1 ? "text-blue-600" : "text-gray-600"
-            }`}
-        >
-          Selection
-        </span>
-      </div>
-      <div
-        className={`h-px w-12 ${currentStep >= 2 ? "bg-blue-300" : "bg-gray-300"
-          }`}
-      />
-      <div className="flex items-center space-x-2">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 2
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-600"
-            }`}
-        >
-          2
-        </div>
-        <span
-          className={`text-sm font-medium ${currentStep >= 2 ? "text-blue-600" : "text-gray-600"
-            }`}
-        >
-          Edit
-        </span>
-      </div>
-      <div
-        className={`h-px w-12 ${currentStep >= 3 ? "bg-blue-300" : "bg-gray-300"
-          }`}
-      />
-      <div className="flex items-center space-x-2">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 3
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-600"
-            }`}
-        >
-          3
-        </div>
-        <span
-          className={`text-sm font-medium ${currentStep >= 3 ? "text-blue-600" : "text-gray-600"
-            }`}
-        >
-          Create
-        </span>
-      </div>
-    </div>
-  );
+
 
   const renderStep1 = () => (
     <div className="space-y-6">
@@ -1967,26 +1952,14 @@ export const CreateLeia: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Header
-          title="Design"
-          description="Create your own LEIAs and test them!"
-        />
-
-        {/* Loading Content */}
-        <div className="flex-1 container mx-auto px-6 py-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Loading resources...
-              </h3>
-              <p className="text-gray-600 text-center">
-                Loading personas, problems, and behaviours from the API...
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="h-full flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">
+          Loading resources...
+        </h3>
+        <p className="text-gray-600 text-center">
+          Loading personas, problems, and behaviours from the API...
+        </p>
       </div>
     );
   }
@@ -1994,86 +1967,69 @@ export const CreateLeia: React.FC = () => {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Header
-          title="Design"
-          description="Create your own LEIAs and test them!"
-        />
-
-        {/* Error Content */}
-        <div className="flex-1 container mx-auto px-6 py-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="bg-red-100 rounded-full p-3 mb-4">
-                <svg
-                  className="w-8 h-8 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Error Loading Data
-              </h3>
-              <p className="text-gray-600 text-center mb-6">{error}</p>
-              <button
-                onClick={loadData}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                Try Again
-              </button>
-            </div>
-          </div>
+      <div className="h-full flex flex-col items-center justify-center">
+        <div className="bg-red-100 rounded-full p-3 mb-4">
+          <svg
+            className="w-8 h-8 text-red-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
         </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">
+          Error Loading Data
+        </h3>
+        <p className="text-gray-600 text-center mb-6">{error}</p>
+        <button
+          onClick={loadData}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Try Again
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Header
-        title="Design"
-        description="Create your own LEIAs and test them!"
-      />
+    <div className="h-full flex flex-col p-8">
+      <Stepper currentStep={currentStep} />
 
       {/* Main Content */}
-      <div className="flex-1 container mx-auto px-6 py-8">
-        {renderStepIndicator()}
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="flex-1">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 min-h-[600px]">
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-between items-center mt-8">
+        <div className="flex justify-between items-center mt-8 pb-8">
           <button
             onClick={handlePrevStep}
             disabled={currentStep === 1}
             className={`px-6 py-2 rounded-lg transition-colors ${currentStep === 1
-              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-              : "bg-gray-600 text-white hover:bg-gray-700"
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
               }`}
           >
             Previous
@@ -2081,22 +2037,29 @@ export const CreateLeia: React.FC = () => {
 
           <div className="flex items-center space-x-4">
             {currentStep === 1 && (
-              <div className="text-sm text-gray-500">
-                {isStep1Complete
-                  ? "✓ All elements selected"
-                  : "Missing elements to select"}
+              <div className="flex items-center text-sm text-gray-500 gap-2">
+                {isStep1Complete ? (
+                  <CheckIcon className="w-5 h-5 text-green-500" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                )}
+                {isStep1Complete ? "Ready to proceed" : "Select all required elements"}
               </div>
             )}
             {currentStep === 2 && (
-              <div className="text-sm text-gray-500">
-                ✓ You can edit resources or continue
+              <div className="flex items-center text-sm text-gray-500 gap-2">
+                <CheckIcon className="w-5 h-5 text-green-500" />
+                Edit resources or continue
               </div>
             )}
             {currentStep === 3 && (
-              <div className="text-sm text-gray-500">
-                {isStep3Complete
-                  ? "✓ Customization complete"
-                  : "Customize names for edited resources"}
+              <div className="flex items-center text-sm text-gray-500 gap-2">
+                {isStep3Complete ? (
+                  <CheckIcon className="w-5 h-5 text-green-500" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                )}
+                {isStep3Complete ? "Ready to finish" : "Complete customization"}
               </div>
             )}
           </div>
@@ -2108,14 +2071,14 @@ export const CreateLeia: React.FC = () => {
               (currentStep === 2 && !isStep2Complete) ||
               (currentStep === 3 && !isStep3Complete)
             }
-            className={`px-6 py-2 rounded-lg transition-colors ${(currentStep === 1 && !isStep1Complete) ||
+            className={`px-6 py-2 rounded-lg transition-colors font-medium ${(currentStep === 1 && !isStep1Complete) ||
               (currentStep === 2 && !isStep2Complete) ||
               (currentStep === 3 && !isStep3Complete)
-              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-              : "bg-blue-600 text-white hover:bg-blue-700"
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
               }`}
           >
-            {currentStep === 3 ? "Finish" : "Next"}
+            {currentStep === 3 ? "Finish Exercise" : "Next Step"}
           </button>
         </div>
       </div>

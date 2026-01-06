@@ -1,9 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useParams, useLocation } from "react-router-dom";
-import { UserCircleIcon } from "@heroicons/react/24/solid";
-import { ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
-import { useNavigate } from "react-router-dom";
-import { Header } from "../components/shared/Header";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
+import {
+  UserCircleIcon,
+  SparklesIcon,
+  PaperAirplaneIcon,
+  InformationCircleIcon,
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  XMarkIcon
+} from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
@@ -38,19 +43,10 @@ interface NavigationState {
 }
 
 const TypingAnimation = () => (
-  <div className="flex items-center space-x-1.5">
-    <div
-      className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-      style={{ animationDuration: "0.6s" }}
-    ></div>
-    <div
-      className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-      style={{ animationDuration: "0.6s", animationDelay: "0.2s" }}
-    ></div>
-    <div
-      className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-      style={{ animationDuration: "0.6s", animationDelay: "0.4s" }}
-    ></div>
+  <div className="flex items-center space-x-1">
+    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDuration: "0.6s" }}></div>
+    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDuration: "0.6s", animationDelay: "0.2s" }}></div>
+    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDuration: "0.6s", animationDelay: "0.4s" }}></div>
   </div>
 );
 
@@ -67,7 +63,7 @@ export const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessageText, setNewMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(true);
+  const [showInstructions, setShowInstructions] = useState(true); // Default to open as requested
   const [problemDescription, setProblemDescription] = useState<string>("");
   const [savingTranscription, setSavingTranscription] = useState(false);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
@@ -90,7 +86,7 @@ export const Chat = () => {
     const textarea = inputRef.current;
     if (textarea) {
       textarea.style.height = "auto";
-      const newHeight = Math.min(textarea.scrollHeight, 150);
+      const newHeight = Math.min(textarea.scrollHeight, 100);
       textarea.style.height = `${newHeight}px`;
     }
   };
@@ -134,14 +130,12 @@ export const Chat = () => {
   }, [location.state]);
 
   useEffect(() => {
-    // Usar requestAnimationFrame para asegurar que el DOM se haya actualizado
     requestAnimationFrame(() => {
       scrollToBottom();
     });
   }, [messages, scrollToBottom]);
 
   useEffect(() => {
-    // Hacer scroll cuando aparece el indicador de "typing"
     if (sendingMessage) {
       requestAnimationFrame(() => {
         scrollToBottom();
@@ -209,8 +203,6 @@ export const Chat = () => {
   };
 
   const handleSaveTranscription = async () => {
-    console.log("Saving transcription...", messages);
-    // Validar que existan mensajes
     if (messages.length === 0) {
       toast.error("No messages to save as transcription");
       return;
@@ -253,24 +245,13 @@ export const Chat = () => {
       });
     } catch (error) {
       let errorMessage = "Failed to add transcription";
-
       if (error && typeof error === "object" && "response" in error) {
         const axiosError = error as {
           response?: { status?: number; data?: { message?: string } };
         };
-        if (
-          axiosError.response?.status === 409 ||
-          axiosError.response?.status === 404 ||
-          axiosError.response?.status === 400
-        ) {
-          errorMessage = axiosError.response.data?.message || errorMessage;
-        }
+        errorMessage = axiosError.response?.data?.message || errorMessage;
       }
-
-      toast.error(errorMessage, {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
+      toast.error(errorMessage, { position: "bottom-right", autoClose: 3000 });
     } finally {
       setSavingTranscription(false);
     }
@@ -288,111 +269,113 @@ export const Chat = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white">
-      <Header
-        title="Chat"
-        description="Test and interact with a LEIA configuration"
-        showNavigation={false}
-        rightContent={
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowInstructions(!showInstructions)}
-              className="px-4 py-1.5 text-sm text-blue-600 bg-white border border-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {showInstructions ? "Hide Instructions" : "Instructions"}
-            </button>
-            {transcription && (
-              <button
-                onClick={handleSaveTranscription}
-                disabled={savingTranscription || messages.length === 0}
-                className="px-4 py-1.5 text-sm text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {savingTranscription ? (
-                  <>
-                    <ArrowPathIcon className="animate-spin h-4 w-4" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <ArrowDownTrayIcon className="w-4 h-4" />
-                    Save Transcription
-                  </>
-                )}
-              </button>
-            )}
-            <button
-              onClick={handleFinishConversation}
-              className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              Finish Conversation
-            </button>
-          </div>
-        }
-      />
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-white relative">
       <ToastContainer />
 
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-sm z-10">
+        <div className="flex items-center gap-2">
+          {problemDescription && (
+            <button
+              onClick={() => setShowInstructions(!showInstructions)}
+              className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${showInstructions
+                ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                }`}
+            >
+              <InformationCircleIcon className="w-4 h-4" />
+              {showInstructions ? "Hide Instructions" : "Show Instructions"}
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {transcription && (
+            <button
+              onClick={handleSaveTranscription}
+              disabled={savingTranscription || messages.length === 0}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              {savingTranscription ? (
+                <ArrowPathIcon className="animate-spin h-3.5 w-3.5" />
+              ) : (
+                <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+              )}
+              Save Transcription
+            </button>
+          )}
+          <button
+            onClick={handleFinishConversation}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-md hover:bg-gray-800 transition-colors"
+          >
+            <XMarkIcon className="w-3.5 h-3.5" />
+            End Session
+          </button>
+        </div>
+      </div>
+
+      {/* Instructions Panel (Collapsible) */}
       {showInstructions && problemDescription && (
-        <div className="bg-blue-50 border-b border-blue-200 px-4 py-4">
+        <div className="px-6 py-4 bg-indigo-50/50 border-b border-indigo-100">
           <div className="max-w-3xl mx-auto">
-            <h3 className="text-lg font-semibold text-blue-900 mb-2">
-              Instructions
-            </h3>
-            <p className="text-sm text-blue-800 whitespace-pre-wrap">
-              {problemDescription}
-            </p>
+            <h4 className="text-sm font-semibold text-indigo-900 mb-1">Activity Instructions</h4>
+            <p className="text-sm text-indigo-800/80 leading-relaxed whitespace-pre-wrap">{problemDescription}</p>
           </div>
         </div>
       )}
 
+      {/* Messages Area */}
       <div
         ref={chatMessagesRef}
-        className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth"
+        className="flex-1 overflow-y-auto px-6 py-6 scroll-smooth"
       >
-        <div className="max-w-3xl mx-auto space-y-4 py-4">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
+                <SparklesIcon className="w-6 h-6 text-indigo-600" />
+              </div>
+              <h3 className="text-gray-900 font-medium">Start the conversation</h3>
+              <p className="text-gray-500 text-sm mt-1 max-w-sm">
+                Say hello to begin your session. AI responses will appear here.
+              </p>
+            </div>
+          )}
+
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex items-end gap-2 ${
-                msg.isLeia ? "flex-row" : "flex-row-reverse"
-              }`}
+              className={`flex items-start gap-3 ${msg.isLeia ? "" : "flex-row-reverse"
+                }`}
             >
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  msg.isLeia ? "bg-blue-50" : "bg-blue-600"
-                }`}
+                className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.isLeia ? "bg-indigo-100/50 text-indigo-600" : "bg-gray-900 text-white"
+                  }`}
               >
                 {msg.isLeia ? (
-                  <UserCircleIcon className="w-5 h-5 text-blue-700" />
+                  <SparklesIcon className="w-4 h-4" />
                 ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className="w-5 h-5 text-white"
-                  >
-                    <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
-                  </svg>
+                  <UserCircleIcon className="w-5 h-5" />
                 )}
               </div>
+
               <div
-                className={`max-w-[80%] px-4 py-2 ${
-                  msg.isLeia
-                    ? "bg-white border border-gray-200 text-gray-900 rounded-t-2xl rounded-r-2xl rounded-bl-md"
-                    : "bg-blue-600 text-white rounded-t-2xl rounded-l-2xl rounded-br-md"
-                }`}
+                className={`max-w-[75%] px-5 py-3.5 text-sm leading-relaxed shadow-sm ${msg.isLeia
+                  ? "bg-white border border-gray-200 text-gray-800 rounded-2xl rounded-tl-sm"
+                  : "bg-gray-900 text-white rounded-2xl rounded-tr-sm"
+                  }`}
               >
-                <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                  {msg.text}
-                </p>
+                <p className="whitespace-pre-wrap">{msg.text}</p>
               </div>
             </div>
           ))}
+
           {sendingMessage && (
-            <div className="flex items-end gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                <UserCircleIcon className="w-5 h-5 text-blue-700" />
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100/50 flex items-center justify-center text-indigo-600">
+                <SparklesIcon className="w-4 h-4" />
               </div>
-              <div className="min-w-[60px] bg-white border border-gray-200 rounded-t-2xl rounded-r-2xl rounded-bl-md px-4 py-3">
+              <div className="bg-white border border-gray-200 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
                 <TypingAnimation />
               </div>
             </div>
@@ -400,32 +383,39 @@ export const Chat = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-[72px] left-0 right-0 h-24 pointer-events-none"></div>
-
-      <div className="absolute bottom-0 left-0 right-0 px-4 pb-6 bg-white">
+      {/* Input Area (Floating) */}
+      <div className="px-6 pb-6 pt-2 bg-transparent">
         <div className="max-w-3xl mx-auto">
           <form
             onSubmit={handleSubmit}
-            className="flex gap-2 bg-white rounded-lg p-3 shadow-[0_0_10px_rgba(0,0,0,0.1)] hover:shadow-[0_0_15px_rgba(0,0,0,0.15)] transition-all"
+            className="flex items-end gap-2 bg-white rounded-[26px] shadow-sm border border-gray-200 pl-6 pr-2 py-2 ring-1 ring-black/5 focus-within:ring-2 focus-within:ring-gray-900/10 transition-all"
           >
             <textarea
               ref={inputRef}
               value={newMessageText}
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message... (Shift+Enter for new line)"
-              className="flex-1 px-2 py-1.5 bg-transparent border-none focus:outline-none text-[15px] resize-none overflow-y-auto"
-              style={{ minHeight: "40px", maxHeight: "150px" }}
+              placeholder="Pregunta lo que quieras"
+              className="flex-1 w-full bg-transparent border-none focus:ring-0 outline-none text-[15px] text-gray-900 placeholder:text-gray-400/80 resize-none max-h-[100px] min-h-[24px] py-2"
               rows={1}
             />
             <button
               type="submit"
-              disabled={!newMessageText.trim()}
-              className="px-5 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!newMessageText.trim() || sendingMessage}
+              className="flex-shrink-0 w-10 h-10 rounded-full bg-black text-white flex items-center justify-center hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
             >
-              Send
+              {sendingMessage ? (
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" />
+              ) : (
+                <PaperAirplaneIcon className="w-5 h-5 -ml-0.5" />
+              )}
             </button>
           </form>
+          <div className="mt-2 text-center">
+            <p className="text-[10px] text-gray-400">
+              Press Enter to send, Shift + Enter for new line
+            </p>
+          </div>
         </div>
       </div>
     </div>
