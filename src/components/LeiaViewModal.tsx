@@ -180,6 +180,18 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                     </div>
                   </div>
                 )}{" "}
+                {leia.spec?.problem?.spec?.evaluationPrompt && (
+                  <div>
+                    <h4 className="text-md font-medium text-gray-900 mb-2">
+                      Evaluation Prompt
+                    </h4>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {leia.spec.problem.spec.evaluationPrompt}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {leia.spec?.problem?.spec?.process && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
@@ -319,7 +331,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                 {leia.spec?.behaviour?.spec?.process && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Process Steps
+                      Process
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <ol className="list-decimal list-inside space-y-2">
@@ -329,6 +341,19 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                           </li>
                         ))}
                       </ol>
+                    </div>
+                  </div>
+                )}
+
+                {leia.spec?.behaviour?.spec?.tooltip && (
+                  <div>
+                    <h4 className="text-md font-medium text-gray-900 mb-2">
+                      Initial Tooltip
+                    </h4>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {leia.spec.behaviour.spec.tooltip}
+                      </p>
                     </div>
                   </div>
                 )}
