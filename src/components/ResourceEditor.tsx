@@ -204,6 +204,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               details: "",
               solution: "",
               solutionFormat: "text",
+              evaluationPrompt: "",
               process: [],
               extends: {},
               overrides: {},
@@ -214,6 +215,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               description: "",
               role: "",
               process: [],
+              tooltip: "",
             };
           default:
             return {};
@@ -489,6 +491,21 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
+          Evaluation Prompt
+        </label>
+        <HighlightableTextarea
+          value={visualData.evaluationPrompt || ""}
+          onChange={(e) =>
+            handleVisualChange("evaluationPrompt", e.target.value)
+          }
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          rows={2}
+          placeholder="Prompt for evaluating the solution..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           Process
         </label>
         {renderProcessCheckboxes()}
@@ -521,6 +538,19 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           onChange={(e) => handleVisualChange("role", e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md"
           placeholder="e.g., Facilitator"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Tooltip
+        </label>
+        <HighlightableTextarea
+          value={visualData.tooltip || ""}
+          onChange={(e) => handleVisualChange("tooltip", e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          rows={2}
+          placeholder="Tooltip text for this behaviour..."
         />
       </div>
 

@@ -36,7 +36,8 @@ export interface Behaviour {
     role: string,
     process: [
       string
-    ]
+    ],
+    tooltip?: string
   },
   isPublished: boolean,
   createdAt: string,
@@ -61,6 +62,7 @@ export interface Problem {
     process: [
       string
     ],
+    evaluationPrompt?: string,
     extends: object,
     overrides: object,
     constrainedTo: object
@@ -114,6 +116,7 @@ export interface Leia {
         details: string,
         solution: string,
         solutionFormat: string,
+        evaluationPrompt?: string,
         process: [
           string
         ],
@@ -137,7 +140,8 @@ export interface Leia {
         role: string,
         process: [
           string
-        ]
+        ],
+        tooltip?: string
       },
       createdAt: string,
       updatedAt: string,
