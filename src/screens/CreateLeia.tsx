@@ -2186,7 +2186,7 @@ export const CreateLeia: React.FC = () => {
                     type="text"
                     value={generateSubject}
                     onChange={(e) => setGenerateSubject(e.target.value)}
-                    placeholder="e.g., Prison Management System"
+                    placeholder="e.g., Library Management System"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
@@ -2198,7 +2198,7 @@ export const CreateLeia: React.FC = () => {
                   <textarea
                     value={generateDetails}
                     onChange={(e) => setGenerateDetails(e.target.value)}
-                    placeholder="e.g., Focus on inmate tracking and visitor management. Include rehabilitation programs."
+                    placeholder="e.g., Focus on catalog search, lending, and reservations. Include member accounts and overdue notifications."
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
                   />
