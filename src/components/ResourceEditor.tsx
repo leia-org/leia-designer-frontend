@@ -49,12 +49,12 @@ const HighlightableInput: React.FC<
     value === undefined || value === null
       ? ""
       : Array.isArray(value)
-      ? value.join(", ")
-      : String(value);
+        ? value.join(", ")
+        : String(value);
 
   const segments = useMemo(
     () => splitPlaceholderSegments(normalizedValue),
-    [normalizedValue]
+    [normalizedValue],
   );
   const showPlaceholder = normalizedValue.length === 0;
 
@@ -86,7 +86,7 @@ const HighlightableInput: React.FC<
               </span>
             ) : (
               <span key={`text-${index}`}>{segment.text}</span>
-            )
+            ),
           )
         )}
       </div>
@@ -102,7 +102,7 @@ const HighlightableTextarea: React.FC<
 
   const segments = useMemo(
     () => splitPlaceholderSegments(normalizedValue),
-    [normalizedValue]
+    [normalizedValue],
   );
   const showPlaceholder = normalizedValue.length === 0;
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -145,7 +145,7 @@ const HighlightableTextarea: React.FC<
               </span>
             ) : (
               <span key={`text-${index}`}>{segment.text}</span>
-            )
+            ),
           )
         )}
       </div>
@@ -203,6 +203,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               personaBackground: "",
               details: "",
               solution: "",
+              initialSolution: "",
               solutionFormat: "text",
               evaluationPrompt: "",
               process: [],
@@ -402,7 +403,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               } else {
                 handleVisualChange(
                   "process",
-                  newProcess.filter((p: string) => p !== value)
+                  newProcess.filter((p: string) => p !== value),
                 );
               }
             }}
@@ -467,6 +468,21 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           className="w-full px-3 py-2 border border-gray-300 rounded-md"
           rows={3}
           placeholder="Expected solution..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Initial Solution
+        </label>
+        <HighlightableTextarea
+          value={visualData.initialSolution || ""}
+          onChange={(e) =>
+            handleVisualChange("initialSolution", e.target.value)
+          }
+          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          rows={3}
+          placeholder="Initial Solution..."
         />
       </div>
 

@@ -8,7 +8,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 const SyntaxHighlighter = lazy(() =>
   import("react-syntax-highlighter").then((module) => ({
     default: module.Prism,
-  }))
+  })),
 );
 
 const LazyCodeBlock: React.FC<{ code: string; language: string }> = ({
@@ -174,6 +174,30 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                       >
                         <LazyCodeBlock
                           code={leia.spec.problem.spec.solution}
+                          language={leia.spec.problem.spec.solutionFormat}
+                        />
+                      </Suspense>
+                    </div>
+                  </div>
+                )}{" "}
+                {leia.spec?.problem?.spec?.initialSolution && (
+                  <div>
+                    <h4 className="text-md font-medium text-gray-900 mb-2">
+                      Initial Solution
+                    </h4>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <Suspense
+                        fallback={
+                          <div className="flex items-center justify-center py-4">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                            <span className="ml-2 text-sm text-gray-500">
+                              Loading syntax highlighter...
+                            </span>
+                          </div>
+                        }
+                      >
+                        <LazyCodeBlock
+                          code={leia.spec.problem.spec.initialSolution}
                           language={leia.spec.problem.spec.solutionFormat}
                         />
                       </Suspense>
@@ -363,5 +387,5 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
         </div>
       </div>
     );
-  }
+  },
 );
