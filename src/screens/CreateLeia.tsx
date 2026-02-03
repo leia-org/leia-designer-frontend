@@ -74,8 +74,8 @@ export const CreateLeia: React.FC = () => {
 
   const [validationErrors, setValidationErrors] = useState<
     | {
-      [key in keyof typeof customizations]?: string;
-    }
+        [key in keyof typeof customizations]?: string;
+      }
     | null
   >(null);
 
@@ -180,11 +180,11 @@ export const CreateLeia: React.FC = () => {
           persona: null,
           problem: null,
           behaviour: null,
-        }
+        },
       );
       setLeiaConfigSnapShot(savedState.leiaConfigSnapShot || null);
       setCustomizations(
-        savedState.customizations || { leia: { name: "", version: "1.0.0" } }
+        savedState.customizations || { leia: { name: "", version: "1.0.0" } },
       );
 
       // Limpiar el estado de navegación para evitar cargas repetidas
@@ -207,7 +207,7 @@ export const CreateLeia: React.FC = () => {
         const leia = generateLeia(
           leiaConfig.persona,
           leiaConfig.behaviour,
-          leiaConfig.problem
+          leiaConfig.problem,
         );
         setGeneratedLeia(leia as Leia);
       } catch (err: unknown) {
@@ -222,7 +222,7 @@ export const CreateLeia: React.FC = () => {
   }, [currentStep, leiaConfig]);
 
   const loadPersonas = async (
-    visibility: "all" | "public" | "private" = "all"
+    visibility: "all" | "public" | "private" = "all",
   ) => {
     try {
       const response = await api.get<Persona[]>("/api/v1/personas", {
@@ -236,7 +236,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadProblems = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all"
+    process: "all" | "requirements-elicitation" | "game" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility };
@@ -254,7 +254,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadBehaviours = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all"
+    process: "all" | "requirements-elicitation" | "game" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility, process };
@@ -288,21 +288,21 @@ export const CreateLeia: React.FC = () => {
 
   // Funciones para manejar cambios de visibilidad
   const handlePersonaVisibilityChange = (
-    visibility: "all" | "private" | "public"
+    visibility: "all" | "private" | "public",
   ) => {
     setPersonaVisibility(visibility);
     loadPersonas(visibility); // Solo recargar personas
   };
 
   const handleProblemVisibilityChange = (
-    visibility: "all" | "private" | "public"
+    visibility: "all" | "private" | "public",
   ) => {
     setProblemVisibility(visibility);
     loadProblems(visibility, problemProcess); // Solo recargar problemas
   };
 
   const handleBehaviourVisibilityChange = (
-    visibility: "all" | "private" | "public"
+    visibility: "all" | "private" | "public",
   ) => {
     setBehaviourVisibility(visibility);
     loadBehaviours(visibility, behaviourProcess); // Solo recargar behaviours
@@ -310,14 +310,14 @@ export const CreateLeia: React.FC = () => {
 
   // Funciones para manejar cambios de process
   const handleProblemProcessChange = (
-    process: "all" | "requirements-elicitation" | "game"
+    process: "all" | "requirements-elicitation" | "game",
   ) => {
     setProblemProcess(process);
     loadProblems(problemVisibility, process); // Solo recargar problems
   };
 
   const handleBehaviourProcessChange = (
-    process: "all" | "requirements-elicitation" | "game"
+    process: "all" | "requirements-elicitation" | "game",
   ) => {
     setBehaviourProcess(process);
     loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
@@ -355,7 +355,7 @@ export const CreateLeia: React.FC = () => {
         value={value}
         onChange={(e) =>
           onChange(
-            e.target.value as "all" | "requirements-elicitation" | "game"
+            e.target.value as "all" | "requirements-elicitation" | "game",
           )
         }
         className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[60px] max-w-[140px]"
@@ -369,7 +369,7 @@ export const CreateLeia: React.FC = () => {
 
   const handleSelect = (
     type: keyof LeiaConfig,
-    item: Persona | Behaviour | Problem
+    item: Persona | Behaviour | Problem,
   ) => {
     setLeiaConfig((prev) => ({
       ...prev,
@@ -380,7 +380,7 @@ export const CreateLeia: React.FC = () => {
   // Funciones de eliminación de recursos
   const handleDeleteResource = (
     resource: Persona | Problem | Behaviour,
-    resourceType: "persona" | "problem" | "behaviour"
+    resourceType: "persona" | "problem" | "behaviour",
   ) => {
     setDeleteModal({
       isOpen: true,
@@ -392,7 +392,7 @@ export const CreateLeia: React.FC = () => {
 
   const confirmDeleteResource = async (
     resource: Persona | Problem | Behaviour,
-    resourceType: "persona" | "problem" | "behaviour"
+    resourceType: "persona" | "problem" | "behaviour",
   ) => {
     setIsDeleting(true);
     setDeleteError(null);
@@ -454,8 +454,9 @@ export const CreateLeia: React.FC = () => {
         } else if (axiosError.response?.status === 404) {
           err.message = "Resource not found";
         } else if (axiosError.response?.status === 400) {
-          err.message = `Cannot delete resource: it is being used in ${axiosError.response?.data?.data?.length
-            } LEIA${axiosError.response?.data?.data?.length === 1 ? "" : "s"}.`;
+          err.message = `Cannot delete resource: it is being used in ${
+            axiosError.response?.data?.data?.length
+          } LEIA${axiosError.response?.data?.data?.length === 1 ? "" : "s"}.`;
           err.data = axiosError.response?.data?.data || [];
         } else if (axiosError.response?.data?.message) {
           err.message = axiosError.response.data.message;
@@ -520,7 +521,7 @@ export const CreateLeia: React.FC = () => {
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
       setGenerateError(
-        err.response?.data?.message || "Failed to generate problem"
+        err.response?.data?.message || "Failed to generate problem",
       );
     } finally {
       setIsGenerating(false);
@@ -529,7 +530,7 @@ export const CreateLeia: React.FC = () => {
 
   const cleanObjectForPreview = (
     obj: unknown,
-    resource?: keyof LeiaConfig
+    resource?: keyof LeiaConfig,
   ): unknown => {
     if (!obj || typeof obj !== "object" || obj === null) return obj;
     const cleaned = structuredClone(obj) as Record<string, unknown>;
@@ -596,7 +597,7 @@ export const CreateLeia: React.FC = () => {
 
           try {
             const response = await api.get(
-              `/api/v1/${key}s/exists/${value.name}`
+              `/api/v1/${key}s/exists/${value.name}`,
             );
             if (response.data.exists) {
               errors[key] = "Name already exists";
@@ -650,7 +651,7 @@ export const CreateLeia: React.FC = () => {
             }
             const response = await api.post(
               `/api/v1/${key}s${publishParam}`,
-              newResource
+              newResource,
             );
             leia.spec[key] = response.data.id;
             leiaConfig[key as keyof LeiaConfig] = response.data;
@@ -725,7 +726,7 @@ export const CreateLeia: React.FC = () => {
       (resource) => {
         if (!resource) return true;
         return resource.name && resource.name.trim() !== "";
-      }
+      },
     );
 
     const noValidationErrors = validationErrors
@@ -739,56 +740,64 @@ export const CreateLeia: React.FC = () => {
     <div className="flex items-center justify-center space-x-8 mb-8">
       <div className="flex items-center space-x-2">
         <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 1
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-600"
-            }`}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+            currentStep >= 1
+              ? "bg-blue-600 text-white"
+              : "bg-gray-200 text-gray-600"
+          }`}
         >
           1
         </div>
         <span
-          className={`text-sm font-medium ${currentStep >= 1 ? "text-blue-600" : "text-gray-600"
-            }`}
+          className={`text-sm font-medium ${
+            currentStep >= 1 ? "text-blue-600" : "text-gray-600"
+          }`}
         >
           Selection
         </span>
       </div>
       <div
-        className={`h-px w-12 ${currentStep >= 2 ? "bg-blue-300" : "bg-gray-300"
-          }`}
+        className={`h-px w-12 ${
+          currentStep >= 2 ? "bg-blue-300" : "bg-gray-300"
+        }`}
       />
       <div className="flex items-center space-x-2">
         <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 2
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-600"
-            }`}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+            currentStep >= 2
+              ? "bg-blue-600 text-white"
+              : "bg-gray-200 text-gray-600"
+          }`}
         >
           2
         </div>
         <span
-          className={`text-sm font-medium ${currentStep >= 2 ? "text-blue-600" : "text-gray-600"
-            }`}
+          className={`text-sm font-medium ${
+            currentStep >= 2 ? "text-blue-600" : "text-gray-600"
+          }`}
         >
           Edit
         </span>
       </div>
       <div
-        className={`h-px w-12 ${currentStep >= 3 ? "bg-blue-300" : "bg-gray-300"
-          }`}
+        className={`h-px w-12 ${
+          currentStep >= 3 ? "bg-blue-300" : "bg-gray-300"
+        }`}
       />
       <div className="flex items-center space-x-2">
         <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 3
-            ? "bg-blue-600 text-white"
-            : "bg-gray-200 text-gray-600"
-            }`}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+            currentStep >= 3
+              ? "bg-blue-600 text-white"
+              : "bg-gray-200 text-gray-600"
+          }`}
         >
           3
         </div>
         <span
-          className={`text-sm font-medium ${currentStep >= 3 ? "text-blue-600" : "text-gray-600"
-            }`}
+          className={`text-sm font-medium ${
+            currentStep >= 3 ? "text-blue-600" : "text-gray-600"
+          }`}
         >
           Create
         </span>
@@ -939,10 +948,11 @@ export const CreateLeia: React.FC = () => {
                         <span>by {leiaConfig.behaviour.user.email}</span>
                         <span className="flex items-center gap-1">
                           <span
-                            className={`inline-block w-2 h-2 rounded-full ${leiaConfig.behaviour.user.role === "admin"
-                              ? "bg-purple-500"
-                              : "bg-green-500"
-                              }`}
+                            className={`inline-block w-2 h-2 rounded-full ${
+                              leiaConfig.behaviour.user.role === "admin"
+                                ? "bg-purple-500"
+                                : "bg-green-500"
+                            }`}
                           ></span>
                           {leiaConfig.behaviour.user.role === "admin"
                             ? "Administrator"
@@ -981,7 +991,7 @@ export const CreateLeia: React.FC = () => {
                               ...prev,
                               behaviour:
                                 structuredClone(
-                                  leiaConfigSnapShot?.behaviour
+                                  leiaConfigSnapShot?.behaviour,
                                 ) || null,
                             }))
                           }
@@ -997,14 +1007,15 @@ export const CreateLeia: React.FC = () => {
                             content: JSON.stringify(
                               leiaConfig.behaviour?.spec,
                               null,
-                              2
+                              2,
                             ),
                             apiVersion:
                               leiaConfig.behaviour?.apiVersion || "v1",
                           })
                         }
-                        className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
-                          }`}
+                        className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
+                          leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
+                        }`}
                       >
                         Edit
                       </button>
@@ -1039,10 +1050,11 @@ export const CreateLeia: React.FC = () => {
                         <span>by {leiaConfig.problem.user.email}</span>
                         <span className="flex items-center gap-1">
                           <span
-                            className={`inline-block w-2 h-2 rounded-full ${leiaConfig.problem.user.role === "admin"
-                              ? "bg-purple-500"
-                              : "bg-green-500"
-                              }`}
+                            className={`inline-block w-2 h-2 rounded-full ${
+                              leiaConfig.problem.user.role === "admin"
+                                ? "bg-purple-500"
+                                : "bg-green-500"
+                            }`}
                           ></span>
                           {leiaConfig.problem.user.role === "admin"
                             ? "Administrator"
@@ -1102,8 +1114,9 @@ export const CreateLeia: React.FC = () => {
                         apiVersion: leiaConfig.problem?.apiVersion || "v1",
                       })
                     }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${leiaConfig.problem?.edited ? "flex-1" : "flex-1"
-                      }`}
+                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
+                      leiaConfig.problem?.edited ? "flex-1" : "flex-1"
+                    }`}
                   >
                     Edit
                   </button>
@@ -1132,10 +1145,11 @@ export const CreateLeia: React.FC = () => {
                         <span>by {leiaConfig.persona.user.email}</span>
                         <span className="flex items-center gap-1">
                           <span
-                            className={`inline-block w-2 h-2 rounded-full ${leiaConfig.persona.user.role === "admin"
-                              ? "bg-purple-500"
-                              : "bg-green-500"
-                              }`}
+                            className={`inline-block w-2 h-2 rounded-full ${
+                              leiaConfig.persona.user.role === "admin"
+                                ? "bg-purple-500"
+                                : "bg-green-500"
+                            }`}
                           ></span>
                           {leiaConfig.persona.user.role === "admin"
                             ? "Administrator"
@@ -1188,8 +1202,9 @@ export const CreateLeia: React.FC = () => {
                         apiVersion: leiaConfig.persona?.apiVersion || "v1",
                       })
                     }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${leiaConfig.persona?.edited ? "flex-1" : "w-full"
-                      }`}
+                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
+                      leiaConfig.persona?.edited ? "flex-1" : "w-full"
+                    }`}
                   >
                     Edit
                   </button>
@@ -1279,8 +1294,9 @@ export const CreateLeia: React.FC = () => {
         </div>
         {generatedLeia && !generationError ? (
           <div
-            className={`grid ${isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-              } gap-4`}
+            className={`grid ${
+              isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+            } gap-4`}
           >
             {!isCurrentUserInstructor && (
               <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
@@ -1294,7 +1310,7 @@ export const CreateLeia: React.FC = () => {
                       value={JSON.stringify(
                         cleanObjectForPreview(generatedLeia?.spec.behaviour),
                         null,
-                        2
+                        2,
                       )}
                       options={{
                         readOnly: true,
@@ -1338,7 +1354,7 @@ export const CreateLeia: React.FC = () => {
                     value={JSON.stringify(
                       cleanObjectForPreview(generatedLeia?.spec.problem),
                       null,
-                      2
+                      2,
                     )}
                     options={{
                       readOnly: true,
@@ -1381,7 +1397,7 @@ export const CreateLeia: React.FC = () => {
                     value={JSON.stringify(
                       cleanObjectForPreview(generatedLeia?.spec.persona),
                       null,
-                      2
+                      2,
                     )}
                     options={{
                       readOnly: true,
@@ -1495,10 +1511,11 @@ export const CreateLeia: React.FC = () => {
                 }
               }}
               placeholder="Enter LEIA name"
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.leia
-                ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                : "border-gray-300"
-                }`}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                validationErrors?.leia
+                  ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                  : "border-gray-300"
+              }`}
             />
             {validationErrors?.leia && (
               <p className="mt-1 text-sm text-red-600">
@@ -1583,8 +1600,9 @@ export const CreateLeia: React.FC = () => {
         </div>
       </div>
       <div
-        className={`grid gap-6 ${isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-          }`}
+        className={`grid gap-6 ${
+          isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+        }`}
       >
         {/* Comportamiento */}
         {customizations.behaviour && !isCurrentUserInstructor && (
@@ -1612,10 +1630,11 @@ export const CreateLeia: React.FC = () => {
                     }
                   }}
                   placeholder="Enter behaviour name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.behaviour
-                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                    : "border-gray-300"
-                    }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                    validationErrors?.behaviour
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                 />
                 {validationErrors?.behaviour && (
                   <p className="mt-1 text-sm text-red-600">
@@ -1636,8 +1655,9 @@ export const CreateLeia: React.FC = () => {
                       setBehaviourPublish(e.target.value === "public")
                     }
                     disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                      }`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                    }`}
                   >
                     <option value="public">Public</option>
                     <option value="private">Private</option>
@@ -1681,10 +1701,11 @@ export const CreateLeia: React.FC = () => {
                     }
                   }}
                   placeholder="Enter problem name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.problem
-                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                    : "border-gray-300"
-                    }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                    validationErrors?.problem
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                 />
                 {validationErrors?.problem && (
                   <p className="mt-1 text-sm text-red-600">
@@ -1705,8 +1726,9 @@ export const CreateLeia: React.FC = () => {
                       setProblemPublish(e.target.value === "public")
                     }
                     disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                      }`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                    }`}
                   >
                     <option value="public">Public</option>
                     <option value="private">Private</option>
@@ -1751,10 +1773,11 @@ export const CreateLeia: React.FC = () => {
                     }
                   }}
                   placeholder="Enter persona name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${validationErrors?.persona
-                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                    : "border-gray-300"
-                    }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                    validationErrors?.persona
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
                 />
                 {validationErrors?.persona && (
                   <p className="mt-1 text-sm text-red-600">
@@ -1775,8 +1798,9 @@ export const CreateLeia: React.FC = () => {
                       setPersonaPublish(e.target.value === "public")
                     }
                     disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                      }`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
+                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
+                    }`}
                   >
                     <option value="public">Public</option>
                     <option value="private">Private</option>
@@ -1801,8 +1825,9 @@ export const CreateLeia: React.FC = () => {
           <h3 className="text-lg w-full font-semibold">Final LEIA Preview</h3>
         </div>
         <div
-          className={`grid gap-4 ${isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-            }`}
+          className={`grid gap-4 ${
+            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
+          }`}
         >
           {!isCurrentUserInstructor && (
             <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
@@ -1821,10 +1846,10 @@ export const CreateLeia: React.FC = () => {
                     value={JSON.stringify(
                       cleanObjectForPreview(
                         generatedLeia?.spec.behaviour,
-                        "behaviour"
+                        "behaviour",
                       ),
                       null,
-                      2
+                      2,
                     )}
                     options={{
                       readOnly: true,
@@ -1873,10 +1898,10 @@ export const CreateLeia: React.FC = () => {
                   value={JSON.stringify(
                     cleanObjectForPreview(
                       generatedLeia?.spec.problem,
-                      "problem"
+                      "problem",
                     ),
                     null,
-                    2
+                    2,
                   )}
                   options={{
                     readOnly: true,
@@ -1924,10 +1949,10 @@ export const CreateLeia: React.FC = () => {
                   value={JSON.stringify(
                     cleanObjectForPreview(
                       generatedLeia?.spec.persona,
-                      "persona"
+                      "persona",
                     ),
                     null,
-                    2
+                    2,
                   )}
                   options={{
                     readOnly: true,
@@ -2071,10 +2096,11 @@ export const CreateLeia: React.FC = () => {
           <button
             onClick={handlePrevStep}
             disabled={currentStep === 1}
-            className={`px-6 py-2 rounded-lg transition-colors ${currentStep === 1
-              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-              : "bg-gray-600 text-white hover:bg-gray-700"
-              }`}
+            className={`px-6 py-2 rounded-lg transition-colors ${
+              currentStep === 1
+                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                : "bg-gray-600 text-white hover:bg-gray-700"
+            }`}
           >
             Previous
           </button>
@@ -2108,12 +2134,13 @@ export const CreateLeia: React.FC = () => {
               (currentStep === 2 && !isStep2Complete) ||
               (currentStep === 3 && !isStep3Complete)
             }
-            className={`px-6 py-2 rounded-lg transition-colors ${(currentStep === 1 && !isStep1Complete) ||
+            className={`px-6 py-2 rounded-lg transition-colors ${
+              (currentStep === 1 && !isStep1Complete) ||
               (currentStep === 2 && !isStep2Complete) ||
               (currentStep === 3 && !isStep3Complete)
-              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-              : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
+                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
           >
             {currentStep === 3 ? "Finish" : "Next"}
           </button>
@@ -2205,8 +2232,20 @@ export const CreateLeia: React.FC = () => {
                 {isGenerating ? (
                   <>
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                     Generating...
                   </>
