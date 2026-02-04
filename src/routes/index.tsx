@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../context";
 import { CreateLeia } from "../screens/CreateLeia";
 import { Chat } from "../screens/Chat";
+import { Edit } from "../screens/Edit";
 import { Login } from "../screens/Login";
 import { Profile } from "../screens/Profile";
 import { ForbiddenPage } from "../screens/ForbiddenPage";
@@ -62,6 +63,14 @@ export const AppRoutes = () => {
         element={
           <AuthenticatedRoute>
             <Chat />
+          </AuthenticatedRoute>
+        }
+      />
+      <Route
+        path="/edit/:sessionId"
+        element={
+          <AuthenticatedRoute>
+            <Edit />
           </AuthenticatedRoute>
         }
       />

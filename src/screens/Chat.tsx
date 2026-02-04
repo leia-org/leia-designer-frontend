@@ -8,6 +8,9 @@ import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
 
+const CHAT_SAVE_STATE_KEY = "designerChatSaveState";
+const EDIT_STATE_KEY = "designerEditState";
+
 interface NavigationState {
   preset?: {
     persona?: unknown;
@@ -35,6 +38,17 @@ interface NavigationState {
     leiaConfigId: string;
     leiaConfig: LeiaConfig;
   };
+}
+
+interface ExerciseSpec {
+  description?: string;
+  solutionFormat?: string;
+  initialSolution?: string;
+}
+
+interface EditLocalState {
+  sessionId: string;
+  exercise?: ExerciseSpec;
 }
 
 const TypingAnimation = () => (
@@ -76,6 +90,45 @@ export const Chat = () => {
   const [experimentId, setExperimentId] = useState<string | null>(null);
   const [leiaConfigId, setLeiaConfigId] = useState<string | null>(null);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig | null>(null);
+
+  const parseSavedNavigationState = (): NavigationState | null => {
+    const raw = localStorage.getItem(CHAT_SAVE_STATE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as NavigationState;
+    } catch {
+      return null;
+    }
+  };
+
+  const extractExerciseFromNavigationState = (
+    navigationState: NavigationState | null
+  ): ExerciseSpec | undefined => {
+    const problem = (navigationState?.save?.leiaConfig?.problem ?? null) as
+      | { spec?: unknown }
+      | null;
+    if (!problem || typeof problem !== "object") return undefined;
+    const spec = problem.spec as ExerciseSpec | undefined;
+    if (!spec || typeof spec !== "object") return undefined;
+    return spec;
+  };
+
+  const configureEditState = useCallback(
+    (navigationState: NavigationState | null) => {
+      if (!sessionId) return;
+      const exercise = extractExerciseFromNavigationState(navigationState);
+      const payload: EditLocalState = {
+        sessionId,
+        exercise,
+      };
+      localStorage.setItem(EDIT_STATE_KEY, JSON.stringify(payload));
+      localStorage.setItem("sessionId", sessionId);
+      if (exercise) {
+        localStorage.setItem("exercise", JSON.stringify(exercise));
+      }
+    },
+    [sessionId]
+  );
 
   const scrollToBottom = useCallback((smooth = true) => {
     if (chatMessagesRef.current) {
@@ -121,6 +174,9 @@ export const Chat = () => {
 
   useEffect(() => {
     const navigationState = location.state as NavigationState;
+    if (navigationState) {
+      localStorage.setItem(CHAT_SAVE_STATE_KEY, JSON.stringify(navigationState));
+    }
     if (navigationState?.problemDescription) {
       setProblemDescription(navigationState.problemDescription);
     }
@@ -131,6 +187,8 @@ export const Chat = () => {
       setLeiaConfigId(navigationState.experimentTranscription.leiaConfigId);
       setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
     }
+
+    configureEditState(navigationState || parseSavedNavigationState());
   }, [location.state]);
 
   useEffect(() => {
@@ -277,7 +335,8 @@ export const Chat = () => {
   };
 
   const handleFinishConversation = async () => {
-    const navigationState = location.state as NavigationState;
+    const navigationState =
+      (location.state as NavigationState | null) || parseSavedNavigationState();
     if (navigationState?.save) {
       navigate("/create", {
         state: { save: navigationState.save } as NavigationState,
@@ -285,6 +344,17 @@ export const Chat = () => {
     } else {
       navigate(-1);
     }
+  };
+
+  const handleOpenSolutionEditor = () => {
+    const navigationState =
+      (location.state as NavigationState | null) || parseSavedNavigationState();
+    configureEditState(navigationState);
+    if (!sessionId) {
+      toast.error("Missing session id to open editor");
+      return;
+    }
+    navigate(`/edit/${sessionId}`);
   };
 
   return (
@@ -296,10 +366,22 @@ export const Chat = () => {
         rightContent={
           <div className="flex gap-2">
             <button
+              onClick={handleOpenSolutionEditor}
+              className="px-4 py-1.5 text-sm text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              Solution Editor
+            </button>
+            <button
               onClick={() => setShowInstructions(!showInstructions)}
               className="px-4 py-1.5 text-sm text-blue-600 bg-white border border-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {showInstructions ? "Hide Instructions" : "Instructions"}
+            </button>
+            <button
+              onClick={handleFinishConversation}
+              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-700 border border-blue-800 rounded-md hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+            >
+              Continue Configuration
             </button>
             {transcription && (
               <button
@@ -320,12 +402,6 @@ export const Chat = () => {
                 )}
               </button>
             )}
-            <button
-              onClick={handleFinishConversation}
-              className="px-4 py-1.5 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              Finish Conversation
-            </button>
           </div>
         }
       />
