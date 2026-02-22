@@ -51,6 +51,10 @@ interface NavigationState {
 
 type WizardStep = 1 | 2 | 3;
 
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_DETAILS =
+  "Enfócate en catálogo, préstamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -142,8 +146,12 @@ export const CreateLeia: React.FC = () => {
 
   // Estados para generación de problemas con IA
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [generateSubject, setGenerateSubject] = useState("");
-  const [generateDetails, setGenerateDetails] = useState("");
+  const [generateSubject, setGenerateSubject] = useState(
+    DEFAULT_PROBLEM_GENERATION_SUBJECT,
+  );
+  const [generateDetails, setGenerateDetails] = useState(
+    DEFAULT_PROBLEM_GENERATION_DETAILS,
+  );
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -478,6 +486,21 @@ export const CreateLeia: React.FC = () => {
     setDeleteError(null);
   };
 
+  const openGenerateProblemModal = () => {
+    if (!leiaConfig.problem) return;
+    setGenerateSubject(DEFAULT_PROBLEM_GENERATION_SUBJECT);
+    setGenerateDetails(DEFAULT_PROBLEM_GENERATION_DETAILS);
+    setGenerateError(null);
+    setShowGenerateModal(true);
+  };
+
+  const closeGenerateProblemModal = () => {
+    setShowGenerateModal(false);
+    setGenerateSubject(DEFAULT_PROBLEM_GENERATION_SUBJECT);
+    setGenerateDetails(DEFAULT_PROBLEM_GENERATION_DETAILS);
+    setGenerateError(null);
+  };
+
   // Función para generar un problema similar con IA
   const handleGenerateProblem = async () => {
     if (!generateSubject.trim() || !leiaConfig.problem) {
@@ -515,13 +538,15 @@ export const CreateLeia: React.FC = () => {
       }));
 
       // Cerrar modal y limpiar
-      setShowGenerateModal(false);
-      setGenerateSubject("");
-      setGenerateDetails("");
+      closeGenerateProblemModal();
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
       setGenerateError(
-        err.response?.data?.message || "Failed to generate problem",
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Failed to generate problem",
       );
     } finally {
       setIsGenerating(false);
@@ -876,7 +901,7 @@ export const CreateLeia: React.FC = () => {
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
                   <button
-                    onClick={() => setShowGenerateModal(true)}
+                    onClick={openGenerateProblemModal}
                     disabled={!leiaConfig.problem}
                     className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     title="Generate similar problem with AI"
@@ -1100,7 +1125,7 @@ export const CreateLeia: React.FC = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => setShowGenerateModal(true)}
+                    onClick={openGenerateProblemModal}
                     className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
                     title="Generate similar with AI"
                   >
@@ -2176,6 +2201,13 @@ export const CreateLeia: React.FC = () => {
                   </p>
                 </div>
               </div>
+              <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                <p className="text-xs text-purple-800 leading-relaxed">
+                  If present in the base template, the generator will also adapt{" "}
+                  <code>evaluationPrompt</code>, <code>extends</code>, and{" "}
+                  <code>overrides</code>.
+                </p>
+              </div>
 
               <div className="space-y-4">
                 <div>
@@ -2186,7 +2218,7 @@ export const CreateLeia: React.FC = () => {
                     type="text"
                     value={generateSubject}
                     onChange={(e) => setGenerateSubject(e.target.value)}
-                    placeholder="e.g., Library Management System"
+                    placeholder="p. ej., Sistema de biblioteca"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
@@ -2198,7 +2230,7 @@ export const CreateLeia: React.FC = () => {
                   <textarea
                     value={generateDetails}
                     onChange={(e) => setGenerateDetails(e.target.value)}
-                    placeholder="e.g., Focus on catalog search, lending, and reservations. Include member accounts and overdue notifications."
+                    placeholder="p. ej., catálogo, préstamos, reservas, cuentas de socios y notificaciones de vencimiento."
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
                   />
@@ -2214,12 +2246,7 @@ export const CreateLeia: React.FC = () => {
 
             <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
               <button
-                onClick={() => {
-                  setShowGenerateModal(false);
-                  setGenerateSubject("");
-                  setGenerateDetails("");
-                  setGenerateError(null);
-                }}
+                onClick={closeGenerateProblemModal}
                 className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
