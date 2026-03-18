@@ -13,9 +13,9 @@ import { Header } from "../components/shared/Header";
 import type { Leia, Persona, Problem, Behaviour } from "../models/Leia";
 import type { Experiment } from "../models/Experiment";
 import { ToastContainer, toast } from "react-toastify";
-import CreatableSelect from "react-select/creatable";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
+import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
 
 type VersionFilter = "" | "latest";
@@ -190,13 +190,14 @@ export const LeiaSearch: React.FC = () => {
       });
 
       setDraftExperiments((prev) => [...(prev || []), response.data]);
-
       setSelectedDraftExperimentId(response.data.id);
 
       toast.success("Activity '" + response.data.name + "' created", {
         position: "bottom-right",
         autoClose: 5000,
       });
+      
+      await handleAddLeiaToExperiment(response.data.id);
     } catch (error) {
       if (error instanceof Error) {
         toast.error("Could not create new activity: " + error.message, {
@@ -209,11 +210,12 @@ export const LeiaSearch: React.FC = () => {
     }
   };
 
-  const handleAddLeiaToExperiment = async () => {
-    if (!selectedDraftExperimentId || !selectedLeia) return;
+  const handleAddLeiaToExperiment = async (experimentId?: string) => {
+    const targetId = experimentId ?? selectedDraftExperimentId;
+    if (!targetId || !selectedLeia) return;
     try {
       setAddingLeiaToExperiment(true);
-      await api.post(`/api/v1/experiments/${selectedDraftExperimentId}/leias`, {
+      await api.post(`/api/v1/experiments/${targetId}/leias`, {
         leia: selectedLeia.id,
       });
       toast.success("LEIA added to activity successfully", {
@@ -330,145 +332,21 @@ export const LeiaSearch: React.FC = () => {
         description="Discover and test existing LEIA configurations"
       />
       <ToastContainer />
-      {showExperimentsModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              handleCloseExperimentsModal();
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4">
-            <div
-              className="p-6"
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              <h2 className="text-xl font-semibold mb-4">
-                Add {selectedLeia?.metadata.name || ""} LEIA to an Activity
-              </h2>
-
-              {/* Activity Selector */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select an Activity
-                </label>
-
-                {errorLoadingDraftExperiments ? (
-                  <div className="space-y-3">
-                    <div className="border border-red-300 rounded-md px-3 py-2 bg-red-50">
-                      <p className="text-sm text-red-600">
-                        {errorLoadingDraftExperiments}
-                      </p>
-                    </div>
-                    <button
-                      onClick={loadDraftExperiments}
-                      className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                    >
-                      Try Again
-                    </button>
-                  </div>
-                ) : draftExperiments && draftExperiments.length === 0 ? (
-                  <div className="border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                    <p className="text-sm text-gray-600">No activities found</p>
-                  </div>
-                ) : (
-                  <CreatableSelect
-                    value={
-                      selectedDraftExperimentId
-                        ? {
-                            value: selectedDraftExperimentId,
-                            label:
-                              draftExperiments?.find(
-                                (exp) => exp.id === selectedDraftExperimentId
-                              )?.name || "",
-                          }
-                        : null
-                    }
-                    onChange={(newValue) =>
-                      setSelectedDraftExperimentId(newValue?.value || null)
-                    }
-                    onCreateOption={handleCreateExperiment}
-                    options={
-                      draftExperiments?.map((experiment) => ({
-                        value: experiment.id,
-                        label: experiment.name,
-                      })) || []
-                    }
-                    placeholder={
-                      loadingDraftExperiments
-                        ? "Loading activities..."
-                        : "Choose or create an activity..."
-                    }
-                    isClearable
-                    isDisabled={
-                      creatingNewExperiment || loadingDraftExperiments
-                    }
-                    isLoading={creatingNewExperiment || loadingDraftExperiments}
-                    formatCreateLabel={(inputValue) =>
-                      `Create activity: "${inputValue}"`
-                    }
-                    createOptionPosition="first"
-                    className="react-select-container"
-                    classNamePrefix="react-select"
-                    styles={{
-                      control: (base) => ({
-                        ...base,
-                        minHeight: "38px",
-                        borderColor: "#d1d5db",
-                        "&:hover": {
-                          borderColor: "#9ca3af",
-                        },
-                        "&:focus-within": {
-                          borderColor: "#3b82f6",
-                          boxShadow: "0 0 0 1px #3b82f6",
-                        },
-                      }),
-                    }}
-                  />
-                )}
-
-                {creatingNewExperiment && (
-                  <div className="mt-2 flex items-center text-sm text-blue-600">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-                    Creating new activity...
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={handleCloseExperimentsModal}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddLeiaToExperiment}
-                  disabled={
-                    !selectedDraftExperimentId ||
-                    !selectedLeia ||
-                    addingLeiaToExperiment
-                  }
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                >
-                  {addingLeiaToExperiment ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                      Adding...
-                    </>
-                  ) : (
-                    "Add to Activity"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddLeiaToAnActivity
+        isOpen={showExperimentsModal}
+        selectedLeia={selectedLeia}
+        draftExperiments={draftExperiments}
+        loadingDraftExperiments={loadingDraftExperiments}
+        errorLoadingDraftExperiments={errorLoadingDraftExperiments}
+        selectedDraftExperimentId={selectedDraftExperimentId}
+        creatingNewExperiment={creatingNewExperiment}
+        addingLeiaToExperiment={addingLeiaToExperiment}
+        onClose={handleCloseExperimentsModal}
+        onRetryLoad={loadDraftExperiments}
+        onSelectDraftExperiment={setSelectedDraftExperimentId}
+        onCreateExperiment={handleCreateExperiment}
+        onConfirmAdd={handleAddLeiaToExperiment}
+      />
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
         <div className="flex items-end justify-between mb-6">
           <div className="flex-1">
