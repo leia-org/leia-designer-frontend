@@ -11,7 +11,6 @@ import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
 import { Header } from "../components/shared/Header";
 import type { Leia, Persona, Problem, Behaviour } from "../models/Leia";
-import type { Experiment } from "../models/Experiment";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
@@ -42,19 +41,7 @@ export const LeiaSearch: React.FC = () => {
     return p;
   }, [queryText, versionFilter, visibilityFilter]);
 
-  const [draftExperiments, setDraftExperiments] = useState<Experiment[] | null>(
-    null
-  );
-  const [loadingDraftExperiments, setLoadingDraftExperiments] = useState(false);
-  const [errorLoadingDraftExperiments, setErrorLoadingDraftExperiments] =
-    useState<string | null>(null);
-  const [selectedDraftExperimentId, setSelectedDraftExperimentId] = useState<
-    string | null
-  >(null);
-  const [addingLeiaToExperiment, setAddingLeiaToExperiment] = useState(false);
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
-
-  const [creatingNewExperiment, setCreatingNewExperiment] = useState(false);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
 
   // Estados para el modal de visualización de LEIA
@@ -149,90 +136,13 @@ export const LeiaSearch: React.FC = () => {
     }
   };
 
-  const loadDraftExperiments = async () => {
-    setErrorLoadingDraftExperiments(null);
-    try {
-      setLoadingDraftExperiments(true);
-      const response = await api.get<Experiment[]>(
-        "/api/v1/experiments/user/me",
-        {
-          params: { visibility: "private" },
-        }
-      );
-      setDraftExperiments(response.data);
-    } catch {
-      setErrorLoadingDraftExperiments("Could not load draft activities");
-    } finally {
-      setLoadingDraftExperiments(false);
-    }
-  };
-
   const handleOpenExperimentsModal = () => {
-    if (!draftExperiments) {
-      loadDraftExperiments();
-    }
     setShowExperimentsModal(true);
   };
 
   const handleCloseExperimentsModal = () => {
     setShowExperimentsModal(false);
-    setSelectedDraftExperimentId(null);
     setSelectedLeia(null);
-  };
-
-  const handleCreateExperiment = async (inputValue: string) => {
-    if (!inputValue.trim()) return;
-
-    try {
-      setCreatingNewExperiment(true);
-      const response = await api.post<Experiment>("/api/v1/experiments", {
-        name: inputValue.trim(),
-      });
-
-      setDraftExperiments((prev) => [...(prev || []), response.data]);
-      setSelectedDraftExperimentId(response.data.id);
-
-      toast.success("Activity '" + response.data.name + "' created", {
-        position: "bottom-right",
-        autoClose: 5000,
-      });
-      
-      await handleAddLeiaToExperiment(response.data.id);
-    } catch (error) {
-      if (error instanceof Error) {
-        toast.error("Could not create new activity: " + error.message, {
-          position: "bottom-right",
-          autoClose: 5000,
-        });
-      }
-    } finally {
-      setCreatingNewExperiment(false);
-    }
-  };
-
-  const handleAddLeiaToExperiment = async (experimentId?: string) => {
-    const targetId = experimentId ?? selectedDraftExperimentId;
-    if (!targetId || !selectedLeia) return;
-    try {
-      setAddingLeiaToExperiment(true);
-      await api.post(`/api/v1/experiments/${targetId}/leias`, {
-        leia: selectedLeia.id,
-      });
-      toast.success("LEIA added to activity successfully", {
-        position: "bottom-right",
-        autoClose: 5000,
-      });
-      handleCloseExperimentsModal();
-    } catch (error) {
-      if (error instanceof Error) {
-        toast.error("Could not add LEIA to activity: " + error.message, {
-          position: "bottom-right",
-          autoClose: 5000,
-        });
-      }
-    } finally {
-      setAddingLeiaToExperiment(false);
-    }
   };
 
   const handleViewLeiaContent = useCallback((leia: Leia) => {
@@ -335,17 +245,14 @@ export const LeiaSearch: React.FC = () => {
       <AddLeiaToAnActivity
         isOpen={showExperimentsModal}
         selectedLeia={selectedLeia}
-        draftExperiments={draftExperiments}
-        loadingDraftExperiments={loadingDraftExperiments}
-        errorLoadingDraftExperiments={errorLoadingDraftExperiments}
-        selectedDraftExperimentId={selectedDraftExperimentId}
-        creatingNewExperiment={creatingNewExperiment}
-        addingLeiaToExperiment={addingLeiaToExperiment}
         onClose={handleCloseExperimentsModal}
-        onRetryLoad={loadDraftExperiments}
-        onSelectDraftExperiment={setSelectedDraftExperimentId}
-        onCreateExperiment={handleCreateExperiment}
-        onConfirmAdd={handleAddLeiaToExperiment}
+        onSuccess={() => {
+          toast.success("LEIA added to activity successfully", {
+            position: "bottom-right",
+            autoClose: 5000,
+          });
+          handleCloseExperimentsModal();
+        }}
       />
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
         <div className="flex items-end justify-between mb-6">

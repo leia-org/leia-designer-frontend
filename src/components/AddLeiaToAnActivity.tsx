@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { SingleValue } from "react-select";
 import CreatableSelect from "react-select/creatable";
 import type { Experiment } from "../models/Experiment";
 import type { Leia } from "../models/Leia";
+import api from "../lib/axios";
 
 type SelectOption = {
   value: string;
@@ -15,35 +16,52 @@ const NEW_OPTION_PREFIX = "__new__";
 interface AddLeiaToAnActivityProps {
   isOpen: boolean;
   selectedLeia: Leia | null;
-  draftExperiments: Experiment[] | null;
-  loadingDraftExperiments: boolean;
-  errorLoadingDraftExperiments: string | null;
-  selectedDraftExperimentId: string | null;
-  creatingNewExperiment: boolean;
-  addingLeiaToExperiment: boolean;
   onClose: () => void;
-  onRetryLoad: () => void;
-  onSelectDraftExperiment: (id: string | null) => void;
-  onCreateExperiment: (name: string) => void;
-  onConfirmAdd: () => void;
+  onSuccess?: () => void;
 }
 
 export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   isOpen,
   selectedLeia,
-  draftExperiments,
-  loadingDraftExperiments,
-  errorLoadingDraftExperiments,
-  selectedDraftExperimentId,
-  creatingNewExperiment,
-  addingLeiaToExperiment,
   onClose,
-  onRetryLoad,
-  onSelectDraftExperiment,
-  onCreateExperiment,
-  onConfirmAdd,
+  onSuccess,
 }) => {
+  const [draftExperiments, setDraftExperiments] = useState<Experiment[] | null>(
+    null,
+  );
+  const [loadingDraftExperiments, setLoadingDraftExperiments] = useState(false);
+  const [errorLoadingDraftExperiments, setErrorLoadingDraftExperiments] =
+    useState<string | null>(null);
+  const [selectedDraftExperimentId, setSelectedDraftExperimentId] = useState<
+    string | null
+  >(null);
+  const [creatingNewExperiment, setCreatingNewExperiment] = useState(false);
+  const [addingLeiaToExperiment, setAddingLeiaToExperiment] = useState(false);
   const [pendingNewName, setPendingNewName] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const loadDraftExperiments = async () => {
+    setErrorLoadingDraftExperiments(null);
+    try {
+      setLoadingDraftExperiments(true);
+      const response = await api.get<Experiment[]>("/api/v1/experiments/user/me", {
+        params: { visibility: "private" },
+      });
+      setDraftExperiments(response.data || []);
+    } catch {
+      setErrorLoadingDraftExperiments("Could not load draft activities");
+    } finally {
+      setLoadingDraftExperiments(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedDraftExperimentId(null);
+    setPendingNewName(null);
+    setActionError(null);
+    loadDraftExperiments();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -68,31 +86,73 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   const handleChange = (newValue: SingleValue<SelectOption>) => {
     if (!newValue) {
       setPendingNewName(null);
-      onSelectDraftExperiment(null);
+      setSelectedDraftExperimentId(null);
       return;
     }
     // Si es una opción nueva (creada con el prefijo), no propagamos al padre aún
     if (newValue.value.startsWith(NEW_OPTION_PREFIX)) {
       setPendingNewName(newValue.label);
-      onSelectDraftExperiment(null);
+      setSelectedDraftExperimentId(null);
     } else {
       setPendingNewName(null);
-      onSelectDraftExperiment(newValue.value);
+      setSelectedDraftExperimentId(newValue.value);
     }
   };
 
   const handleCreateOption = (inputValue: string) => {
     // Solo guardamos el nombre, NO llamamos a onCreateExperiment todavía
     setPendingNewName(inputValue);
-    onSelectDraftExperiment(null);
+    setSelectedDraftExperimentId(null);
   };
 
-  const handleConfirm = () => {
-    if (pendingNewName) {
-      // Aquí sí creamos, justo al pulsar el botón
-      onCreateExperiment(pendingNewName);
-    } else {
-      onConfirmAdd();
+  const handleAddLeiaToExperiment = async (experimentId: string) => {
+    if (!selectedLeia) return;
+    await api.post(`/api/v1/experiments/${experimentId}/leias`, {
+      leia: selectedLeia.id,
+    });
+  };
+
+  const handleCreateExperiment = async (name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return null;
+
+    setCreatingNewExperiment(true);
+    try {
+      const response = await api.post<Experiment>("/api/v1/experiments", {
+        name: trimmedName,
+      });
+      setDraftExperiments((prev) => [...(prev || []), response.data]);
+      setSelectedDraftExperimentId(response.data.id);
+      return response.data.id;
+    } finally {
+      setCreatingNewExperiment(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedLeia) return;
+    setActionError(null);
+
+    try {
+      setAddingLeiaToExperiment(true);
+      let targetExperimentId = selectedDraftExperimentId;
+
+      if (!targetExperimentId && pendingNewName) {
+        targetExperimentId = await handleCreateExperiment(pendingNewName);
+      }
+
+      if (!targetExperimentId) {
+        setActionError("Select or create an activity first");
+        return;
+      }
+
+      await handleAddLeiaToExperiment(targetExperimentId);
+      handleClose();
+      onSuccess?.();
+    } catch {
+      setActionError("Could not add LEIA to activity");
+    } finally {
+      setAddingLeiaToExperiment(false);
     }
   };
 
@@ -104,7 +164,8 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   const canConfirm =
     (!!selectedDraftExperimentId || !!pendingNewName) &&
     !!selectedLeia &&
-    !addingLeiaToExperiment;
+    !addingLeiaToExperiment &&
+    !creatingNewExperiment;
 
   return (
     <div
@@ -132,7 +193,7 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
                   </p>
                 </div>
                 <button
-                  onClick={onRetryLoad}
+                  onClick={loadDraftExperiments}
                   className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                 >
                   Try Again
@@ -178,6 +239,10 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
                 Creating new activity...
               </div>
+            )}
+
+            {actionError && (
+              <p className="mt-2 text-sm text-red-600">{actionError}</p>
             )}
 
             {/* Indicador visual de que es una actividad nueva pendiente */}

@@ -11,8 +11,14 @@ import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
+import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
-import type { Persona, Behaviour, Problem } from "../models/Leia";
+import type {
+  Persona,
+  Behaviour,
+  Problem,
+  Leia as LeiaResource,
+} from "../models/Leia";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
 
@@ -146,6 +152,15 @@ export const CreateLeia: React.FC = () => {
   const [generateDetails, setGenerateDetails] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // Modal cuando se pulsa Finish
+  const [showFinishModal, setShowFinishModal] = useState(false);
+  const [createdLeiaName, setCreatedLeiaName] = useState("");
+
+  // Estados para opcionalmente añadir la LEIA a una Activity
+  const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
+  const [createdLeiaResource, setCreatedLeiaResource] =
+    useState<LeiaResource | null>(null);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -674,7 +689,11 @@ export const CreateLeia: React.FC = () => {
           currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
         const response = await api.post(`/api/v1/leias${publishParam}`, leia);
         console.log("LEIA created successfully:", response.data);
-        navigate("/leias");
+        setCreatedLeiaName(
+          response.data?.metadata?.name || customizations.leia.name || "LEIA",
+        );
+        setCreatedLeiaResource(response.data as LeiaResource);
+        setShowFinishModal(true);
       } catch (error) {
         console.error("Error creating LEIA:", error);
         setError("Failed to create LEIA");
@@ -2157,6 +2176,56 @@ export const CreateLeia: React.FC = () => {
         isDeleting={isDeleting}
         error={deleteError}
       />
+
+      <AddLeiaToAnActivity
+        isOpen={showAddToActivityModal}
+        selectedLeia={createdLeiaResource}
+        onClose={() => {setShowAddToActivityModal(false); navigate("/leias")}}
+        onSuccess={() => {
+          setShowAddToActivityModal(false);
+          navigate("/leias");
+        }}
+      />
+
+      {/* Modal mostrado despues de crear la LEIA*/}
+      {showFinishModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                LEIA created successfully
+              </h3>
+              <p className="text-sm text-gray-600">
+                "{createdLeiaName}" was created successfully.
+              </p>
+              <p className="text-sm text-gray-600 mt-2">
+                Do you want to add it directly to an activity?
+              </p>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowFinishModal(false);
+                  navigate("/leias");
+                }}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                No, go to LEIAs
+              </button>
+              <button
+                onClick={() => {
+                  setShowFinishModal(false);
+                  setShowAddToActivityModal(true);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Yes, add now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de generación de problemas con IA */}
       {showGenerateModal && (
