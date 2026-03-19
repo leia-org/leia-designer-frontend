@@ -51,6 +51,10 @@ interface NavigationState {
 
 type WizardStep = 1 | 2 | 3;
 
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_DETAILS =
+  "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+
 const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
 const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
   "Mantén un tono profesional y colaborativo. Debe guiar al estudiante con preguntas de aclaración sobre catálogo, préstamos, reservas y multas.";
