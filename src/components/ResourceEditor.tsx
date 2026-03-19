@@ -10,6 +10,59 @@ type HighlightSegment = {
   highlight: boolean;
 };
 
+type ProblemEditorData = {
+  solutionFormat?: unknown;
+  solution?: unknown;
+};
+
+type MermaidParser = {
+  initialize: (config: { startOnLoad: boolean }) => void;
+  parse: (text: string) => Promise<unknown>;
+};
+
+let mermaidParserPromise: Promise<MermaidParser> | null = null;
+
+const loadMermaidParser = async (): Promise<MermaidParser> => {
+  if (!mermaidParserPromise) {
+    mermaidParserPromise = import("mermaid").then(({ default: mermaid }) => {
+      mermaid.initialize({ startOnLoad: false });
+      return mermaid as MermaidParser;
+    });
+  }
+
+  return mermaidParserPromise;
+};
+
+const extractMermaidSolution = (data: unknown): string | null => {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const problemData = data as ProblemEditorData;
+  if (problemData.solutionFormat !== "mermaid") {
+    return null;
+  }
+
+  if (typeof problemData.solution !== "string") {
+    return null;
+  }
+
+  const trimmedSolution = problemData.solution.trim();
+  return trimmedSolution.length > 0 ? trimmedSolution : null;
+};
+
+const getMermaidErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  return "Invalid Mermaid syntax";
+};
+
 const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
   const segments: HighlightSegment[] = [];
   if (!text) {
@@ -173,10 +226,26 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const [jsonContent, setJsonContent] = useState("");
   const [visualData, setVisualData] = useState<any>({});
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [mermaidError, setMermaidError] = useState<string | null>(null);
   const processOptions = [
     { value: "requirements-elicitation", label: "Requirements Elicitation" },
     { value: "game", label: "Game" },
   ];
+
+  const validateMermaidSyntax = async (data: unknown): Promise<string | null> => {
+    const mermaidSolution = extractMermaidSolution(data);
+    if (!mermaidSolution) {
+      return null;
+    }
+
+    try {
+      const mermaid = await loadMermaidParser();
+      await mermaid.parse(mermaidSolution);
+      return null;
+    } catch (error: unknown) {
+      return getMermaidErrorMessage(error);
+    }
+  };
 
   // Inicializar datos
   useEffect(() => {
@@ -234,6 +303,30 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     }
   }, [activeTab, visualData]);
 
+  useEffect(() => {
+    if (resourceType !== "problem") {
+      setMermaidError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      void validateMermaidSyntax({
+        solutionFormat: visualData?.solutionFormat,
+        solution: visualData?.solution,
+      }).then((error) => {
+        if (!cancelled) {
+          setMermaidError(error);
+        }
+      });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [resourceType, visualData?.solutionFormat, visualData?.solution]);
+
   const handleVisualChange = (field: string, value: any) => {
     setVisualData((prev: any) => ({
       ...prev,
@@ -252,21 +345,33 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
       }
     } catch (err) {
       setJsonError("Invalid JSON format");
+      setMermaidError(null);
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    let dataToSave: unknown = visualData;
+
     if (activeTab === "code") {
       try {
         const parsed = JSON.parse(jsonContent);
-        onSave(parsed, currentApiVersion);
+        dataToSave = parsed;
       } catch (err) {
         setJsonError("Cannot save: Invalid JSON format");
         return;
       }
-    } else {
-      onSave(visualData, currentApiVersion);
     }
+
+    if (resourceType === "problem") {
+      const validationError = await validateMermaidSyntax(dataToSave);
+      setMermaidError(validationError);
+
+      if (validationError) {
+        return;
+      }
+    }
+
+    onSave(dataToSave, currentApiVersion);
   };
 
   const renderPersonaForm = () => (
@@ -469,6 +574,11 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Expected solution..."
         />
+        {visualData.solutionFormat === "mermaid" && mermaidError && (
+          <div className="mt-2 text-sm text-red-600 whitespace-pre-wrap">
+            {mermaidError}
+          </div>
+        )}
       </div>
 
       <div>
@@ -673,6 +783,14 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             {jsonError && (
               <div className="mt-2 text-sm text-red-600">{jsonError}</div>
             )}
+            {!jsonError &&
+              resourceType === "problem" &&
+              mermaidError &&
+              extractMermaidSolution(visualData) && (
+                <div className="mt-2 text-sm text-red-600 whitespace-pre-wrap">
+                  {mermaidError}
+                </div>
+              )}
           </Tabs.Content>
         </Tabs.Root>
 
@@ -686,9 +804,9 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           </button>
           <button
             onClick={handleSave}
-            disabled={jsonError !== null}
+            disabled={jsonError !== null || mermaidError !== null}
             className={`px-4 py-2 rounded-lg transition-colors text-sm ${
-              jsonError
+              jsonError || mermaidError
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
