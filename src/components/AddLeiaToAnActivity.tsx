@@ -5,6 +5,8 @@ import type { Experiment } from "../models/Experiment";
 import type { Leia } from "../models/Leia";
 import api from "../lib/axios";
 
+type Activity = Experiment;
+
 type SelectOption = {
   value: string;
   label: string;
@@ -26,59 +28,59 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [draftExperiments, setDraftExperiments] = useState<Experiment[] | null>(
+  const [draftActivities, setDraftActivities] = useState<Activity[] | null>(
     null,
   );
-  const [loadingDraftExperiments, setLoadingDraftExperiments] = useState(false);
-  const [errorLoadingDraftExperiments, setErrorLoadingDraftExperiments] =
+  const [loadingDraftActivities, setLoadingDraftActivities] = useState(false);
+  const [errorLoadingDraftActivities, setErrorLoadingDraftActivities] =
     useState<string | null>(null);
-  const [selectedDraftExperimentId, setSelectedDraftExperimentId] = useState<
+  const [selectedDraftActivityId, setSelectedDraftActivityId] = useState<
     string | null
   >(null);
-  const [creatingNewExperiment, setCreatingNewExperiment] = useState(false);
-  const [addingLeiaToExperiment, setAddingLeiaToExperiment] = useState(false);
+  const [creatingNewActivity, setCreatingNewActivity] = useState(false);
+  const [addingLeiaToActivity, setAddingLeiaToActivity] = useState(false);
   const [pendingNewName, setPendingNewName] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const loadDraftExperiments = async () => {
-    setErrorLoadingDraftExperiments(null);
+  const loadDraftActivities = async () => {
+    setErrorLoadingDraftActivities(null);
     try {
-      setLoadingDraftExperiments(true);
+      setLoadingDraftActivities(true);
       const response = await api.get<Experiment[]>("/api/v1/experiments/user/me", {
         params: { visibility: "private" },
       });
-      setDraftExperiments(response.data || []);
+      setDraftActivities(response.data || []);
     } catch {
-      setErrorLoadingDraftExperiments("Could not load draft activities");
+      setErrorLoadingDraftActivities("Could not load draft activities");
     } finally {
-      setLoadingDraftExperiments(false);
+      setLoadingDraftActivities(false);
     }
   };
 
   useEffect(() => {
     if (!isOpen) return;
-    setSelectedDraftExperimentId(null);
+    setSelectedDraftActivityId(null);
     setPendingNewName(null);
     setActionError(null);
-    loadDraftExperiments();
+    loadDraftActivities();
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   const options: SelectOption[] =
-    draftExperiments?.map((experiment) => ({
-      value: experiment.id,
-      label: experiment.name,
+    draftActivities?.map((activity) => ({
+      value: activity.id,
+      label: activity.name,
     })) || [];
 
   // Valor mostrado en el select
   const selectedOption: SelectOption | null = pendingNewName
     ? { value: `${NEW_OPTION_PREFIX}${pendingNewName}`, label: pendingNewName }
-    : selectedDraftExperimentId
+    : selectedDraftActivityId
     ? {
-        value: selectedDraftExperimentId,
+        value: selectedDraftActivityId,
         label:
-          draftExperiments?.find((exp) => exp.id === selectedDraftExperimentId)
+          draftActivities?.find((activity) => activity.id === selectedDraftActivityId)
             ?.name || "",
       }
     : null;
@@ -86,46 +88,46 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   const handleChange = (newValue: SingleValue<SelectOption>) => {
     if (!newValue) {
       setPendingNewName(null);
-      setSelectedDraftExperimentId(null);
+      setSelectedDraftActivityId(null);
       return;
     }
     // Si es una opción nueva (creada con el prefijo), no propagamos al padre aún
     if (newValue.value.startsWith(NEW_OPTION_PREFIX)) {
       setPendingNewName(newValue.label);
-      setSelectedDraftExperimentId(null);
+      setSelectedDraftActivityId(null);
     } else {
       setPendingNewName(null);
-      setSelectedDraftExperimentId(newValue.value);
+      setSelectedDraftActivityId(newValue.value);
     }
   };
 
   const handleCreateOption = (inputValue: string) => {
     // Solo guardamos el nombre, NO llamamos a onCreateExperiment todavía
     setPendingNewName(inputValue);
-    setSelectedDraftExperimentId(null);
+    setSelectedDraftActivityId(null);
   };
 
-  const handleAddLeiaToExperiment = async (experimentId: string) => {
+  const handleAddLeiaToActivity = async (activityId: string) => {
     if (!selectedLeia) return;
-    await api.post(`/api/v1/experiments/${experimentId}/leias`, {
+    await api.post(`/api/v1/experiments/${activityId}/leias`, {
       leia: selectedLeia.id,
     });
   };
 
-  const handleCreateExperiment = async (name: string) => {
+  const handleCreateActivity = async (name: string) => {
     const trimmedName = name.trim();
     if (!trimmedName) return null;
 
-    setCreatingNewExperiment(true);
+    setCreatingNewActivity(true);
     try {
       const response = await api.post<Experiment>("/api/v1/experiments", {
         name: trimmedName,
       });
-      setDraftExperiments((prev) => [...(prev || []), response.data]);
-      setSelectedDraftExperimentId(response.data.id);
+      setDraftActivities((prev) => [...(prev || []), response.data]);
+      setSelectedDraftActivityId(response.data.id);
       return response.data.id;
     } finally {
-      setCreatingNewExperiment(false);
+      setCreatingNewActivity(false);
     }
   };
 
@@ -134,25 +136,25 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
     setActionError(null);
 
     try {
-      setAddingLeiaToExperiment(true);
-      let targetExperimentId = selectedDraftExperimentId;
+      setAddingLeiaToActivity(true);
+      let targetActivityId = selectedDraftActivityId;
 
-      if (!targetExperimentId && pendingNewName) {
-        targetExperimentId = await handleCreateExperiment(pendingNewName);
+      if (!targetActivityId && pendingNewName) {
+        targetActivityId = await handleCreateActivity(pendingNewName);
       }
 
-      if (!targetExperimentId) {
+      if (!targetActivityId) {
         setActionError("Select or create an activity first");
         return;
       }
 
-      await handleAddLeiaToExperiment(targetExperimentId);
+      await handleAddLeiaToActivity(targetActivityId);
       handleClose();
       onSuccess?.();
     } catch {
       setActionError("Could not add LEIA to activity");
     } finally {
-      setAddingLeiaToExperiment(false);
+      setAddingLeiaToActivity(false);
     }
   };
 
@@ -162,10 +164,10 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   };
 
   const canConfirm =
-    (!!selectedDraftExperimentId || !!pendingNewName) &&
+    (!!selectedDraftActivityId || !!pendingNewName) &&
     !!selectedLeia &&
-    !addingLeiaToExperiment &&
-    !creatingNewExperiment;
+    !addingLeiaToActivity &&
+    !creatingNewActivity;
 
   return (
     <div
@@ -185,15 +187,15 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
               Select an Activity
             </label>
 
-            {errorLoadingDraftExperiments ? (
+            {errorLoadingDraftActivities ? (
               <div className="space-y-3">
                 <div className="border border-red-300 rounded-md px-3 py-2 bg-red-50">
                   <p className="text-sm text-red-600">
-                    {errorLoadingDraftExperiments}
+                    {errorLoadingDraftActivities}
                   </p>
                 </div>
                 <button
-                  onClick={loadDraftExperiments}
+                  onClick={loadDraftActivities}
                   className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                 >
                   Try Again
@@ -206,13 +208,13 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
                 onCreateOption={handleCreateOption}
                 options={options}
                 placeholder={
-                  loadingDraftExperiments
+                  loadingDraftActivities
                     ? "Loading activities..."
                     : "Choose or create an activity..."
                 }
                 isClearable
-                isDisabled={creatingNewExperiment || loadingDraftExperiments}
-                isLoading={creatingNewExperiment || loadingDraftExperiments}
+                isDisabled={creatingNewActivity || loadingDraftActivities}
+                isLoading={creatingNewActivity || loadingDraftActivities}
                 formatCreateLabel={(inputValue) =>
                   `Create new activity: "${inputValue}"`
                 }
@@ -234,7 +236,7 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
               />
             )}
 
-            {creatingNewExperiment && (
+            {creatingNewActivity && (
               <div className="mt-2 flex items-center text-sm text-blue-600">
                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
                 Creating new activity...
@@ -246,7 +248,7 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
             )}
 
             {/* Indicador visual de que es una actividad nueva pendiente */}
-            {pendingNewName && !creatingNewExperiment && (
+            {pendingNewName && !creatingNewActivity && (
               <p className="mt-2 text-sm text-blue-600">
                 New activity "{pendingNewName}" will be created on confirm.
               </p>
@@ -265,10 +267,10 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
               disabled={!canConfirm}
               className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
-              {addingLeiaToExperiment || creatingNewExperiment ? (
+              {addingLeiaToActivity || creatingNewActivity ? (
                 <>
                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                  {creatingNewExperiment ? "Creating..." : "Adding..."}
+                  {creatingNewActivity ? "Creating..." : "Adding..."}
                 </>
               ) : (
                 "Add to Activity"
