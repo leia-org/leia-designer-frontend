@@ -57,6 +57,14 @@ interface NavigationState {
 
 type WizardStep = 1 | 2 | 3;
 
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_DETAILS =
+  "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+
+const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
+const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
+  "Mantén un tono profesional y colaborativo. Debe guiar al estudiante con preguntas de aclaración sobre catálogo, préstamos, reservas y multas.";
+
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,10 +115,10 @@ export const CreateLeia: React.FC = () => {
 
   // Estados para filtros de process
   const [problemProcess, setProblemProcess] = useState<
-    "all" | "requirements-elicitation" | "game"
+    "all" | "requirements-elicitation" | "game" | "other"
   >("all");
   const [behaviourProcess, setBehaviourProcess] = useState<
-    "all" | "requirements-elicitation" | "game"
+    "all" | "requirements-elicitation" | "game" | "other"
   >("all");
 
   // Estado para controlar la visibilidad/publicación de la LEIA
@@ -148,10 +156,26 @@ export const CreateLeia: React.FC = () => {
 
   // Estados para generación de problemas con IA
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [generateSubject, setGenerateSubject] = useState("");
-  const [generateDetails, setGenerateDetails] = useState("");
+  const [generateSubject, setGenerateSubject] = useState(
+    DEFAULT_PROBLEM_GENERATION_SUBJECT,
+  );
+  const [generateDetails, setGenerateDetails] = useState(
+    DEFAULT_PROBLEM_GENERATION_DETAILS,
+  );
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [showGenerateBehaviourModal, setShowGenerateBehaviourModal] =
+    useState(false);
+  const [generateBehaviourSubject, setGenerateBehaviourSubject] = useState(
+    DEFAULT_BEHAVIOUR_GENERATION_SUBJECT,
+  );
+  const [generateBehaviourDetails, setGenerateBehaviourDetails] = useState(
+    DEFAULT_BEHAVIOUR_GENERATION_DETAILS,
+  );
+  const [isGeneratingBehaviour, setIsGeneratingBehaviour] = useState(false);
+  const [generateBehaviourError, setGenerateBehaviourError] = useState<
+    string | null
+  >(null);
 
   // Modal cuando se pulsa Finish
   const [showFinishModal, setShowFinishModal] = useState(false);
@@ -251,7 +275,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadProblems = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility };
@@ -269,7 +293,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadBehaviours = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility, process };
@@ -325,14 +349,14 @@ export const CreateLeia: React.FC = () => {
 
   // Funciones para manejar cambios de process
   const handleProblemProcessChange = (
-    process: "all" | "requirements-elicitation" | "game",
+    process: "all" | "requirements-elicitation" | "game" | "other",
   ) => {
     setProblemProcess(process);
     loadProblems(problemVisibility, process); // Solo recargar problems
   };
 
   const handleBehaviourProcessChange = (
-    process: "all" | "requirements-elicitation" | "game",
+    process: "all" | "requirements-elicitation" | "game" | "other",
   ) => {
     setBehaviourProcess(process);
     loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
@@ -361,8 +385,8 @@ export const CreateLeia: React.FC = () => {
 
   // Componente para selector de process
   const ProcessSelector: React.FC<{
-    value: "all" | "requirements-elicitation" | "game";
-    onChange: (value: "all" | "requirements-elicitation" | "game") => void;
+    value: "all" | "requirements-elicitation" | "game" | "other";
+    onChange: (value: "all" | "requirements-elicitation" | "game" | "other") => void;
   }> = ({ value, onChange }) => (
     <div className="flex flex-col items-center">
       <label className="text-xs text-gray-600 mb-1">Process</label>
@@ -370,7 +394,7 @@ export const CreateLeia: React.FC = () => {
         value={value}
         onChange={(e) =>
           onChange(
-            e.target.value as "all" | "requirements-elicitation" | "game",
+            e.target.value as "all" | "requirements-elicitation" | "game" | "other",
           )
         }
         className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[60px] max-w-[140px]"
@@ -378,6 +402,7 @@ export const CreateLeia: React.FC = () => {
         <option value="all">All</option>
         <option value="requirements-elicitation">Req. Elicitation</option>
         <option value="game">Game</option>
+        <option value="other">Other</option>
       </select>
     </div>
   );
@@ -493,6 +518,39 @@ export const CreateLeia: React.FC = () => {
     setDeleteError(null);
   };
 
+const openGenerateProblemModal = () => {
+    if (!leiaConfig.problem) return;
+    setGenerateSubject(DEFAULT_PROBLEM_GENERATION_SUBJECT);
+    setGenerateDetails(DEFAULT_PROBLEM_GENERATION_DETAILS);
+    setGenerateError(null);
+    setShowGenerateModal(true);
+  };
+
+  const closeGenerateProblemModal = () => {
+    setShowGenerateModal(false);
+    setGenerateSubject(DEFAULT_PROBLEM_GENERATION_SUBJECT);
+    setGenerateDetails(DEFAULT_PROBLEM_GENERATION_DETAILS);
+    setGenerateError(null);
+  };
+
+  const openGenerateBehaviourModal = () => {
+    if (!leiaConfig.behaviour) {
+      return;
+    }
+    setGenerateBehaviourSubject(DEFAULT_BEHAVIOUR_GENERATION_SUBJECT);
+    setGenerateBehaviourDetails(DEFAULT_BEHAVIOUR_GENERATION_DETAILS);
+    setGenerateBehaviourError(null);
+    setShowGenerateBehaviourModal(true);
+  };
+
+  const closeGenerateBehaviourModal = () => {
+    setShowGenerateBehaviourModal(false);
+    setGenerateBehaviourSubject(DEFAULT_BEHAVIOUR_GENERATION_SUBJECT);
+    setGenerateBehaviourDetails(DEFAULT_BEHAVIOUR_GENERATION_DETAILS);
+    setGenerateBehaviourError(null);
+  };
+ 
+
   // Función para generar un problema similar con IA
   const handleGenerateProblem = async () => {
     if (!generateSubject.trim() || !leiaConfig.problem) {
@@ -530,16 +588,76 @@ export const CreateLeia: React.FC = () => {
       }));
 
       // Cerrar modal y limpiar
-      setShowGenerateModal(false);
-      setGenerateSubject("");
-      setGenerateDetails("");
+      closeGenerateProblemModal();
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
       setGenerateError(
-        err.response?.data?.message || "Failed to generate problem",
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Failed to generate problem",
       );
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Función para generar un behaviour similar con IA
+  const handleGenerateBehaviour = async () => {
+    if (!generateBehaviourSubject.trim() || !leiaConfig.behaviour) {
+      return;
+    }
+
+    setIsGeneratingBehaviour(true);
+    setGenerateBehaviourError(null);
+
+    try {
+      const response = await api.post("/api/v1/runner/behaviours/generate", {
+        subject: generateBehaviourSubject.trim(),
+        additionalDetails: generateBehaviourDetails.trim() || undefined,
+        exampleBehaviour: leiaConfig.behaviour,
+      });
+
+      const generatedBehaviourSpec = (response.data?.spec ||
+        response.data) as Behaviour["spec"];
+
+      const generatedBehaviour: Behaviour = {
+        apiVersion: leiaConfig.behaviour.apiVersion || "v1",
+        metadata: {
+          name: generateBehaviourSubject
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "-"),
+          version: "1.0.0",
+        },
+        spec: generatedBehaviourSpec,
+        id: `generated-behaviour-${Date.now()}`,
+        edited: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isPublished: false,
+        user: currentUser!,
+      };
+
+      setBehaviours((prev) => [generatedBehaviour, ...prev]);
+      setLeiaConfig((prev) => ({
+        ...prev,
+        behaviour: generatedBehaviour,
+      }));
+
+      closeGenerateBehaviourModal();
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
+      setGenerateBehaviourError(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Failed to generate behaviour",
+      );
+    } finally {
+      setIsGeneratingBehaviour(false);
     }
   };
 
@@ -870,6 +988,14 @@ export const CreateLeia: React.FC = () => {
               onDelete={handleDeleteResource}
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
+                  <button
+                    onClick={openGenerateBehaviourModal}
+                    disabled={!leiaConfig.behaviour}
+                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Generate similar behaviour with AI"
+                  >
+                    <SparklesIcon className="w-5 h-5" />
+                  </button>
                   <VisibilitySelector
                     value={behaviourVisibility}
                     onChange={handleBehaviourVisibilityChange}
@@ -895,7 +1021,7 @@ export const CreateLeia: React.FC = () => {
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
                   <button
-                    onClick={() => setShowGenerateModal(true)}
+                    onClick={openGenerateProblemModal}
                     disabled={!leiaConfig.problem}
                     className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     title="Generate similar problem with AI"
@@ -1020,6 +1146,13 @@ export const CreateLeia: React.FC = () => {
                         </button>
                       )}
                       <button
+                        onClick={openGenerateBehaviourModal}
+                        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
+                        title="Generate similar with AI"
+                      >
+                        <SparklesIcon className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() =>
                           setEditingResource({
                             resource: "behaviour",
@@ -1119,7 +1252,7 @@ export const CreateLeia: React.FC = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => setShowGenerateModal(true)}
+                    onClick={openGenerateProblemModal}
                     className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
                     title="Generate similar with AI"
                   >
@@ -2177,6 +2310,101 @@ export const CreateLeia: React.FC = () => {
         error={deleteError}
       />
 
+      {/* Modal de generación de behaviours con IA */}
+      {showGenerateBehaviourModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <SparklesIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Generate Similar Behaviour
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Using "{leiaConfig.behaviour?.metadata.name}" as template
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Behaviour Subject *
+                  </label>
+                  <input
+                    type="text"
+                    value={generateBehaviourSubject}
+                    onChange={(e) => setGenerateBehaviourSubject(e.target.value)}
+                    placeholder="e.g., Senior Librarian"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Additional Details (optional)
+                  </label>
+                  <textarea
+                    value={generateBehaviourDetails}
+                    onChange={(e) => setGenerateBehaviourDetails(e.target.value)}
+                    placeholder="e.g., Ask clarifying questions and keep a constructive interview tone."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                {generateBehaviourError && (
+                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+                    {generateBehaviourError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={closeGenerateBehaviourModal}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateBehaviour}
+                disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isGeneratingBehaviour ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  "Generate"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AddLeiaToAnActivity
         isOpen={showAddToActivityModal}
         selectedLeia={createdLeiaResource}
@@ -2227,6 +2455,101 @@ export const CreateLeia: React.FC = () => {
         </div>
       )}
 
+      {/* Modal de generación de behaviours con IA */}
+      {showGenerateBehaviourModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <SparklesIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Generate Similar Behaviour
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Using "{leiaConfig.behaviour?.metadata.name}" as template
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Behaviour Subject *
+                  </label>
+                  <input
+                    type="text"
+                    value={generateBehaviourSubject}
+                    onChange={(e) => setGenerateBehaviourSubject(e.target.value)}
+                    placeholder="e.g., Senior Librarian"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Additional Details (optional)
+                  </label>
+                  <textarea
+                    value={generateBehaviourDetails}
+                    onChange={(e) => setGenerateBehaviourDetails(e.target.value)}
+                    placeholder="e.g., Ask clarifying questions and keep a constructive interview tone."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                {generateBehaviourError && (
+                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+                    {generateBehaviourError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={closeGenerateBehaviourModal}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateBehaviour}
+                disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isGeneratingBehaviour ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  "Generate"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de generación de problemas con IA */}
       {showGenerateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -2245,6 +2568,13 @@ export const CreateLeia: React.FC = () => {
                   </p>
                 </div>
               </div>
+              <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                <p className="text-xs text-purple-800 leading-relaxed">
+                  If present in the base template, the generator will also adapt{" "}
+                  <code>evaluationPrompt</code>, <code>extends</code>, and{" "}
+                  <code>overrides</code>.
+                </p>
+              </div>
 
               <div className="space-y-4">
                 <div>
@@ -2255,7 +2585,7 @@ export const CreateLeia: React.FC = () => {
                     type="text"
                     value={generateSubject}
                     onChange={(e) => setGenerateSubject(e.target.value)}
-                    placeholder="e.g., Library Management System"
+                    placeholder="p. ej., Sistema de biblioteca"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
@@ -2267,7 +2597,7 @@ export const CreateLeia: React.FC = () => {
                   <textarea
                     value={generateDetails}
                     onChange={(e) => setGenerateDetails(e.target.value)}
-                    placeholder="e.g., Focus on catalog search, lending, and reservations. Include member accounts and overdue notifications."
+                    placeholder="p. ej., catálogo, préstamos, reservas, cuentas de socios y notificaciones de vencimiento."
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
                   />
@@ -2283,12 +2613,7 @@ export const CreateLeia: React.FC = () => {
 
             <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
               <button
-                onClick={() => {
-                  setShowGenerateModal(false);
-                  setGenerateSubject("");
-                  setGenerateDetails("");
-                  setGenerateError(null);
-                }}
+                onClick={closeGenerateProblemModal}
                 className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel

@@ -7,7 +7,11 @@ import type { User } from "../models/User";
 // Ensure YAML language support is loaded
 loader.init().then((monaco) => {
   // Register YAML language if not already registered
-  if (!monaco.languages.getLanguages().find((lang) => lang.id === "yaml")) {
+  if (
+    !monaco.languages
+      .getLanguages()
+      .find((lang: { id: string }) => lang.id === "yaml")
+  ) {
     monaco.languages.register({ id: "yaml" });
   }
 });
@@ -192,7 +196,7 @@ export default function LeiaCard({
                 if (
                   !monaco.languages
                     .getLanguages()
-                    .find((lang) => lang.id === "yaml")
+                    .find((lang: { id: string }) => lang.id === "yaml")
                 ) {
                   monaco.languages.register({ id: "yaml" });
                 }
