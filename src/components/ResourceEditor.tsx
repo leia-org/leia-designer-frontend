@@ -230,6 +230,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const processOptions = [
     { value: "requirements-elicitation", label: "Requirements Elicitation" },
     { value: "game", label: "Game" },
+    { value: "other", label: "Other" },
   ];
 
   const validateMermaidSyntax = async (data: unknown): Promise<string | null> => {
@@ -496,27 +497,44 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const renderProcessCheckboxes = () => (
     <div className="space-y-2">
-      {processOptions.map(({ value, label }) => (
-        <label className="flex items-center" key={value}>
-          <input
-            type="checkbox"
-            checked={visualData.process?.includes(value) || false}
-            onChange={(e) => {
-              const newProcess = visualData.process || [];
-              if (e.target.checked) {
-                handleVisualChange("process", [...newProcess, value]);
-              } else {
-                handleVisualChange(
-                  "process",
-                  newProcess.filter((p: string) => p !== value),
-                );
-              }
-            }}
-            className="mr-2"
-          />
-          {label}
-        </label>
-      ))}
+      {processOptions.map(({ value, label }) => {
+        const currentProcess: string[] = visualData.process || [];
+        const isChecked = currentProcess.includes(value);
+        const hasOther = currentProcess.includes("other");
+        const disabled = !isChecked && (
+          (value === "other" && currentProcess.length > 0) ||
+          (value !== "other" && hasOther)
+        );
+        return (
+          <label
+            className={`flex items-center ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+            key={value}
+          >
+            <input
+              type="checkbox"
+              disabled={disabled}
+              checked={isChecked}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  // "other" es exclusivo; el resto se pueden combinar
+                  if (value === "other") {
+                    handleVisualChange("process", ["other"]);
+                  } else {
+                    handleVisualChange("process", [...currentProcess, value]);
+                  }
+                } else {
+                  handleVisualChange(
+                    "process",
+                    currentProcess.filter((p: string) => p !== value),
+                  );
+                }
+              }}
+              className="mr-2"
+            />
+            {label}
+          </label>
+        );
+      })}
     </div>
   );
 

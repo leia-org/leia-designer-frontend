@@ -109,10 +109,10 @@ export const CreateLeia: React.FC = () => {
 
   // Estados para filtros de process
   const [problemProcess, setProblemProcess] = useState<
-    "all" | "requirements-elicitation" | "game"
+    "all" | "requirements-elicitation" | "game" | "other"
   >("all");
   const [behaviourProcess, setBehaviourProcess] = useState<
-    "all" | "requirements-elicitation" | "game"
+    "all" | "requirements-elicitation" | "game" | "other"
   >("all");
 
   // Estado para controlar la visibilidad/publicación de la LEIA
@@ -260,7 +260,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadProblems = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility };
@@ -278,7 +278,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadBehaviours = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility, process };
@@ -334,14 +334,14 @@ export const CreateLeia: React.FC = () => {
 
   // Funciones para manejar cambios de process
   const handleProblemProcessChange = (
-    process: "all" | "requirements-elicitation" | "game",
+    process: "all" | "requirements-elicitation" | "game" | "other",
   ) => {
     setProblemProcess(process);
     loadProblems(problemVisibility, process); // Solo recargar problems
   };
 
   const handleBehaviourProcessChange = (
-    process: "all" | "requirements-elicitation" | "game",
+    process: "all" | "requirements-elicitation" | "game" | "other",
   ) => {
     setBehaviourProcess(process);
     loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
@@ -370,8 +370,8 @@ export const CreateLeia: React.FC = () => {
 
   // Componente para selector de process
   const ProcessSelector: React.FC<{
-    value: "all" | "requirements-elicitation" | "game";
-    onChange: (value: "all" | "requirements-elicitation" | "game") => void;
+    value: "all" | "requirements-elicitation" | "game" | "other";
+    onChange: (value: "all" | "requirements-elicitation" | "game" | "other") => void;
   }> = ({ value, onChange }) => (
     <div className="flex flex-col items-center">
       <label className="text-xs text-gray-600 mb-1">Process</label>
@@ -379,7 +379,7 @@ export const CreateLeia: React.FC = () => {
         value={value}
         onChange={(e) =>
           onChange(
-            e.target.value as "all" | "requirements-elicitation" | "game",
+            e.target.value as "all" | "requirements-elicitation" | "game" | "other",
           )
         }
         className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[60px] max-w-[140px]"
@@ -387,6 +387,7 @@ export const CreateLeia: React.FC = () => {
         <option value="all">All</option>
         <option value="requirements-elicitation">Req. Elicitation</option>
         <option value="game">Game</option>
+        <option value="other">Other</option>
       </select>
     </div>
   );
