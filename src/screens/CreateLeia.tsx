@@ -11,8 +11,14 @@ import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
+import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
-import type { Persona, Behaviour, Problem } from "../models/Leia";
+import type {
+  Persona,
+  Behaviour,
+  Problem,
+  Leia as LeiaResource,
+} from "../models/Leia";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
 
@@ -170,6 +176,15 @@ export const CreateLeia: React.FC = () => {
   const [generateBehaviourError, setGenerateBehaviourError] = useState<
     string | null
   >(null);
+
+  // Modal cuando se pulsa Finish
+  const [showFinishModal, setShowFinishModal] = useState(false);
+  const [createdLeiaName, setCreatedLeiaName] = useState("");
+
+  // Estados para opcionalmente añadir la LEIA a una Activity
+  const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
+  const [createdLeiaResource, setCreatedLeiaResource] =
+    useState<LeiaResource | null>(null);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -792,7 +807,11 @@ const openGenerateProblemModal = () => {
           currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
         const response = await api.post(`/api/v1/leias${publishParam}`, leia);
         console.log("LEIA created successfully:", response.data);
-        navigate("/leias");
+        setCreatedLeiaName(
+          response.data?.metadata?.name || customizations.leia.name || "LEIA",
+        );
+        setCreatedLeiaResource(response.data as LeiaResource);
+        setShowFinishModal(true);
       } catch (error) {
         console.error("Error creating LEIA:", error);
         setError("Failed to create LEIA");
@@ -2290,6 +2309,151 @@ const openGenerateProblemModal = () => {
         isDeleting={isDeleting}
         error={deleteError}
       />
+
+      {/* Modal de generación de behaviours con IA */}
+      {showGenerateBehaviourModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <SparklesIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Generate Similar Behaviour
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Using "{leiaConfig.behaviour?.metadata.name}" as template
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Behaviour Subject *
+                  </label>
+                  <input
+                    type="text"
+                    value={generateBehaviourSubject}
+                    onChange={(e) => setGenerateBehaviourSubject(e.target.value)}
+                    placeholder="e.g., Senior Librarian"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Additional Details (optional)
+                  </label>
+                  <textarea
+                    value={generateBehaviourDetails}
+                    onChange={(e) => setGenerateBehaviourDetails(e.target.value)}
+                    placeholder="e.g., Ask clarifying questions and keep a constructive interview tone."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                {generateBehaviourError && (
+                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+                    {generateBehaviourError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={closeGenerateBehaviourModal}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateBehaviour}
+                disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isGeneratingBehaviour ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  "Generate"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AddLeiaToAnActivity
+        isOpen={showAddToActivityModal}
+        selectedLeia={createdLeiaResource}
+        onClose={() => {setShowAddToActivityModal(false); navigate("/leias")}}
+        onSuccess={() => {
+          setShowAddToActivityModal(false);
+          navigate("/leias");
+        }}
+      />
+
+      {/* Modal mostrado despues de crear la LEIA*/}
+      {showFinishModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                LEIA created successfully
+              </h3>
+              <p className="text-sm text-gray-600">
+                "{createdLeiaName}" was created successfully.
+              </p>
+              <p className="text-sm text-gray-600 mt-2">
+                Do you want to add it directly to an activity?
+              </p>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowFinishModal(false);
+                  navigate("/leias");
+                }}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                No, go to LEIAs
+              </button>
+              <button
+                onClick={() => {
+                  setShowFinishModal(false);
+                  setShowAddToActivityModal(true);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Yes, add now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de generación de behaviours con IA */}
       {showGenerateBehaviourModal && (
