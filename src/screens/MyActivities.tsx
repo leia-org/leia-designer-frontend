@@ -224,7 +224,8 @@ export const MyActivities: React.FC = () => {
         };
         if (
           axiosError.response?.status === 409 ||
-          axiosError.response?.status === 404
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
         ) {
           errorMessage = axiosError.response.data?.message || errorMessage;
         }
