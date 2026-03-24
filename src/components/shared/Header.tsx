@@ -109,7 +109,8 @@ export const Header: React.FC<HeaderProps> = ({
           <img
             src="/logo/leia_puzzle_clear.png"
             alt="LEIA Logo"
-            className="h-10 w-auto"
+            className="h-10 w-auto cursor-pointer"
+            onClick={() => navigate("/")}
           />
           <div className="flex items-baseline gap-4">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
