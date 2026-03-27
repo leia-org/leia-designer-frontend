@@ -1392,7 +1392,7 @@ export const MyActivities: React.FC = () => {
                             )}
                             {experiment.isPublished &&<button 
                               onClick={() => handleFastReplication(experiment.id)}
-                              className="h-8 px-3 text-xs font-medium rounded-md bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 transition-colors duration-200 flex items-center gap-1"
+                              className="h-8 px-3 text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 flex items-center gap-1"
                               title="Replicate activity"
                             >
                               Replicate
