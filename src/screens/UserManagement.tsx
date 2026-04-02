@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect} from "react";
 import {
   UsersIcon,
   UserPlusIcon,
@@ -17,6 +17,7 @@ interface UserResponse {
   id: string;
   email: string;
   role: "admin" | "instructor" | "advanced";
+  useSystemApiKey: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +40,7 @@ export const UserManagement = () => {
     role: "instructor" as "admin" | "instructor" | "advanced",
     password: "",
     confirmPassword: "",
+    useSystemApiKey: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -147,6 +149,7 @@ export const UserManagement = () => {
           email: formData.email.trim(),
           role: formData.role,
           password: formData.password || undefined,
+          useSystemApiKey: formData.useSystemApiKey,
         });
         setSubmitSuccess(true);
         setSubmitMessage("User updated successfully!");
@@ -155,6 +158,7 @@ export const UserManagement = () => {
           email: formData.email.trim(),
           role: formData.role,
           password: formData.password,
+          useSystemApiKey: formData.useSystemApiKey,
         });
         setSubmitSuccess(true);
         setSubmitMessage("User created successfully!");
@@ -248,6 +252,7 @@ export const UserManagement = () => {
       role: user.role,
       password: "",
       confirmPassword: "",
+      useSystemApiKey: user.useSystemApiKey,
     });
     setFormErrors({});
     setSubmitMessage("");
@@ -262,6 +267,8 @@ export const UserManagement = () => {
         role: editingUser.role,
         password: "",
         confirmPassword: "",
+        useSystemApiKey: editingUser.useSystemApiKey,
+
       });
     } else {
       setFormData({
@@ -269,6 +276,7 @@ export const UserManagement = () => {
         role: "instructor",
         password: "",
         confirmPassword: "",
+        useSystemApiKey: false,
       });
     }
     setFormErrors({});
@@ -350,6 +358,9 @@ export const UserManagement = () => {
                       Creation Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      System API Key
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -383,6 +394,17 @@ export const UserManagement = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(user.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {user.useSystemApiKey ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            No
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -543,6 +565,7 @@ export const UserManagement = () => {
                         </button>
                       </div>
                     </div>
+
                     {formErrors.password && (
                       <p className="mt-1 text-sm text-red-600">
                         {formErrors.password}
@@ -599,6 +622,23 @@ export const UserManagement = () => {
                         {formErrors.confirmPassword}
                       </p>
                     )}
+                    <div className="py-3 mb-4 flex items-center">
+                    <input
+                      type="checkbox"
+                      id="useSystemApiKey"
+                      checked={formData.useSystemApiKey}
+                      onChange={(e) =>
+                        setFormData({ ...formData, useSystemApiKey: e.target.checked })
+                      }
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label
+                      htmlFor="useSystemApiKey"
+                      className="ml-2 block text-sm text-gray-700"
+                    >
+                      Use System API Key
+                    </label>
+                  </div>
                   </div>
 
                   <div className="flex items-center justify-between">
