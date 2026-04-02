@@ -1245,8 +1245,8 @@ export const MyActivities: React.FC = () => {
                 placeholder="Search activities..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                disabled
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
+                //disabled
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white text-gray-900 cursor-text focus:outline-none"
               />
             </div>
 
@@ -1340,7 +1340,7 @@ export const MyActivities: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {experiments.map((experiment) => (
+                  {experiments.filter((experiment) => experiment.name.toLowerCase().includes(searchQuery.toLowerCase())).map((experiment) => (
                     <div
                       key={experiment.id}
                       className="bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow duration-200"
