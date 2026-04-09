@@ -326,6 +326,20 @@ export const MyActivities: React.FC = () => {
     }
   };
 
+  const handleFastReplication = (experimentId: string) => {
+    const workbenchBaseUrl =
+      import.meta.env.VITE_WORKBENCH_URL;
+
+    const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/experiments/${encodeURIComponent(experimentId)}`;
+    const newWindow = window.open(replicationUrl);
+    if (!newWindow) {
+      toast.error("Popup blocked or could not open replication", {
+        position: "bottom-right",
+        autoClose: 2000,
+      });
+    }
+  };
+
   const handleUpdateExperimentLeiaMode = async (
     experimentId: string,
     leiaConfigId: string,
@@ -1377,6 +1391,13 @@ export const MyActivities: React.FC = () => {
                                 Published
                               </span>
                             )}
+                            {experiment.isPublished &&<button 
+                              onClick={() => handleFastReplication(experiment.id)}
+                              className="h-8 px-3 text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 flex items-center gap-1"
+                              title="Replicate activity"
+                            >
+                              Replicate
+                            </button>}
                             {!experiment.isPublished && (
                               <div className="flex items-center gap-2">
                                 <button
