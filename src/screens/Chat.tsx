@@ -92,9 +92,9 @@ export const Chat = () => {
   const [experimentId, setExperimentId] = useState<string | null>(null);
   const [leiaConfigId, setLeiaConfigId] = useState<string | null>(null);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig | null>(null);
-  //const [sessionTime, setSessionTime] = useState<number | null>(null);
+  const [sessionTime, setSessionTime] = useState<number | null>(null);
   // TEMP: hardcode for timer testing, remove after
-  const [sessionTime, setSessionTime] = useState<number | null>(1);
+  //const [sessionTime, setSessionTime] = useState<number | null>(1);
 
   const parseSavedNavigationState = (): NavigationState | null => {
     const raw = localStorage.getItem(CHAT_SAVE_STATE_KEY);
