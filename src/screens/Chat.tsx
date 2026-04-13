@@ -7,6 +7,7 @@ import { Header } from "../components/shared/Header";
 import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
+import { SessionTimer } from "../components/SessionTimer";
 
 const CHAT_SAVE_STATE_KEY = "designerChatSaveState";
 const EDIT_STATE_KEY = "designerEditState";
@@ -38,6 +39,7 @@ interface NavigationState {
     leiaConfigId: string;
     leiaConfig: LeiaConfig;
   };
+  sessionTime?: number;
 }
 
 interface ExerciseSpec {
@@ -90,6 +92,9 @@ export const Chat = () => {
   const [experimentId, setExperimentId] = useState<string | null>(null);
   const [leiaConfigId, setLeiaConfigId] = useState<string | null>(null);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig | null>(null);
+  //const [sessionTime, setSessionTime] = useState<number | null>(null);
+  // TEMP: hardcode for timer testing, remove after
+  const [sessionTime, setSessionTime] = useState<number | null>(1);
 
   const parseSavedNavigationState = (): NavigationState | null => {
     const raw = localStorage.getItem(CHAT_SAVE_STATE_KEY);
@@ -186,6 +191,10 @@ export const Chat = () => {
       setExperimentId(navigationState.experimentTranscription.experimentId);
       setLeiaConfigId(navigationState.experimentTranscription.leiaConfigId);
       setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
+    }
+
+    if (navigationState?.sessionTime) {
+      setSessionTime(navigationState.sessionTime);
     }
 
     configureEditState(navigationState || parseSavedNavigationState());
@@ -365,6 +374,12 @@ export const Chat = () => {
         showNavigation={false}
         rightContent={
           <div className="flex gap-2">
+            {sessionTime && (
+              <SessionTimer
+                durationMinutes={sessionTime}
+                onExpire={handleFinishConversation}
+              />
+            )}
             <button
               onClick={handleOpenSolutionEditor}
               className="px-4 py-1.5 text-sm text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"

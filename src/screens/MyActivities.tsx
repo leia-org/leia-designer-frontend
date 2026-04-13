@@ -479,6 +479,9 @@ export const MyActivities: React.FC = () => {
               leiaConfigId,
               leiaConfig,
             },
+            sessionTime: typeof leiaConfig.configuration?.data?.sessionTime === "number"
+              ? leiaConfig.configuration.data.sessionTime
+              : undefined,
           },
         });
       }
@@ -830,6 +833,44 @@ export const MyActivities: React.FC = () => {
     setJsonEditText("");
     setJsonEditError(null);
   };
+
+  const handleUpdateSessionTime = async (
+  experimentId: string,
+  leiaConfigId: string,
+  leiaConfig: LeiaConfig,
+  sessionTime: number | null
+) => {
+  try {
+    const update = {
+      leia:
+        typeof leiaConfig.leia === "string"
+          ? leiaConfig.leia
+          : leiaConfig.leia.id,
+      configuration: {
+        ...leiaConfig.configuration,
+        data: {
+          ...leiaConfig.configuration.data,
+          sessionTime: sessionTime ?? undefined,
+        },
+      },
+    };
+    const response = await api.put<Experiment>(
+      `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`,
+      update
+    );
+    setExperiments((prev) => {
+      if (!prev) return null;
+      return prev.map((exp) =>
+        exp.id === experimentId ? response.data : exp
+      );
+    });
+  } catch {
+    toast.error("Failed to update session time", {
+      position: "bottom-right",
+      autoClose: 3000,
+    });
+  }
+};
 
   return (
     <div className="flex flex-col h-screen bg-white">
@@ -1493,34 +1534,19 @@ export const MyActivities: React.FC = () => {
                                               </span>
                                               {experiment.isPublished ? (
                                                 <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                                  {
-                                                    leiaConfig.configuration
-                                                      .mode
-                                                  }
+                                                  {leiaConfig.configuration.mode}
                                                 </span>
                                               ) : (
                                                 <Select
                                                   value={{
-                                                    value:
-                                                      leiaConfig.configuration
-                                                        .mode,
-                                                    label:
-                                                      leiaConfig.configuration
-                                                        .mode,
+                                                    value: leiaConfig.configuration.mode,
+                                                    label: leiaConfig.configuration.mode,
                                                   }}
                                                   options={[
-                                                    {
-                                                      value: "standard",
-                                                      label: "standard",
-                                                    },
-                                                    {
-                                                      value: "transcription",
-                                                      label: "transcription",
-                                                    },
+                                                    { value: "standard", label: "standard" },
+                                                    { value: "transcription", label: "transcription" },
                                                   ]}
-                                                  onChange={(
-                                                    selectedOption
-                                                  ) => {
+                                                  onChange={(selectedOption) => {
                                                     if (selectedOption) {
                                                       handleUpdateExperimentLeiaMode(
                                                         experiment.id,
@@ -1534,7 +1560,43 @@ export const MyActivities: React.FC = () => {
                                               )}
                                             </div>
                                           )}
-                                        </div>
+
+                                          {/* Session time input */}
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium text-gray-600 text-sm">
+                                              Time (min):
+                                            </span>
+                                            {experiment.isPublished ? (
+                                              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                                                {typeof leiaConfig.configuration?.data?.sessionTime === "number"
+                                                  ? leiaConfig.configuration.data.sessionTime
+                                                  : "No limit"}
+                                              </span>
+                                            ) : (
+                                              <input
+                                                type="number"
+                                                min={1}
+                                                placeholder="No limit"
+                                                value={
+                                                  typeof leiaConfig.configuration?.data?.sessionTime === "number"
+                                                    ? leiaConfig.configuration.data.sessionTime
+                                                    : ""
+                                                }
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  handleUpdateSessionTime(
+                                                    experiment.id,
+                                                    leiaConfig.id,
+                                                    leiaConfig,
+                                                    val === "" ? null : parseInt(val, 10)
+                                                  );
+                                                }}
+                                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                              />
+                                            )}
+                                          </div>
+
+                                        </div>  {/* end of left flex group */}
 
                                         {/* Delete button */}
                                         {experiment.isPublished == false && (

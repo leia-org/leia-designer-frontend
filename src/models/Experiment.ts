@@ -16,6 +16,8 @@ export interface LeiaConfig {
   leia: Leia | string;
   configuration: {
     mode: string;
-    data: Record<string, unknown>;
+    data: Record<string, unknown> & {
+      sessionTime?: number; // session duration in minutes
+    };
   };
 }
