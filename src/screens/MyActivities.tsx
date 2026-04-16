@@ -326,12 +326,12 @@ export const MyActivities: React.FC = () => {
     }
   };
 
-  const handleFastReplication = (experimentId: string) => {
+  const handleFastReplication = (experimentId: string, activityName: string) => {
     const workbenchBaseUrl =
       import.meta.env.VITE_WORKBENCH_URL;
-
-    const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/experiments/${encodeURIComponent(experimentId)}`;
-    const newWindow = window.open(replicationUrl);
+    const url = new URL(`${workbenchBaseUrl.replace(/\/$/, "")}/experiments/${encodeURIComponent(experimentId)}`);
+    url.searchParams.set("activityName", activityName);
+    const newWindow = window.open(url);
     if (!newWindow) {
       toast.error("Popup blocked or could not open replication", {
         position: "bottom-right",
@@ -1392,7 +1392,7 @@ export const MyActivities: React.FC = () => {
                               </span>
                             )}
                             {experiment.isPublished &&<button 
-                              onClick={() => handleFastReplication(experiment.id)}
+                              onClick={() => handleFastReplication(experiment.id, experiment.name)}
                               className="h-8 px-3 text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 flex items-center gap-1"
                               title="Replicate activity"
                             >
