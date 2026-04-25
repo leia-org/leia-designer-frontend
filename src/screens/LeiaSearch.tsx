@@ -324,6 +324,20 @@ export const LeiaSearch: React.FC = () => {
                     leia.spec?.problem?.spec?.description ||
                     leia.spec?.persona?.spec?.description ||
                     "";
+                  const labelData = leia.metadata?.label;
+                  const labelName =
+                    typeof labelData === "string"
+                      ? labelData
+                      : labelData?.name || null;
+                  const labelColor =
+                    typeof labelData === "string"
+                      ? undefined
+                      : labelData?.color;
+                  const labelSecundaryColor =
+                    typeof labelData === "string"
+                      ? undefined
+                      : labelData?.secundaryColor;
+
                   return (
                     <li
                       key={leia.id}
@@ -347,6 +361,18 @@ export const LeiaSearch: React.FC = () => {
                             >
                               {leia.isPublished ? "Published" : "Unpublished"}
                             </span>
+                            {labelName && (
+                              <span
+                                className="px-2 py-0.5 text-xs font-medium rounded-full border border-gray-200"
+                                style={{
+                                  backgroundColor: labelColor || "#f3f4f6",
+                                  color: labelSecundaryColor || "#111827",
+                                }}
+                                title={`Label: ${labelName}`}
+                              >
+                                {labelName}
+                              </span>
+                            )}
                           </div>
                           {/* User information moved back to the right without margin */}
                           {leia.user && leia.user.email && leia.user.role && (
