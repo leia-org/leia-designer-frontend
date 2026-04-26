@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
+import { type SingleValue, type InputActionMeta } from "react-select";
+import CreatableSelect from "react-select/creatable";
 import {
   LightBulbIcon,
   CpuChipIcon,
@@ -22,6 +24,31 @@ import type {
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
 
+interface Label {
+  id?: string;
+  _id?: string;
+  name: string;
+  color: string;
+  secundaryColor: string;
+  isGlobal?: boolean;
+  user?: unknown;
+}
+
+interface LabelDraft {
+  name: string;
+  color: string;
+  secundaryColor: string;
+  isGlobal: boolean;
+}
+
+type LabelOption = {
+  value: string;
+  label: string;
+  color: string;
+  secundaryColor: string;
+  isGlobal: boolean;
+};
+
 interface LeiaConfig {
   persona: Persona | null;
   problem: Problem | null;
@@ -33,6 +60,7 @@ interface Leia {
     persona: Persona;
     problem: Problem;
     behaviour: Behaviour;
+    label: Label;
   };
 }
 
@@ -46,6 +74,7 @@ interface NavigationState {
     currentStep: WizardStep;
     leiaConfig: LeiaConfig;
     leiaConfigSnapShot: LeiaConfig | null;
+    labelId?: string | null;
     customizations: {
       persona?: { name: string; version?: string };
       problem?: { name: string; version?: string };
@@ -64,6 +93,8 @@ const DEFAULT_PROBLEM_GENERATION_DETAILS =
 const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
 const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
   "Mantén un tono profesional y colaborativo. Debe guiar al estudiante con preguntas de aclaración sobre catálogo, préstamos, reservas y multas.";
+
+const PENDING_LABEL_PREFIX = "__pending_label__";
 
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
@@ -97,10 +128,23 @@ export const CreateLeia: React.FC = () => {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [behaviours, setBehaviours] = useState<Behaviour[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<Error | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
+  const [labelsError, setLabelsError] = useState<string | null>(null);
+  const [showCreateLabelModal, setShowCreateLabelModal] = useState(false);
+  const [creatingLabel, setCreatingLabel] = useState(false);
+  const [createLabelError, setCreateLabelError] = useState<string | null>(null);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#2563eb");
+  const [newLabelSecondaryColor, setNewLabelSecondaryColor] =
+    useState("#bfdbfe");
+  const [isLabelGlobal, setIsLabelGlobal] = useState(false);
+  const [labelSearchInput, setLabelSearchInput] = useState("");
+  const [pendingLabelDraft, setPendingLabelDraft] =
+    useState<LabelDraft | null>(null);
 
   // Estados para filtros de visibilidad
   const [personaVisibility, setPersonaVisibility] = useState<
@@ -123,6 +167,7 @@ export const CreateLeia: React.FC = () => {
 
   // Estado para controlar la visibilidad/publicación de la LEIA
   const [leiaPublish, setLeiaPublish] = useState<boolean>(true);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
 
   // Estados para controlar la visibilidad de los recursos individuales
   const [behaviourPublish, setBehaviourPublish] = useState<boolean>(true);
@@ -225,6 +270,7 @@ export const CreateLeia: React.FC = () => {
       setCustomizations(
         savedState.customizations || { leia: { name: "", version: "1.0.0" } },
       );
+      setSelectedLabelId(savedState.labelId || null);
 
       // Limpiar el estado de navegación para evitar cargas repetidas
       navigate(location.pathname, {
@@ -306,6 +352,48 @@ export const CreateLeia: React.FC = () => {
     }
   };
 
+  const loadLabels = async () => {
+    try {
+      setLabelsError(null);
+      const response = await api.get<Label[]>("/api/v1/labels");
+      setLabels(response.data || []);
+    } catch (err) {
+      console.error("Error loading labels:", err);
+      setLabelsError("Failed to load labels");
+    }
+  };
+
+  const getLabelIdentifier = (label: Label) => label.id || label._id || null;
+
+  const handleCreateLabel = async () => {
+    const trimmedName = newLabelName.trim();
+    if (!trimmedName) {
+      setCreateLabelError("Label name is required");
+      return;
+    }
+
+    try {
+      setCreateLabelError(null);
+      const pendingLabelId = `${PENDING_LABEL_PREFIX}${trimmedName}`;
+      setPendingLabelDraft({
+        name: trimmedName,
+        color: newLabelColor,
+        secundaryColor: newLabelSecondaryColor,
+        isGlobal: currentUser?.role === "admin" ? isLabelGlobal : false,
+      });
+      setSelectedLabelId(pendingLabelId);
+      setShowCreateLabelModal(false);
+      setLabelSearchInput("");
+      setNewLabelName("");
+      setNewLabelColor("#2563eb");
+      setNewLabelSecondaryColor("#bfdbfe");
+      setIsLabelGlobal(false);
+    } catch (err) {
+      console.error("Error creating label:", err);
+      setCreateLabelError("Failed to prepare label");
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -316,6 +404,7 @@ export const CreateLeia: React.FC = () => {
         loadPersonas(personaVisibility),
         loadProblems(problemVisibility, problemProcess),
         loadBehaviours(behaviourVisibility, behaviourProcess),
+        loadLabels(),
       ]);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -704,6 +793,7 @@ const openGenerateProblemModal = () => {
             currentStep,
             leiaConfig,
             leiaConfigSnapShot,
+            labelId: selectedLabelId,
             customizations,
           },
           problemDescription: generatedLeia.spec.problem.spec.description,
@@ -746,11 +836,38 @@ const openGenerateProblemModal = () => {
         return;
       }
 
+      let finalLabelId = selectedLabelId;
+      if (pendingLabelDraft) {
+        try {
+          setCreatingLabel(true);
+          const response = await api.post<Label>("/api/v1/labels", {
+            name: pendingLabelDraft.name,
+            color: pendingLabelDraft.color,
+            secundaryColor: pendingLabelDraft.secundaryColor,
+            isGlobal:
+              currentUser?.role === "admin" ? pendingLabelDraft.isGlobal : false,
+            user: currentUser?.id,
+          });
+
+          finalLabelId = getLabelIdentifier(response.data);
+          setSelectedLabelId(finalLabelId);
+          setPendingLabelDraft(null);
+          await loadLabels();
+        } catch (error) {
+          console.error("Error creating label on finish:", error);
+          setError("Failed to create label");
+          return;
+        } finally {
+          setCreatingLabel(false);
+        }
+      }
+
       const leia = {
         apiVersion: "v1",
         metadata: {
           name: customizations.leia.name,
           version: "1.0.0",
+          label: finalLabelId || undefined,
         },
         spec: {} as Record<string, any>,
       };
@@ -1629,16 +1746,35 @@ const openGenerateProblemModal = () => {
     </div>
   );
 
-  const renderStep3 = () => (
-    <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Step 3: Create your LEIA
-        </h2>
-        <p className="text-gray-600">
-          Update the fields of the required resources and complete the process
-        </p>
-      </div>
+  const renderStep3 = () => {
+    const selectedLabelOption: LabelOption | null = pendingLabelDraft
+      ? {
+          value: `${PENDING_LABEL_PREFIX}${pendingLabelDraft.name}`,
+          label: pendingLabelDraft.name,
+          color: pendingLabelDraft.color,
+          secundaryColor: pendingLabelDraft.secundaryColor,
+          isGlobal: pendingLabelDraft.isGlobal,
+        }
+      : labels
+          .map((label) => ({
+            value: getLabelIdentifier(label) || label.name,
+            label: label.name,
+            color: label.color,
+            secundaryColor: label.secundaryColor,
+            isGlobal: Boolean(label.isGlobal),
+          }))
+          .find((option) => option.value === selectedLabelId) || null;
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Step 3: Create your LEIA
+          </h2>
+          <p className="text-gray-600">
+            Update the fields of the required resources and complete the process
+          </p>
+        </div>
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="font-semibold text-gray-900 mb-4">LEIA</h3>
         <div className="space-y-4">
@@ -1674,6 +1810,139 @@ const openGenerateProblemModal = () => {
                 {validationErrors.leia}
               </p>
             )}
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Label
+              </label>
+              {labels.length > 0 ? (
+                <CreatableSelect<LabelOption, false>
+                  isClearable
+                  isSearchable
+                  isDisabled={loading || !!labelsError}
+                  isLoading={loading}
+                  inputValue={labelSearchInput}
+                  placeholder="Select an existing label..."
+                  value={selectedLabelOption}
+                  options={labels.map((label) => ({
+                    value: getLabelIdentifier(label) || label.name,
+                    label: label.name,
+                    color: label.color,
+                    secundaryColor: label.secundaryColor,
+                    isGlobal: Boolean(label.isGlobal),
+                  }))}
+                  onChange={(option: SingleValue<LabelOption>) => {
+                    setSelectedLabelId(option?.value || null);
+                    if (!option) {
+                      setPendingLabelDraft(null);
+                    }
+                    setLabelSearchInput("");
+                    if (option) {
+                      setPendingLabelDraft(null);
+                    }
+                    if (option) {
+                      setShowCreateLabelModal(false);
+                    }
+                  }}
+                  onInputChange={(inputValue: string, meta: InputActionMeta) => {
+                    if (meta.action === "input-change") {
+                      setLabelSearchInput(inputValue);
+                    }
+
+                    return inputValue;
+                  }}
+                  onCreateOption={(inputValue: string) => {
+                    const candidate = inputValue.trim();
+                    if (!candidate) return;
+                    setShowCreateLabelModal(true);
+                    setCreateLabelError(null);
+                    setNewLabelName(candidate);
+                    setSelectedLabelId(`${PENDING_LABEL_PREFIX}${candidate}`);
+                  }}
+                  formatCreateLabel={(inputValue) =>
+                    `Create label "${inputValue}"`
+                  }
+                  noOptionsMessage={({ inputValue }) =>
+                    inputValue?.trim()
+                      ? `No labels found. Create "${inputValue.trim()}"`
+                      : "No labels available"
+                  }
+                  isValidNewOption={(inputValue) => {
+                    const candidate = inputValue.trim();
+                    if (!candidate) return false;
+                    return !labels.some(
+                      (label) =>
+                        label.name.trim().toLowerCase() ===
+                        candidate.toLowerCase(),
+                    );
+                  }}
+                  formatOptionLabel={(option) => (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full border border-black/10"
+                        style={{ backgroundColor: option.color }}
+                      />
+                      <span className="truncate">{option.label}</span>
+                      {option.isGlobal && (
+                        <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                          Global
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  styles={{
+                    control: (base, state) => ({
+                      ...base,
+                      minHeight: "42px",
+                      borderColor: labelsError
+                        ? "#fca5a5"
+                        : state.isFocused
+                          ? "#3b82f6"
+                          : "#d1d5db",
+                      boxShadow: state.isFocused
+                        ? "0 0 0 1px #3b82f6"
+                        : "none",
+                      "&:hover": {
+                        borderColor: labelsError ? "#fca5a5" : "#9ca3af",
+                      },
+                    }),
+                    option: (base, state) => ({
+                      ...base,
+                      backgroundColor: state.isFocused
+                        ? "#eff6ff"
+                        : state.isSelected
+                          ? "#dbeafe"
+                          : "white",
+                      color: "#111827",
+                    }),
+                  }}
+                  className="react-select-container"
+                  classNamePrefix="react-select"
+                />
+              ) : (
+                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-sm text-gray-600">
+                  No labels available.
+                </div>
+              )}
+              {pendingLabelDraft && (
+                <p className="mt-1 text-xs text-blue-700">
+                  New label "{pendingLabelDraft.name}"{pendingLabelDraft.isGlobal ? "(Global)" : "(Private)"} will be created when you
+                  click Finish.
+                </p>
+              )}
+              {labelsError && (
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-sm text-red-600">{labelsError}</p>
+                  <button
+                    type="button"
+                    onClick={loadLabels}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Selector de visibilidad - solo para usuarios admin */}
@@ -2139,7 +2408,8 @@ const openGenerateProblemModal = () => {
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   // Loading state
   if (loading) {
@@ -2308,7 +2578,124 @@ const openGenerateProblemModal = () => {
         onConfirm={confirmDeleteResource}
         isDeleting={isDeleting}
         error={deleteError}
-      />
+      />  
+      {showCreateLabelModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreateLabelModal(false);
+              setCreateLabelError(null);
+            }
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                Create New Label
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Add a label and reuse it in your LEIAs.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newLabelName}
+                    onChange={(e) => setNewLabelName(e.target.value)}
+                    placeholder="e.g. bug"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Color
+                    </label>
+                    <input
+                      type="color"
+                      value={newLabelColor}
+                      onChange={(e) => setNewLabelColor(e.target.value)}
+                      className="h-10 w-full border border-gray-300 rounded-lg bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Secondary color
+                    </label>
+                    <input
+                      type="color"
+                      value={newLabelSecondaryColor}
+                      onChange={(e) => setNewLabelSecondaryColor(e.target.value)}
+                      className="h-10 w-full border border-gray-300 rounded-lg bg-white"
+                    />
+                  </div>
+                </div>
+
+                {currentUser?.role === "admin" && (
+                  <div>
+                    <p className="block text-sm font-medium text-gray-700 mb-2">
+                      Visibility
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsLabelGlobal((prev) => !prev)}
+                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        isLabelGlobal
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span>{isLabelGlobal ? "Global" : "Private"}</span>
+                      <span
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          isLabelGlobal ? "bg-blue-600" : "bg-gray-300"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                            isLabelGlobal ? "translate-x-5" : "translate-x-1"
+                          }`}
+                        />
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {createLabelError && (
+                  <p className="text-sm text-red-600">{createLabelError}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateLabelModal(false);
+                  setCreateLabelError(null);
+                }}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateLabel}
+                disabled={creatingLabel}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                Save label for Finish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de generación de behaviours con IA */}
       {showGenerateBehaviourModal && (

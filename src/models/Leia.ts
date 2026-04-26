@@ -1,5 +1,14 @@
 import type { User } from "./User";
 
+export interface Label {
+  _id: string,
+  name: string,
+  color: string,
+  secundaryColor: string,
+  user: string,
+  isGlobal: boolean,
+}
+
 export interface Persona {
   id: string,
   apiVersion: string,
@@ -80,7 +89,8 @@ export interface Leia {
   apiVersion: string,
   metadata: {
     name: string,
-    version: string
+    version: string,
+    label?: Label | null
   },
   spec: {
     persona: {
