@@ -1,11 +1,12 @@
 import type { User } from "./User";
 
-export interface LabelRef {
-  id?: string,
+export interface Label {
+  _id: string,
   name: string,
-  color?: string,
-  secundaryColor?: string,
-  isGlobal?: boolean
+  color: string,
+  secundaryColor: string,
+  user: string,
+  isGlobal: boolean,
 }
 
 export interface Persona {
@@ -89,7 +90,7 @@ export interface Leia {
   metadata: {
     name: string,
     version: string,
-    label?: LabelRef | null
+    label?: Label | null
   },
   spec: {
     persona: {
