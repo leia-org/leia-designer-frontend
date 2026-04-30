@@ -1747,6 +1747,14 @@ const openGenerateProblemModal = () => {
   );
 
   const renderStep3 = () => {
+    const labelOptions = labels.map((label) => ({
+      value: getLabelIdentifier(label) || label.name,
+      label: label.name,
+      color: label.color,
+      secundaryColor: label.secundaryColor,
+      isGlobal: Boolean(label.isGlobal),
+    }));
+
     const selectedLabelOption: LabelOption | null = pendingLabelDraft
       ? {
           value: `${PENDING_LABEL_PREFIX}${pendingLabelDraft.name}`,
@@ -1755,15 +1763,7 @@ const openGenerateProblemModal = () => {
           secundaryColor: pendingLabelDraft.secundaryColor,
           isGlobal: pendingLabelDraft.isGlobal,
         }
-      : labels
-          .map((label) => ({
-            value: getLabelIdentifier(label) || label.name,
-            label: label.name,
-            color: label.color,
-            secundaryColor: label.secundaryColor,
-            isGlobal: Boolean(label.isGlobal),
-          }))
-          .find((option) => option.value === selectedLabelId) || null;
+      : labelOptions.find((option) => option.value === selectedLabelId) || null;
 
     return (
       <div className="space-y-6">
@@ -1815,115 +1815,103 @@ const openGenerateProblemModal = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Label
               </label>
-              {labels.length > 0 ? (
-                <CreatableSelect<LabelOption, false>
-                  isClearable
-                  isSearchable
-                  isDisabled={loading || !!labelsError}
-                  isLoading={loading}
-                  inputValue={labelSearchInput}
-                  placeholder="Select an existing label..."
-                  value={selectedLabelOption}
-                  options={labels.map((label) => ({
-                    value: getLabelIdentifier(label) || label.name,
-                    label: label.name,
-                    color: label.color,
-                    secundaryColor: label.secundaryColor,
-                    isGlobal: Boolean(label.isGlobal),
-                  }))}
-                  onChange={(option: SingleValue<LabelOption>) => {
-                    setSelectedLabelId(option?.value || null);
-                    if (!option) {
-                      setPendingLabelDraft(null);
-                    }
-                    setLabelSearchInput("");
-                    if (option) {
-                      setPendingLabelDraft(null);
-                    }
-                    if (option) {
-                      setShowCreateLabelModal(false);
-                    }
-                  }}
-                  onInputChange={(inputValue: string, meta: InputActionMeta) => {
-                    if (meta.action === "input-change") {
-                      setLabelSearchInput(inputValue);
-                    }
+              <CreatableSelect<LabelOption, false>
+                isClearable
+                isSearchable
+                isDisabled={loading || !!labelsError}
+                isLoading={loading}
+                inputValue={labelSearchInput}
+                placeholder="Select or create a label..."
+                value={selectedLabelOption}
+                options={labelOptions}
+                onChange={(option: SingleValue<LabelOption>) => {
+                  setSelectedLabelId(option?.value || null);
+                  if (!option) {
+                    setPendingLabelDraft(null);
+                  }
+                  setLabelSearchInput("");
+                  if (option) {
+                    setPendingLabelDraft(null);
+                  }
+                  if (option) {
+                    setShowCreateLabelModal(false);
+                  }
+                }}
+                onInputChange={(inputValue: string, meta: InputActionMeta) => {
+                  if (meta.action === "input-change") {
+                    setLabelSearchInput(inputValue);
+                  }
 
-                    return inputValue;
-                  }}
-                  onCreateOption={(inputValue: string) => {
-                    const candidate = inputValue.trim();
-                    if (!candidate) return;
-                    setShowCreateLabelModal(true);
-                    setCreateLabelError(null);
-                    setNewLabelName(candidate);
-                    setSelectedLabelId(`${PENDING_LABEL_PREFIX}${candidate}`);
-                  }}
-                  formatCreateLabel={(inputValue) =>
-                    `Create label "${inputValue}"`
-                  }
-                  noOptionsMessage={({ inputValue }) =>
-                    inputValue?.trim()
-                      ? `No labels found. Create "${inputValue.trim()}"`
-                      : "No labels available"
-                  }
-                  isValidNewOption={(inputValue) => {
-                    const candidate = inputValue.trim();
-                    if (!candidate) return false;
-                    return !labels.some(
-                      (label) =>
-                        label.name.trim().toLowerCase() ===
-                        candidate.toLowerCase(),
-                    );
-                  }}
-                  formatOptionLabel={(option) => (
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-3 w-3 rounded-full border border-black/10"
-                        style={{ backgroundColor: option.color }}
-                      />
-                      <span className="truncate">{option.label}</span>
-                      {option.isGlobal && (
-                        <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
-                          Global
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  styles={{
-                    control: (base, state) => ({
-                      ...base,
-                      minHeight: "42px",
-                      borderColor: labelsError
-                        ? "#fca5a5"
-                        : state.isFocused
-                          ? "#3b82f6"
-                          : "#d1d5db",
-                      boxShadow: state.isFocused
-                        ? "0 0 0 1px #3b82f6"
-                        : "none",
-                      "&:hover": {
-                        borderColor: labelsError ? "#fca5a5" : "#9ca3af",
-                      },
-                    }),
-                    option: (base, state) => ({
-                      ...base,
-                      backgroundColor: state.isFocused
-                        ? "#eff6ff"
-                        : state.isSelected
-                          ? "#dbeafe"
-                          : "white",
-                      color: "#111827",
-                    }),
-                  }}
-                  className="react-select-container"
-                  classNamePrefix="react-select"
-                />
-              ) : (
-                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-sm text-gray-600">
-                  No labels available.
-                </div>
-              )}
+                  return inputValue;
+                }}
+                onCreateOption={(inputValue: string) => {
+                  const candidate = inputValue.trim();
+                  if (!candidate) return;
+                  setShowCreateLabelModal(true);
+                  setCreateLabelError(null);
+                  setNewLabelName(candidate);
+                  setSelectedLabelId(`${PENDING_LABEL_PREFIX}${candidate}`);
+                }}
+                formatCreateLabel={(inputValue) =>
+                  `Create label "${inputValue}"`
+                }
+                noOptionsMessage={({ inputValue }) =>
+                  inputValue?.trim()
+                    ? `No labels found. Create "${inputValue.trim()}"`
+                    : "No labels available. Type to create one."
+                }
+                isValidNewOption={(inputValue) => {
+                  const candidate = inputValue.trim();
+                  if (!candidate) return false;
+                  return !labels.some(
+                    (label) =>
+                      label.name.trim().toLowerCase() ===
+                      candidate.toLowerCase(),
+                  );
+                }}
+                formatOptionLabel={(option) => (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full border border-black/10"
+                      style={{ backgroundColor: option.color }}
+                    />
+                    <span className="truncate">{option.label}</span>
+                    {option.isGlobal && (
+                      <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                        Global
+                      </span>
+                    )}
+                  </div>
+                )}
+                styles={{
+                  control: (base, state) => ({
+                    ...base,
+                    minHeight: "42px",
+                    borderColor: labelsError
+                      ? "#fca5a5"
+                      : state.isFocused
+                        ? "#3b82f6"
+                        : "#d1d5db",
+                    boxShadow: state.isFocused
+                      ? "0 0 0 1px #3b82f6"
+                      : "none",
+                    "&:hover": {
+                      borderColor: labelsError ? "#fca5a5" : "#9ca3af",
+                    },
+                  }),
+                  option: (base, state) => ({
+                    ...base,
+                    backgroundColor: state.isFocused
+                      ? "#eff6ff"
+                      : state.isSelected
+                        ? "#dbeafe"
+                        : "white",
+                    color: "#111827",
+                  }),
+                }}
+                className="react-select-container"
+                classNamePrefix="react-select"
+              />
               {pendingLabelDraft && (
                 <p className="mt-1 text-xs text-blue-700">
                   New label "{pendingLabelDraft.name}"{pendingLabelDraft.isGlobal ? "(Global)" : "(Private)"} will be created when you
