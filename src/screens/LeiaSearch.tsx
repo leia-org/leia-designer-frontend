@@ -10,7 +10,7 @@ import {
 import api from "../lib/axios";
 import { SearchFilter } from "../components/shared/SearchFilter";
 import { Header } from "../components/shared/Header";
-import type { Leia, Persona, Problem, Behaviour } from "../models/Leia";
+import type { Leia, Persona, Problem, Behaviour, Label } from "../models/Leia";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
@@ -28,6 +28,8 @@ export const LeiaSearch: React.FC = () => {
   const [visibilityFilter, setVisibilityFilter] = useState<
     "all" | "private" | "public"
   >("all");
+  const [selectedLabelFilter, setSelectedLabelFilter] = useState<string | null>(null);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [leias, setLeias] = useState<Leia[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +40,9 @@ export const LeiaSearch: React.FC = () => {
     if (queryText.trim()) p.text = queryText.trim();
     if (versionFilter) p.version = versionFilter;
     if (visibilityFilter !== "all") p.visibility = visibilityFilter;
+    if (selectedLabelFilter) p.labelId = selectedLabelFilter;
     return p;
-  }, [queryText, versionFilter, visibilityFilter]);
+  }, [queryText, versionFilter, visibilityFilter, selectedLabelFilter]);
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
@@ -82,7 +85,6 @@ export const LeiaSearch: React.FC = () => {
         if (active) setLoading(false);
       }
     };
-
     const t = setTimeout(fetchLeias, 300);
     return () => {
       active = false;
@@ -90,7 +92,18 @@ export const LeiaSearch: React.FC = () => {
       clearTimeout(t);
     };
   }, [params]);
-
+  useEffect(() => {
+    const fetchLabels = async () => {
+      try {
+        const response = await api.get<Label[]>("/api/v1/labels");
+        setLabels(response.data || []);
+      } catch (err) {
+        console.error("Error fetching labels", err);
+        setLabels([]);
+      }
+    };
+    fetchLabels();
+  }, []);
   const handlePersonalize = async (leia: Leia) => {
     try {
       const [personaResp, problemResp, behaviourResp] = await Promise.all([
@@ -255,7 +268,7 @@ export const LeiaSearch: React.FC = () => {
         }}
       />
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
-        <div className="flex items-end justify-between mb-6">
+        <div className="flex items-end gap-4 mb-6">
           <div className="flex-1">
             <SearchFilter
               placeholder="Search by name or description"
@@ -265,6 +278,27 @@ export const LeiaSearch: React.FC = () => {
             />
           </div>
           <div className="flex gap-4">
+            <div className="min-w-[140px]">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Label
+              </label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                value={selectedLabelFilter || ""}
+                onChange={(e) =>
+                  setSelectedLabelFilter(
+                    e.target.value
+                  )
+                }
+              >
+                <option value="">All Labels</option>
+                {labels.map((label) => (
+                  <option key={label._id} value={label._id}>
+                    {label.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="min-w-[140px]">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Visibility
@@ -324,6 +358,20 @@ export const LeiaSearch: React.FC = () => {
                     leia.spec?.problem?.spec?.description ||
                     leia.spec?.persona?.spec?.description ||
                     "";
+                  const labelData = leia.metadata?.label;
+                  const labelName =
+                    typeof labelData === "string"
+                      ? labelData
+                      : labelData?.name || null;
+                  const labelColor =
+                    typeof labelData === "string"
+                      ? undefined
+                      : labelData?.color;
+                  const labelSecundaryColor =
+                    typeof labelData === "string"
+                      ? undefined
+                      : labelData?.secundaryColor;
+
                   return (
                     <li
                       key={leia.id}
@@ -347,6 +395,18 @@ export const LeiaSearch: React.FC = () => {
                             >
                               {leia.isPublished ? "Published" : "Unpublished"}
                             </span>
+                            {labelName && (
+                              <span
+                                className="px-2 py-0.5 text-xs font-medium rounded-full border border-gray-200"
+                                style={{
+                                  backgroundColor: labelColor || "#f3f4f6",
+                                  color: labelSecundaryColor || "#111827",
+                                }}
+                                title={`Label: ${labelName}`}
+                              >
+                                {labelName}
+                              </span>
+                            )}
                           </div>
                           {/* User information moved back to the right without margin */}
                           {leia.user && leia.user.email && leia.user.role && (
