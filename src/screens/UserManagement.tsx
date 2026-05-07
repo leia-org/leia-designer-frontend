@@ -8,7 +8,7 @@ import {
   EyeIcon,
   EyeSlashIcon,
 } from "@heroicons/react/24/outline";
-import api from "../lib/axios";
+import {authApi} from "../lib/axios";
 import validator from "validator";
 import axios from "axios";
 import { Header } from "../components/shared/Header";
@@ -57,7 +57,7 @@ export const UserManagement = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get<UserResponse[]>("/api/v1/users");
+      const response = await authApi.get<UserResponse[]>("/api/v1/users");
       setUsers(response.data);
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -145,7 +145,7 @@ export const UserManagement = () => {
 
     try {
       if (editingUser) {
-        await api.put(`/api/v1/users/${editingUser.id}`, {
+        await authApi.put(`/api/v1/users/${editingUser.id}`, {
           email: formData.email.trim(),
           role: formData.role,
           password: formData.password || undefined,
@@ -154,7 +154,7 @@ export const UserManagement = () => {
         setSubmitSuccess(true);
         setSubmitMessage("User updated successfully!");
       } else {
-        await api.post("/api/v1/users", {
+        await authApi.post("/api/v1/users", {
           email: formData.email.trim(),
           role: formData.role,
           password: formData.password,
@@ -210,7 +210,7 @@ export const UserManagement = () => {
     setDeleteMessage("");
 
     try {
-      await api.delete(`/api/v1/users/${deletingUser.id}`);
+      await authApi.delete(`/api/v1/users/${deletingUser.id}`);
       setDeleteSuccess(true);
       setDeleteMessage("User deleted successfully!");
 

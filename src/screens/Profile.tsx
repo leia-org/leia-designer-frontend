@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context";
 import { Header } from "../components/shared/Header";
-import api from "../lib/axios";
+import {authApi} from "../lib/axios";
 import {
   UserCircleIcon,
   EnvelopeIcon,
@@ -38,7 +38,7 @@ export const Profile = () => {
     setEmailMessage(null);
 
     try {
-      const response = await api.put('/api/v1/users/profile/update', { email });
+      const response = await authApi.put('/api/v1/users/profile/update', { email });
       setUser(response.data);
       setEmailMessage({ type: 'success', text: 'Email updated successfully!' });
       setIsEditingEmail(false);
@@ -72,7 +72,7 @@ export const Profile = () => {
     setPasswordMessage(null);
 
     try {
-      await api.put('/api/v1/users/profile/change-password', {
+      await authApi.put('/api/v1/users/profile/change-password', {
         currentPassword,
         newPassword,
       });
