@@ -24,6 +24,7 @@ import {
   ExclamationTriangleIcon,
   DocumentIcon,
   XMarkIcon,
+  StarIcon
 } from "@heroicons/react/24/outline";
 import Select from "react-select";
 import { useNavigate } from "react-router-dom";
@@ -57,7 +58,10 @@ export const MyActivities: React.FC = () => {
   const [newExperimentName, setNewExperimentName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
-
+  const [selectMultiLeia, setSelectMultiLeia] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<Experiment | null>(null);
+  const [availableLeias, setAvailableLeias] = useState<Leia[]>([]);
+  const [selectedLeiaIdToAdd, setSelectedLeiaIdToAdd] = useState<string | null>(null);
   // LEIA accordion and viewing state
   const [expandedExperiments, setExpandedExperiments] = useState<Set<string>>(
     new Set()
@@ -65,7 +69,7 @@ export const MyActivities: React.FC = () => {
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [showLeiaModal, setShowLeiaModal] = useState(false);
   const [preloadModal, setPreloadModal] = useState(false);
-
+  const [showAddLeiaModal, setShowAddLeiaModal] = useState(false);
   // Publishing state
   const [publishingExperiments, setPublishingExperiments] = useState<
     Set<string>
@@ -147,6 +151,7 @@ export const MyActivities: React.FC = () => {
       setCreatingNewExperiment(true);
       const response = await api.post<Experiment>("/api/v1/experiments", {
         name: newExperimentName.trim(),
+        isMultiLeia: selectMultiLeia,
       });
 
       setExperiments((prev) => [...(prev || []), response.data]);
@@ -823,6 +828,19 @@ export const MyActivities: React.FC = () => {
       });
     }
   };
+  const handleShowLeiaToActivity = async (experiment: Experiment) => {
+    setSelectedActivity(experiment);
+    if (experiment.isMultiLeia && experiment.leias.length >= 1) {
+      const response = await api.get("/api/v1/leias", {
+        params: { problemId : experiment.leias[0].leia.spec.problem.id },
+      });
+      setAvailableLeias(response.data);
+    } else {
+      const response = await api.get("/api/v1/leias");
+      setAvailableLeias(response.data);
+    }
+    setShowAddLeiaModal(true);
+  };
 
   const handleCancelJsonEdit = () => {
     setShowJsonEditModal(false);
@@ -880,7 +898,27 @@ export const MyActivities: React.FC = () => {
                     autoFocus
                   />
                 </div>
-
+                    
+                <div className="flex items-center mb-2">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  id="multi-leia-toggle"
+                  type="checkbox"
+                  checked={selectMultiLeia}
+                  onChange={(e) => setSelectMultiLeia(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-blue-600 transition-colors duration-300
+                                after:content-[''] after:absolute after:top-0.5 after:left-0.5
+                                after:bg-white after:rounded-full after:h-5 after:w-5
+                                after:transition-all after:duration-300
+                                peer-checked:after:translate-x-5" />
+              </label>
+              <span className="ml-2 text-sm font-medium text-gray-700">
+                  Multi-LEIA Mode
+                </span>
+            </div>
+              
                 {creatingNewExperiment && (
                   <div className="flex items-center justify-center text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
@@ -920,7 +958,80 @@ export const MyActivities: React.FC = () => {
           </div>
         </div>
       )}
-
+      {/*Add Leia Modal */}
+      {showAddLeiaModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Add a LEIA to {selectedActivity?.name}
+              </h3>
+              {selectedActivity?.isMultiLeia && (
+                <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                  This MultiLeia Activity can only have LEIA's of the same problem
+                </p>
+              )}
+            </div>
+            <div className="px-6 pb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Select a LEIA
+        </label>
+        <select
+          value={selectedLeiaIdToAdd ?? ''}
+          onChange={(e) => setSelectedLeiaIdToAdd(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-700 bg-white cursor-pointer font-medium"
+        >
+          <option value="" disabled>Selecciona una LEIA</option>
+          {availableLeias.map((leia) => (
+            <option key={leia.id} value={leia.id}>
+              {leia.metadata.name}
+            </option>
+          ))}
+        </select>
+      </div>
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowAddLeiaModal(false);
+                  setSelectedActivity(null);
+                  setSelectedLeiaIdToAdd(null);
+                }}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Return
+              </button>
+              <button
+                onClick={async () => {
+                  if (selectedLeiaIdToAdd && selectedActivity) {
+                    try {
+                      await api.post(`/api/v1/experiments/${selectedActivity.id}/leias`, {
+                        leia: selectedLeiaIdToAdd
+                      });
+                      setShowAddLeiaModal(false);
+                      setSelectedActivity(null);
+                      setSelectedLeiaIdToAdd(null);
+                      fetchExperiments();
+                      toast.success("LEIA added to activity successfully", {
+                        position: "bottom-right",
+                        autoClose: 3000,
+                      });
+                    } catch (error: any) {
+                      const message = error?.response?.data?.message || error?.message || "Failed to add LEIA to activity";
+                      toast.error(message, {
+                        position: "bottom-right",
+                        autoClose: 3000,
+                      });
+                    }
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Add to Activity
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* LEIA Content Modal - Mantener montado para mejor rendimiento */}
       {(showLeiaModal || preloadModal) && (
         <LeiaViewModal
@@ -1363,9 +1474,16 @@ export const MyActivities: React.FC = () => {
                       <div className="p-6 pb-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">
-                              {experiment.name}
+                            <h3 className="text-lg font-medium text-gray-900 mb-2 flex items-center gap-2">
+                              <span>{experiment.name}</span>
+                              {experiment.isMultiLeia && <div className="relative group">
+                                <StarIcon className="w-4 h-4 text-purple-700" />
+                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ">
+                                  Multi-LEIA
+                                </span>
+                              </div>}
                             </h3>
+                            
                             <div className="flex items-center gap-4 text-sm text-gray-500">
                               <span>
                                 Created:{" "}
@@ -1518,6 +1636,45 @@ export const MyActivities: React.FC = () => {
                                                       label: "transcription",
                                                     },
                                                   ]}
+                                                  styles={{
+                                                    control: (base) => ({
+                                                      ...base,
+                                                      fontSize: "0.875rem",
+                                                      fontWeight: "500",
+                                                      borderColor: "#d1d5db",
+                                                      backgroundColor: "#ffffff",
+                                                      minHeight: "auto",
+                                                      padding: "0.25rem",
+                                                      borderRadius: "0.5rem",
+                                                      boxShadow: "none",
+                                                      cursor: "pointer",
+                                                      "&:hover": {
+                                                        borderColor: "#9ca3af",
+                                                      },
+                                                      "&:focus-within": {
+                                                        borderColor: "#3b82f6",
+                                                        outline: "none",
+                                                      },
+                                                    }),
+                                                    option: (base, state) => ({
+                                                      ...base,
+                                                      fontSize: "0.875rem",
+                                                      fontWeight: "500",
+                                                      backgroundColor: state.isSelected
+                                                        ? "#3b82f6"
+                                                        : state.isFocused
+                                                          ? "#eff6ff"
+                                                          : "#ffffff",
+                                                      color: state.isSelected
+                                                        ? "#ffffff"
+                                                        : "#1f2937",
+                                                      cursor: "pointer",
+                                                    }),
+                                                    menuList: (base) => ({
+                                                      ...base,
+                                                      fontSize: "0.875rem",
+                                                    }),
+                                                  }}
                                                   onChange={(
                                                     selectedOption
                                                   ) => {
@@ -1553,6 +1710,8 @@ export const MyActivities: React.FC = () => {
                                           </button>
                                         )}
                                       </div>
+
+                                      
 
                                       {/* Second row: Transcription section */}
                                       {leiaConfig.configuration?.mode ===
@@ -1830,17 +1989,35 @@ export const MyActivities: React.FC = () => {
                               })}
                             </div>
                           ) : (
-                            <div className="p-6 text-center text-gray-500">
+                            <div className="p-6 flex flex-col items-center allign items-center gap-4">
                               <img
                                 src="/logo/leia_puzzle_black.png"
                                 alt="LEIA"
-                                className="w-8 h-8 mx-auto opacity-30 mb-2"
+                                className="w-8 h-8 mx-auto opacity-30"
                               />
-                              <p className="text-sm">
-                                No LEIAs in this experiment
-                              </p>
+                              <button
+                                onClick={() => handleShowLeiaToActivity(experiment)}
+                                className="h-8 px-3 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-1"
+                              >
+                                Add LEIA
+                              </button>
                             </div>
                           )}
+                          {!experiment.isPublished && (
+                                        <div className="p-6 flex flex-col items-center allign items-center gap-4">
+                                          <img
+                                            src="/logo/leia_puzzle_black.png"
+                                            alt="LEIA"
+                                            className="w-8 h-8 mx-auto opacity-30"
+                                          />
+                                          <button
+                                            onClick={() => handleShowLeiaToActivity(experiment)}
+                                            className="h-8 px-3 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-1"
+                                          >
+                                            Add LEIA
+                                          </button>
+                                        </div>
+                                      )}
                         </div>
                       )}
                     </div>

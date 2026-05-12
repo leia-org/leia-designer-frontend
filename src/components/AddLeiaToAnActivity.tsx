@@ -50,8 +50,9 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
         params: { visibility: "private" },
       });
       setDraftActivities(response.data || []);
-    } catch {
-      setErrorLoadingDraftActivities("Could not load draft activities");
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || "Could not load draft activities";
+      setErrorLoadingDraftActivities(message);
     } finally {
       setLoadingDraftActivities(false);
     }
@@ -109,9 +110,14 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
 
   const handleAddLeiaToActivity = async (activityId: string) => {
     if (!selectedLeia) return;
-    await api.post(`/api/v1/experiments/${activityId}/leias`, {
-      leia: selectedLeia.id,
-    });
+    try {
+      await api.post(`/api/v1/experiments/${activityId}/leias`, {
+        leia: selectedLeia.id,
+      });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || "Failed to add LEIA to activity";
+      throw new Error(message);
+    }
   };
 
   const handleCreateActivity = async (name: string) => {
@@ -126,6 +132,10 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       setDraftActivities((prev) => [...(prev || []), response.data]);
       setSelectedDraftActivityId(response.data.id);
       return response.data.id;
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || "Failed to create activity";
+      setActionError(message);
+      return null;
     } finally {
       setCreatingNewActivity(false);
     }
@@ -151,8 +161,9 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       await handleAddLeiaToActivity(targetActivityId);
       handleClose();
       onSuccess?.();
-    } catch {
-      setActionError("Could not add LEIA to activity");
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || "An unexpected error occurred";
+      setActionError(message);
     } finally {
       setAddingLeiaToActivity(false);
     }

@@ -2,6 +2,7 @@ import type { Leia } from "./Leia";
 import type { User } from "./User";
 
 export interface Experiment {
+  isMultiLeia: boolean;
   id: string;
   name: string;
   isPublished: boolean;
