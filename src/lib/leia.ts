@@ -63,6 +63,19 @@ export function checkConstraints(leia: Leia) {
   }
 }
 
+export function checkProcessOthers(leia: Leia) {
+  const processes = [
+    leia.behaviour?.spec?.process,
+    leia.problem?.spec?.process,
+  ];
+
+  for (const process of processes) {
+    if (Array.isArray(process) && process.includes('other') && process.length > 1) {
+      throw new Error("When 'other' is selected in process, it must be the only value.");
+    }
+  }
+}
+
 export function resolveExtensions(leia: Leia) {
   const extensions = leia.problem?.spec?.extends;
   if (!extensions) return leia;
@@ -134,6 +147,7 @@ export function generateLeia(persona: any, behaviour: any, problem: any) {
   const entities = { persona: structuredClone(persona), behaviour: structuredClone(behaviour), problem: structuredClone(problem) };
 
   checkConstraints(entities);
+  checkProcessOthers(entities);
   const extendedEntities = resolveExtensions(entities);
   const overriddenEntities = resolveOverrides(extendedEntities);
   const replacedEntities = resolvePlaceholders(overriddenEntities);

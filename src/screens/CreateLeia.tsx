@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
+import { type SingleValue, type InputActionMeta } from "react-select";
+import CreatableSelect from "react-select/creatable";
 import {
   LightBulbIcon,
   CpuChipIcon,
@@ -11,10 +13,41 @@ import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
+import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
-import type { Persona, Behaviour, Problem } from "../models/Leia";
+import type {
+  Persona,
+  Behaviour,
+  Problem,
+  Leia as LeiaResource,
+} from "../models/Leia";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
+
+interface Label {
+  id?: string;
+  _id?: string;
+  name: string;
+  color: string;
+  secundaryColor: string;
+  isGlobal?: boolean;
+  user?: unknown;
+}
+
+interface LabelDraft {
+  name: string;
+  color: string;
+  secundaryColor: string;
+  isGlobal: boolean;
+}
+
+type LabelOption = {
+  value: string;
+  label: string;
+  color: string;
+  secundaryColor: string;
+  isGlobal: boolean;
+};
 
 interface LeiaConfig {
   persona: Persona | null;
@@ -27,6 +60,7 @@ interface Leia {
     persona: Persona;
     problem: Problem;
     behaviour: Behaviour;
+    label: Label;
   };
 }
 
@@ -40,6 +74,7 @@ interface NavigationState {
     currentStep: WizardStep;
     leiaConfig: LeiaConfig;
     leiaConfigSnapShot: LeiaConfig | null;
+    labelId?: string | null;
     customizations: {
       persona?: { name: string; version?: string };
       problem?: { name: string; version?: string };
@@ -50,6 +85,16 @@ interface NavigationState {
 }
 
 type WizardStep = 1 | 2 | 3;
+
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_DETAILS =
+  "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+
+const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
+const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
+  "Mantén un tono profesional y colaborativo. Debe guiar al estudiante con preguntas de aclaración sobre catálogo, préstamos, reservas y multas.";
+
+const PENDING_LABEL_PREFIX = "__pending_label__";
 
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
@@ -83,10 +128,23 @@ export const CreateLeia: React.FC = () => {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [behaviours, setBehaviours] = useState<Behaviour[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<Error | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
+  const [labelsError, setLabelsError] = useState<string | null>(null);
+  const [showCreateLabelModal, setShowCreateLabelModal] = useState(false);
+  const [creatingLabel, setCreatingLabel] = useState(false);
+  const [createLabelError, setCreateLabelError] = useState<string | null>(null);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#2563eb");
+  const [newLabelSecondaryColor, setNewLabelSecondaryColor] =
+    useState("#bfdbfe");
+  const [isLabelGlobal, setIsLabelGlobal] = useState(false);
+  const [labelSearchInput, setLabelSearchInput] = useState("");
+  const [pendingLabelDraft, setPendingLabelDraft] =
+    useState<LabelDraft | null>(null);
 
   // Estados para filtros de visibilidad
   const [personaVisibility, setPersonaVisibility] = useState<
@@ -101,14 +159,15 @@ export const CreateLeia: React.FC = () => {
 
   // Estados para filtros de process
   const [problemProcess, setProblemProcess] = useState<
-    "all" | "requirements-elicitation" | "game"
+    "all" | "requirements-elicitation" | "game" | "other"
   >("all");
   const [behaviourProcess, setBehaviourProcess] = useState<
-    "all" | "requirements-elicitation" | "game"
+    "all" | "requirements-elicitation" | "game" | "other"
   >("all");
 
   // Estado para controlar la visibilidad/publicación de la LEIA
   const [leiaPublish, setLeiaPublish] = useState<boolean>(true);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
 
   // Estados para controlar la visibilidad de los recursos individuales
   const [behaviourPublish, setBehaviourPublish] = useState<boolean>(true);
@@ -142,10 +201,35 @@ export const CreateLeia: React.FC = () => {
 
   // Estados para generación de problemas con IA
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [generateSubject, setGenerateSubject] = useState("");
-  const [generateDetails, setGenerateDetails] = useState("");
+  const [generateSubject, setGenerateSubject] = useState(
+    DEFAULT_PROBLEM_GENERATION_SUBJECT,
+  );
+  const [generateDetails, setGenerateDetails] = useState(
+    DEFAULT_PROBLEM_GENERATION_DETAILS,
+  );
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [showGenerateBehaviourModal, setShowGenerateBehaviourModal] =
+    useState(false);
+  const [generateBehaviourSubject, setGenerateBehaviourSubject] = useState(
+    DEFAULT_BEHAVIOUR_GENERATION_SUBJECT,
+  );
+  const [generateBehaviourDetails, setGenerateBehaviourDetails] = useState(
+    DEFAULT_BEHAVIOUR_GENERATION_DETAILS,
+  );
+  const [isGeneratingBehaviour, setIsGeneratingBehaviour] = useState(false);
+  const [generateBehaviourError, setGenerateBehaviourError] = useState<
+    string | null
+  >(null);
+
+  // Modal cuando se pulsa Finish
+  const [showFinishModal, setShowFinishModal] = useState(false);
+  const [createdLeiaName, setCreatedLeiaName] = useState("");
+
+  // Estados para opcionalmente añadir la LEIA a una Activity
+  const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
+  const [createdLeiaResource, setCreatedLeiaResource] =
+    useState<LeiaResource | null>(null);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -186,6 +270,7 @@ export const CreateLeia: React.FC = () => {
       setCustomizations(
         savedState.customizations || { leia: { name: "", version: "1.0.0" } },
       );
+      setSelectedLabelId(savedState.labelId || null);
 
       // Limpiar el estado de navegación para evitar cargas repetidas
       navigate(location.pathname, {
@@ -236,7 +321,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadProblems = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility };
@@ -254,7 +339,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadBehaviours = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility, process };
@@ -264,6 +349,48 @@ export const CreateLeia: React.FC = () => {
       setBehaviours(response.data);
     } catch (err) {
       console.error("Error loading behaviours:", err);
+    }
+  };
+
+  const loadLabels = async () => {
+    try {
+      setLabelsError(null);
+      const response = await api.get<Label[]>("/api/v1/labels");
+      setLabels(response.data || []);
+    } catch (err) {
+      console.error("Error loading labels:", err);
+      setLabelsError("Failed to load labels");
+    }
+  };
+
+  const getLabelIdentifier = (label: Label) => label.id || label._id || null;
+
+  const handleCreateLabel = async () => {
+    const trimmedName = newLabelName.trim();
+    if (!trimmedName) {
+      setCreateLabelError("Label name is required");
+      return;
+    }
+
+    try {
+      setCreateLabelError(null);
+      const pendingLabelId = `${PENDING_LABEL_PREFIX}${trimmedName}`;
+      setPendingLabelDraft({
+        name: trimmedName,
+        color: newLabelColor,
+        secundaryColor: newLabelSecondaryColor,
+        isGlobal: currentUser?.role === "admin" ? isLabelGlobal : false,
+      });
+      setSelectedLabelId(pendingLabelId);
+      setShowCreateLabelModal(false);
+      setLabelSearchInput("");
+      setNewLabelName("");
+      setNewLabelColor("#2563eb");
+      setNewLabelSecondaryColor("#bfdbfe");
+      setIsLabelGlobal(false);
+    } catch (err) {
+      console.error("Error creating label:", err);
+      setCreateLabelError("Failed to prepare label");
     }
   };
 
@@ -277,6 +404,7 @@ export const CreateLeia: React.FC = () => {
         loadPersonas(personaVisibility),
         loadProblems(problemVisibility, problemProcess),
         loadBehaviours(behaviourVisibility, behaviourProcess),
+        loadLabels(),
       ]);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -310,14 +438,14 @@ export const CreateLeia: React.FC = () => {
 
   // Funciones para manejar cambios de process
   const handleProblemProcessChange = (
-    process: "all" | "requirements-elicitation" | "game",
+    process: "all" | "requirements-elicitation" | "game" | "other",
   ) => {
     setProblemProcess(process);
     loadProblems(problemVisibility, process); // Solo recargar problems
   };
 
   const handleBehaviourProcessChange = (
-    process: "all" | "requirements-elicitation" | "game",
+    process: "all" | "requirements-elicitation" | "game" | "other",
   ) => {
     setBehaviourProcess(process);
     loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
@@ -346,8 +474,8 @@ export const CreateLeia: React.FC = () => {
 
   // Componente para selector de process
   const ProcessSelector: React.FC<{
-    value: "all" | "requirements-elicitation" | "game";
-    onChange: (value: "all" | "requirements-elicitation" | "game") => void;
+    value: "all" | "requirements-elicitation" | "game" | "other";
+    onChange: (value: "all" | "requirements-elicitation" | "game" | "other") => void;
   }> = ({ value, onChange }) => (
     <div className="flex flex-col items-center">
       <label className="text-xs text-gray-600 mb-1">Process</label>
@@ -355,7 +483,7 @@ export const CreateLeia: React.FC = () => {
         value={value}
         onChange={(e) =>
           onChange(
-            e.target.value as "all" | "requirements-elicitation" | "game",
+            e.target.value as "all" | "requirements-elicitation" | "game" | "other",
           )
         }
         className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[60px] max-w-[140px]"
@@ -363,6 +491,7 @@ export const CreateLeia: React.FC = () => {
         <option value="all">All</option>
         <option value="requirements-elicitation">Req. Elicitation</option>
         <option value="game">Game</option>
+        <option value="other">Other</option>
       </select>
     </div>
   );
@@ -478,6 +607,39 @@ export const CreateLeia: React.FC = () => {
     setDeleteError(null);
   };
 
+const openGenerateProblemModal = () => {
+    if (!leiaConfig.problem) return;
+    setGenerateSubject(DEFAULT_PROBLEM_GENERATION_SUBJECT);
+    setGenerateDetails(DEFAULT_PROBLEM_GENERATION_DETAILS);
+    setGenerateError(null);
+    setShowGenerateModal(true);
+  };
+
+  const closeGenerateProblemModal = () => {
+    setShowGenerateModal(false);
+    setGenerateSubject(DEFAULT_PROBLEM_GENERATION_SUBJECT);
+    setGenerateDetails(DEFAULT_PROBLEM_GENERATION_DETAILS);
+    setGenerateError(null);
+  };
+
+  const openGenerateBehaviourModal = () => {
+    if (!leiaConfig.behaviour) {
+      return;
+    }
+    setGenerateBehaviourSubject(DEFAULT_BEHAVIOUR_GENERATION_SUBJECT);
+    setGenerateBehaviourDetails(DEFAULT_BEHAVIOUR_GENERATION_DETAILS);
+    setGenerateBehaviourError(null);
+    setShowGenerateBehaviourModal(true);
+  };
+
+  const closeGenerateBehaviourModal = () => {
+    setShowGenerateBehaviourModal(false);
+    setGenerateBehaviourSubject(DEFAULT_BEHAVIOUR_GENERATION_SUBJECT);
+    setGenerateBehaviourDetails(DEFAULT_BEHAVIOUR_GENERATION_DETAILS);
+    setGenerateBehaviourError(null);
+  };
+ 
+
   // Función para generar un problema similar con IA
   const handleGenerateProblem = async () => {
     if (!generateSubject.trim() || !leiaConfig.problem) {
@@ -515,16 +677,76 @@ export const CreateLeia: React.FC = () => {
       }));
 
       // Cerrar modal y limpiar
-      setShowGenerateModal(false);
-      setGenerateSubject("");
-      setGenerateDetails("");
+      closeGenerateProblemModal();
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
       setGenerateError(
-        err.response?.data?.message || "Failed to generate problem",
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Failed to generate problem",
       );
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Función para generar un behaviour similar con IA
+  const handleGenerateBehaviour = async () => {
+    if (!generateBehaviourSubject.trim() || !leiaConfig.behaviour) {
+      return;
+    }
+
+    setIsGeneratingBehaviour(true);
+    setGenerateBehaviourError(null);
+
+    try {
+      const response = await api.post("/api/v1/runner/behaviours/generate", {
+        subject: generateBehaviourSubject.trim(),
+        additionalDetails: generateBehaviourDetails.trim() || undefined,
+        exampleBehaviour: leiaConfig.behaviour,
+      });
+
+      const generatedBehaviourSpec = (response.data?.spec ||
+        response.data) as Behaviour["spec"];
+
+      const generatedBehaviour: Behaviour = {
+        apiVersion: leiaConfig.behaviour.apiVersion || "v1",
+        metadata: {
+          name: generateBehaviourSubject
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "-"),
+          version: "1.0.0",
+        },
+        spec: generatedBehaviourSpec,
+        id: `generated-behaviour-${Date.now()}`,
+        edited: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isPublished: false,
+        user: currentUser!,
+      };
+
+      setBehaviours((prev) => [generatedBehaviour, ...prev]);
+      setLeiaConfig((prev) => ({
+        ...prev,
+        behaviour: generatedBehaviour,
+      }));
+
+      closeGenerateBehaviourModal();
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
+      setGenerateBehaviourError(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Failed to generate behaviour",
+      );
+    } finally {
+      setIsGeneratingBehaviour(false);
     }
   };
 
@@ -571,6 +793,7 @@ export const CreateLeia: React.FC = () => {
             currentStep,
             leiaConfig,
             leiaConfigSnapShot,
+            labelId: selectedLabelId,
             customizations,
           },
           problemDescription: generatedLeia.spec.problem.spec.description,
@@ -613,11 +836,38 @@ export const CreateLeia: React.FC = () => {
         return;
       }
 
+      let finalLabelId = selectedLabelId;
+      if (pendingLabelDraft) {
+        try {
+          setCreatingLabel(true);
+          const response = await api.post<Label>("/api/v1/labels", {
+            name: pendingLabelDraft.name,
+            color: pendingLabelDraft.color,
+            secundaryColor: pendingLabelDraft.secundaryColor,
+            isGlobal:
+              currentUser?.role === "admin" ? pendingLabelDraft.isGlobal : false,
+            user: currentUser?.id,
+          });
+
+          finalLabelId = getLabelIdentifier(response.data);
+          setSelectedLabelId(finalLabelId);
+          setPendingLabelDraft(null);
+          await loadLabels();
+        } catch (error) {
+          console.error("Error creating label on finish:", error);
+          setError("Failed to create label");
+          return;
+        } finally {
+          setCreatingLabel(false);
+        }
+      }
+
       const leia = {
         apiVersion: "v1",
         metadata: {
           name: customizations.leia.name,
           version: "1.0.0",
+          label: finalLabelId || undefined,
         },
         spec: {} as Record<string, any>,
       };
@@ -674,7 +924,11 @@ export const CreateLeia: React.FC = () => {
           currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
         const response = await api.post(`/api/v1/leias${publishParam}`, leia);
         console.log("LEIA created successfully:", response.data);
-        navigate("/leias");
+        setCreatedLeiaName(
+          response.data?.metadata?.name || customizations.leia.name || "LEIA",
+        );
+        setCreatedLeiaResource(response.data as LeiaResource);
+        setShowFinishModal(true);
       } catch (error) {
         console.error("Error creating LEIA:", error);
         setError("Failed to create LEIA");
@@ -851,6 +1105,14 @@ export const CreateLeia: React.FC = () => {
               onDelete={handleDeleteResource}
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
+                  <button
+                    onClick={openGenerateBehaviourModal}
+                    disabled={!leiaConfig.behaviour}
+                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Generate similar behaviour with AI"
+                  >
+                    <SparklesIcon className="w-5 h-5" />
+                  </button>
                   <VisibilitySelector
                     value={behaviourVisibility}
                     onChange={handleBehaviourVisibilityChange}
@@ -876,7 +1138,7 @@ export const CreateLeia: React.FC = () => {
               rightHeaderElement={
                 <div className="flex gap-3 items-start">
                   <button
-                    onClick={() => setShowGenerateModal(true)}
+                    onClick={openGenerateProblemModal}
                     disabled={!leiaConfig.problem}
                     className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     title="Generate similar problem with AI"
@@ -1001,6 +1263,13 @@ export const CreateLeia: React.FC = () => {
                         </button>
                       )}
                       <button
+                        onClick={openGenerateBehaviourModal}
+                        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
+                        title="Generate similar with AI"
+                      >
+                        <SparklesIcon className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() =>
                           setEditingResource({
                             resource: "behaviour",
@@ -1100,7 +1369,7 @@ export const CreateLeia: React.FC = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => setShowGenerateModal(true)}
+                    onClick={openGenerateProblemModal}
                     className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
                     title="Generate similar with AI"
                   >
@@ -1477,16 +1746,35 @@ export const CreateLeia: React.FC = () => {
     </div>
   );
 
-  const renderStep3 = () => (
-    <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Step 3: Create your LEIA
-        </h2>
-        <p className="text-gray-600">
-          Update the fields of the required resources and complete the process
-        </p>
-      </div>
+  const renderStep3 = () => {
+    const labelOptions = labels.map((label) => ({
+      value: getLabelIdentifier(label) || label.name,
+      label: label.name,
+      color: label.color,
+      secundaryColor: label.secundaryColor,
+      isGlobal: Boolean(label.isGlobal),
+    }));
+
+    const selectedLabelOption: LabelOption | null = pendingLabelDraft
+      ? {
+          value: `${PENDING_LABEL_PREFIX}${pendingLabelDraft.name}`,
+          label: pendingLabelDraft.name,
+          color: pendingLabelDraft.color,
+          secundaryColor: pendingLabelDraft.secundaryColor,
+          isGlobal: pendingLabelDraft.isGlobal,
+        }
+      : labelOptions.find((option) => option.value === selectedLabelId) || null;
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Step 3: Create your LEIA
+          </h2>
+          <p className="text-gray-600">
+            Update the fields of the required resources and complete the process
+          </p>
+        </div>
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="font-semibold text-gray-900 mb-4">LEIA</h3>
         <div className="space-y-4">
@@ -1522,6 +1810,127 @@ export const CreateLeia: React.FC = () => {
                 {validationErrors.leia}
               </p>
             )}
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Label
+              </label>
+              <CreatableSelect<LabelOption, false>
+                isClearable
+                isSearchable
+                isDisabled={loading || !!labelsError}
+                isLoading={loading}
+                inputValue={labelSearchInput}
+                placeholder="Select or create a label..."
+                value={selectedLabelOption}
+                options={labelOptions}
+                onChange={(option: SingleValue<LabelOption>) => {
+                  setSelectedLabelId(option?.value || null);
+                  if (!option) {
+                    setPendingLabelDraft(null);
+                  }
+                  setLabelSearchInput("");
+                  if (option) {
+                    setPendingLabelDraft(null);
+                  }
+                  if (option) {
+                    setShowCreateLabelModal(false);
+                  }
+                }}
+                onInputChange={(inputValue: string, meta: InputActionMeta) => {
+                  if (meta.action === "input-change") {
+                    setLabelSearchInput(inputValue);
+                  }
+
+                  return inputValue;
+                }}
+                onCreateOption={(inputValue: string) => {
+                  const candidate = inputValue.trim();
+                  if (!candidate) return;
+                  setShowCreateLabelModal(true);
+                  setCreateLabelError(null);
+                  setNewLabelName(candidate);
+                  setSelectedLabelId(`${PENDING_LABEL_PREFIX}${candidate}`);
+                }}
+                formatCreateLabel={(inputValue) =>
+                  `Create label "${inputValue}"`
+                }
+                noOptionsMessage={({ inputValue }) =>
+                  inputValue?.trim()
+                    ? `No labels found. Create "${inputValue.trim()}"`
+                    : "No labels available. Type to create one."
+                }
+                isValidNewOption={(inputValue) => {
+                  const candidate = inputValue.trim();
+                  if (!candidate) return false;
+                  return !labels.some(
+                    (label) =>
+                      label.name.trim().toLowerCase() ===
+                      candidate.toLowerCase(),
+                  );
+                }}
+                formatOptionLabel={(option) => (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full border border-black/10"
+                      style={{ backgroundColor: option.color }}
+                    />
+                    <span className="truncate">{option.label}</span>
+                    {option.isGlobal && (
+                      <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                        Global
+                      </span>
+                    )}
+                  </div>
+                )}
+                styles={{
+                  control: (base, state) => ({
+                    ...base,
+                    minHeight: "42px",
+                    borderColor: labelsError
+                      ? "#fca5a5"
+                      : state.isFocused
+                        ? "#3b82f6"
+                        : "#d1d5db",
+                    boxShadow: state.isFocused
+                      ? "0 0 0 1px #3b82f6"
+                      : "none",
+                    "&:hover": {
+                      borderColor: labelsError ? "#fca5a5" : "#9ca3af",
+                    },
+                  }),
+                  option: (base, state) => ({
+                    ...base,
+                    backgroundColor: state.isFocused
+                      ? "#eff6ff"
+                      : state.isSelected
+                        ? "#dbeafe"
+                        : "white",
+                    color: "#111827",
+                  }),
+                }}
+                className="react-select-container"
+                classNamePrefix="react-select"
+              />
+              {pendingLabelDraft && (
+                <p className="mt-1 text-xs text-blue-700">
+                  New label "{pendingLabelDraft.name}"{pendingLabelDraft.isGlobal ? "(Global)" : "(Private)"} will be created when you
+                  click Finish.
+                </p>
+              )}
+              {labelsError && (
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-sm text-red-600">{labelsError}</p>
+                  <button
+                    type="button"
+                    onClick={loadLabels}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Selector de visibilidad - solo para usuarios admin */}
@@ -1987,7 +2396,8 @@ export const CreateLeia: React.FC = () => {
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   // Loading state
   if (loading) {
@@ -2156,7 +2566,364 @@ export const CreateLeia: React.FC = () => {
         onConfirm={confirmDeleteResource}
         isDeleting={isDeleting}
         error={deleteError}
+      />  
+      {showCreateLabelModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreateLabelModal(false);
+              setCreateLabelError(null);
+            }
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                Create New Label
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Add a label and reuse it in your LEIAs.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newLabelName}
+                    onChange={(e) => setNewLabelName(e.target.value)}
+                    placeholder="e.g. bug"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Color
+                    </label>
+                    <input
+                      type="color"
+                      value={newLabelColor}
+                      onChange={(e) => setNewLabelColor(e.target.value)}
+                      className="h-10 w-full border border-gray-300 rounded-lg bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Secondary color
+                    </label>
+                    <input
+                      type="color"
+                      value={newLabelSecondaryColor}
+                      onChange={(e) => setNewLabelSecondaryColor(e.target.value)}
+                      className="h-10 w-full border border-gray-300 rounded-lg bg-white"
+                    />
+                  </div>
+                </div>
+
+                {currentUser?.role === "admin" && (
+                  <div>
+                    <p className="block text-sm font-medium text-gray-700 mb-2">
+                      Visibility
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsLabelGlobal((prev) => !prev)}
+                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        isLabelGlobal
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span>{isLabelGlobal ? "Global" : "Private"}</span>
+                      <span
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          isLabelGlobal ? "bg-blue-600" : "bg-gray-300"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                            isLabelGlobal ? "translate-x-5" : "translate-x-1"
+                          }`}
+                        />
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {createLabelError && (
+                  <p className="text-sm text-red-600">{createLabelError}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateLabelModal(false);
+                  setCreateLabelError(null);
+                }}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateLabel}
+                disabled={creatingLabel}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                Save label for Finish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de generación de behaviours con IA */}
+      {showGenerateBehaviourModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <SparklesIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Generate Similar Behaviour
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Using "{leiaConfig.behaviour?.metadata.name}" as template
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Behaviour Subject *
+                  </label>
+                  <input
+                    type="text"
+                    value={generateBehaviourSubject}
+                    onChange={(e) => setGenerateBehaviourSubject(e.target.value)}
+                    placeholder="e.g., Senior Librarian"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Additional Details (optional)
+                  </label>
+                  <textarea
+                    value={generateBehaviourDetails}
+                    onChange={(e) => setGenerateBehaviourDetails(e.target.value)}
+                    placeholder="e.g., Ask clarifying questions and keep a constructive interview tone."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                {generateBehaviourError && (
+                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+                    {generateBehaviourError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={closeGenerateBehaviourModal}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateBehaviour}
+                disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isGeneratingBehaviour ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  "Generate"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AddLeiaToAnActivity
+        isOpen={showAddToActivityModal}
+        selectedLeia={createdLeiaResource}
+        onClose={() => {setShowAddToActivityModal(false); navigate("/leias")}}
+        onSuccess={() => {
+          setShowAddToActivityModal(false);
+          navigate("/leias");
+        }}
       />
+
+      {/* Modal mostrado despues de crear la LEIA*/}
+      {showFinishModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                LEIA created successfully
+              </h3>
+              <p className="text-sm text-gray-600">
+                "{createdLeiaName}" was created successfully.
+              </p>
+              <p className="text-sm text-gray-600 mt-2">
+                Do you want to add it directly to an activity?
+              </p>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowFinishModal(false);
+                  navigate("/leias");
+                }}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                No, go to LEIAs
+              </button>
+              <button
+                onClick={() => {
+                  setShowFinishModal(false);
+                  setShowAddToActivityModal(true);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Yes, add now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de generación de behaviours con IA */}
+      {showGenerateBehaviourModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <SparklesIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Generate Similar Behaviour
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Using "{leiaConfig.behaviour?.metadata.name}" as template
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Behaviour Subject *
+                  </label>
+                  <input
+                    type="text"
+                    value={generateBehaviourSubject}
+                    onChange={(e) => setGenerateBehaviourSubject(e.target.value)}
+                    placeholder="e.g., Senior Librarian"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Additional Details (optional)
+                  </label>
+                  <textarea
+                    value={generateBehaviourDetails}
+                    onChange={(e) => setGenerateBehaviourDetails(e.target.value)}
+                    placeholder="e.g., Ask clarifying questions and keep a constructive interview tone."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                {generateBehaviourError && (
+                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+                    {generateBehaviourError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={closeGenerateBehaviourModal}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateBehaviour}
+                disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isGeneratingBehaviour ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  "Generate"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de generación de problemas con IA */}
       {showGenerateModal && (
@@ -2176,6 +2943,13 @@ export const CreateLeia: React.FC = () => {
                   </p>
                 </div>
               </div>
+              <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                <p className="text-xs text-purple-800 leading-relaxed">
+                  If present in the base template, the generator will also adapt{" "}
+                  <code>evaluationPrompt</code>, <code>extends</code>, and{" "}
+                  <code>overrides</code>.
+                </p>
+              </div>
 
               <div className="space-y-4">
                 <div>
@@ -2186,7 +2960,7 @@ export const CreateLeia: React.FC = () => {
                     type="text"
                     value={generateSubject}
                     onChange={(e) => setGenerateSubject(e.target.value)}
-                    placeholder="e.g., Library Management System"
+                    placeholder="p. ej., Sistema de biblioteca"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
@@ -2198,7 +2972,7 @@ export const CreateLeia: React.FC = () => {
                   <textarea
                     value={generateDetails}
                     onChange={(e) => setGenerateDetails(e.target.value)}
-                    placeholder="e.g., Focus on catalog search, lending, and reservations. Include member accounts and overdue notifications."
+                    placeholder="p. ej., catálogo, préstamos, reservas, cuentas de socios y notificaciones de vencimiento."
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
                   />
@@ -2214,12 +2988,7 @@ export const CreateLeia: React.FC = () => {
 
             <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
               <button
-                onClick={() => {
-                  setShowGenerateModal(false);
-                  setGenerateSubject("");
-                  setGenerateDetails("");
-                  setGenerateError(null);
-                }}
+                onClick={closeGenerateProblemModal}
                 className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel

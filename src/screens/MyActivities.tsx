@@ -224,7 +224,8 @@ export const MyActivities: React.FC = () => {
         };
         if (
           axiosError.response?.status === 409 ||
-          axiosError.response?.status === 404
+          axiosError.response?.status === 404 ||
+          axiosError.response?.status === 400
         ) {
           errorMessage = axiosError.response.data?.message || errorMessage;
         }
@@ -321,6 +322,20 @@ export const MyActivities: React.FC = () => {
       toast.error(errorMessage, {
         position: "bottom-right",
         autoClose: 3000,
+      });
+    }
+  };
+
+  const handleFastReplication = (experimentId: string) => {
+    const workbenchBaseUrl =
+      import.meta.env.VITE_WORKBENCH_URL;
+
+    const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/experiments/${encodeURIComponent(experimentId)}`;
+    const newWindow = window.open(replicationUrl);
+    if (!newWindow) {
+      toast.error("Popup blocked or could not open replication", {
+        position: "bottom-right",
+        autoClose: 2000,
       });
     }
   };
@@ -1244,8 +1259,8 @@ export const MyActivities: React.FC = () => {
                 placeholder="Search activities..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                disabled
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-gray-50 text-gray-500 cursor-not-allowed focus:outline-none"
+                //disabled
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white text-gray-900 cursor-text focus:outline-none"
               />
             </div>
 
@@ -1339,7 +1354,7 @@ export const MyActivities: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {experiments.map((experiment) => (
+                  {experiments.filter((experiment) => experiment.name.toLowerCase().includes(searchQuery.toLowerCase())).map((experiment) => (
                     <div
                       key={experiment.id}
                       className="bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow duration-200"
@@ -1376,6 +1391,13 @@ export const MyActivities: React.FC = () => {
                                 Published
                               </span>
                             )}
+                            {experiment.isPublished &&<button 
+                              onClick={() => handleFastReplication(experiment.id)}
+                              className="h-8 px-3 text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 flex items-center gap-1"
+                              title="Replicate activity"
+                            >
+                              Replicate
+                            </button>}
                             {!experiment.isPublished && (
                               <div className="flex items-center gap-2">
                                 <button
