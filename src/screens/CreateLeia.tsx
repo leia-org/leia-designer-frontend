@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
-import { type SingleValue, type InputActionMeta } from "react-select";
+import { type InputActionMeta, type MultiValue } from "react-select";
 import CreatableSelect from "react-select/creatable";
 import {
   LightBulbIcon,
@@ -35,6 +35,7 @@ interface Label {
 }
 
 interface LabelDraft {
+  id: string;
   name: string;
   color: string;
   secundaryColor: string;
@@ -60,7 +61,6 @@ interface Leia {
     persona: Persona;
     problem: Problem;
     behaviour: Behaviour;
-    label: Label;
   };
 }
 
@@ -74,6 +74,7 @@ interface NavigationState {
     currentStep: WizardStep;
     leiaConfig: LeiaConfig;
     leiaConfigSnapShot: LeiaConfig | null;
+    labelIds?: string[];
     labelId?: string | null;
     customizations: {
       persona?: { name: string; version?: string };
@@ -143,8 +144,9 @@ export const CreateLeia: React.FC = () => {
     useState("#bfdbfe");
   const [isLabelGlobal, setIsLabelGlobal] = useState(false);
   const [labelSearchInput, setLabelSearchInput] = useState("");
-  const [pendingLabelDraft, setPendingLabelDraft] =
-    useState<LabelDraft | null>(null);
+  const [pendingLabelDrafts, setPendingLabelDrafts] = useState<LabelDraft[]>(
+    [],
+  );
 
   // Estados para filtros de visibilidad
   const [personaVisibility, setPersonaVisibility] = useState<
@@ -167,7 +169,7 @@ export const CreateLeia: React.FC = () => {
 
   // Estado para controlar la visibilidad/publicación de la LEIA
   const [leiaPublish, setLeiaPublish] = useState<boolean>(true);
-  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
 
   // Estados para controlar la visibilidad de los recursos individuales
   const [behaviourPublish, setBehaviourPublish] = useState<boolean>(true);
@@ -270,7 +272,9 @@ export const CreateLeia: React.FC = () => {
       setCustomizations(
         savedState.customizations || { leia: { name: "", version: "1.0.0" } },
       );
-      setSelectedLabelId(savedState.labelId || null);
+      setSelectedLabelIds(
+        savedState.labelIds || (savedState.labelId ? [savedState.labelId] : []),
+      );
 
       // Limpiar el estado de navegación para evitar cargas repetidas
       navigate(location.pathname, {
@@ -365,6 +369,9 @@ export const CreateLeia: React.FC = () => {
 
   const getLabelIdentifier = (label: Label) => label.id || label._id || null;
 
+  const getPendingLabelId = (labelName: string) =>
+    `${PENDING_LABEL_PREFIX}${labelName.trim().toLowerCase()}`;
+
   const handleCreateLabel = async () => {
     const trimmedName = newLabelName.trim();
     if (!trimmedName) {
@@ -374,14 +381,26 @@ export const CreateLeia: React.FC = () => {
 
     try {
       setCreateLabelError(null);
-      const pendingLabelId = `${PENDING_LABEL_PREFIX}${trimmedName}`;
-      setPendingLabelDraft({
+      const pendingLabelId = getPendingLabelId(trimmedName);
+      const nextDraft: LabelDraft = {
+        id: pendingLabelId,
         name: trimmedName,
         color: newLabelColor,
         secundaryColor: newLabelSecondaryColor,
         isGlobal: currentUser?.role === "admin" ? isLabelGlobal : false,
+      };
+
+      setPendingLabelDrafts((prev) => {
+        const withoutDuplicatedName = prev.filter(
+          (draft) =>
+            draft.name.trim().toLowerCase() !== trimmedName.toLowerCase(),
+        );
+
+        return [...withoutDuplicatedName, nextDraft];
       });
-      setSelectedLabelId(pendingLabelId);
+      setSelectedLabelIds((prev) =>
+        prev.includes(pendingLabelId) ? prev : [...prev, pendingLabelId],
+      );
       setShowCreateLabelModal(false);
       setLabelSearchInput("");
       setNewLabelName("");
@@ -793,7 +812,8 @@ const openGenerateProblemModal = () => {
             currentStep,
             leiaConfig,
             leiaConfigSnapShot,
-            labelId: selectedLabelId,
+            labelIds: selectedLabelIds,
+            labelId: selectedLabelIds[0] || null,
             customizations,
           },
           problemDescription: generatedLeia.spec.problem.spec.description,
@@ -836,22 +856,40 @@ const openGenerateProblemModal = () => {
         return;
       }
 
-      let finalLabelId = selectedLabelId;
-      if (pendingLabelDraft) {
+      let finalLabelIds = [...selectedLabelIds];
+      if (pendingLabelDrafts.length > 0) {
         try {
           setCreatingLabel(true);
-          const response = await api.post<Label>("/api/v1/labels", {
-            name: pendingLabelDraft.name,
-            color: pendingLabelDraft.color,
-            secundaryColor: pendingLabelDraft.secundaryColor,
-            isGlobal:
-              currentUser?.role === "admin" ? pendingLabelDraft.isGlobal : false,
-            user: currentUser?.id,
-          });
+          const createdLabels = await Promise.all(
+            pendingLabelDrafts.map(async (draft) => {
+              const response = await api.post<Label>("/api/v1/labels", {
+                name: draft.name,
+                color: draft.color,
+                secundaryColor: draft.secundaryColor,
+                isGlobal:
+                  currentUser?.role === "admin" ? draft.isGlobal : false,
+                user: currentUser?.id,
+              });
 
-          finalLabelId = getLabelIdentifier(response.data);
-          setSelectedLabelId(finalLabelId);
-          setPendingLabelDraft(null);
+              return {
+                pendingId: draft.id,
+                createdId: getLabelIdentifier(response.data),
+              };
+            }),
+          );
+
+          const pendingToCreated = new Map(
+            createdLabels
+              .filter((entry) => Boolean(entry.createdId))
+              .map((entry) => [entry.pendingId, entry.createdId as string]),
+          );
+
+          finalLabelIds = finalLabelIds
+            .map((labelId) => pendingToCreated.get(labelId) || labelId)
+            .filter(Boolean);
+
+          setSelectedLabelIds(finalLabelIds);
+          setPendingLabelDrafts([]);
           await loadLabels();
         } catch (error) {
           console.error("Error creating label on finish:", error);
@@ -867,7 +905,7 @@ const openGenerateProblemModal = () => {
         metadata: {
           name: customizations.leia.name,
           version: "1.0.0",
-          label: finalLabelId || undefined,
+          labels: finalLabelIds.length > 0 ? finalLabelIds : undefined,
         },
         spec: {} as Record<string, any>,
       };
@@ -1747,23 +1785,26 @@ const openGenerateProblemModal = () => {
   );
 
   const renderStep3 = () => {
-    const labelOptions = labels.map((label) => ({
-      value: getLabelIdentifier(label) || label.name,
-      label: label.name,
-      color: label.color,
-      secundaryColor: label.secundaryColor,
-      isGlobal: Boolean(label.isGlobal),
-    }));
+    const labelOptions: LabelOption[] = [
+      ...labels.map((label) => ({
+        value: getLabelIdentifier(label) || label.name,
+        label: label.name,
+        color: label.color,
+        secundaryColor: label.secundaryColor,
+        isGlobal: Boolean(label.isGlobal),
+      })),
+      ...pendingLabelDrafts.map((draft) => ({
+        value: draft.id,
+        label: draft.name,
+        color: draft.color,
+        secundaryColor: draft.secundaryColor,
+        isGlobal: draft.isGlobal,
+      })),
+    ];
 
-    const selectedLabelOption: LabelOption | null = pendingLabelDraft
-      ? {
-          value: `${PENDING_LABEL_PREFIX}${pendingLabelDraft.name}`,
-          label: pendingLabelDraft.name,
-          color: pendingLabelDraft.color,
-          secundaryColor: pendingLabelDraft.secundaryColor,
-          isGlobal: pendingLabelDraft.isGlobal,
-        }
-      : labelOptions.find((option) => option.value === selectedLabelId) || null;
+    const selectedLabelOptions: LabelOption[] = labelOptions.filter((option) =>
+      selectedLabelIds.includes(option.value),
+    );
 
     return (
       <div className="space-y-6">
@@ -1813,29 +1854,30 @@ const openGenerateProblemModal = () => {
 
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Label
+                Labels
               </label>
-              <CreatableSelect<LabelOption, false>
-                isClearable
+              <CreatableSelect<LabelOption, true>
+                isMulti
+                closeMenuOnSelect={false}
                 isSearchable
                 isDisabled={loading || !!labelsError}
                 isLoading={loading}
                 inputValue={labelSearchInput}
-                placeholder="Select or create a label..."
-                value={selectedLabelOption}
+                placeholder="Select one or more labels..."
+                value={selectedLabelOptions}
                 options={labelOptions}
-                onChange={(option: SingleValue<LabelOption>) => {
-                  setSelectedLabelId(option?.value || null);
-                  if (!option) {
-                    setPendingLabelDraft(null);
-                  }
+                onChange={(options: MultiValue<LabelOption>) => {
+                  const nextSelectedLabelIds = options.map(
+                    (option) => option.value,
+                  );
+
+                  setSelectedLabelIds(nextSelectedLabelIds);
+                  setPendingLabelDrafts((prev) =>
+                    prev.filter((draft) =>
+                      nextSelectedLabelIds.includes(draft.id),
+                    ),
+                  );
                   setLabelSearchInput("");
-                  if (option) {
-                    setPendingLabelDraft(null);
-                  }
-                  if (option) {
-                    setShowCreateLabelModal(false);
-                  }
                 }}
                 onInputChange={(inputValue: string, meta: InputActionMeta) => {
                   if (meta.action === "input-change") {
@@ -1850,7 +1892,6 @@ const openGenerateProblemModal = () => {
                   setShowCreateLabelModal(true);
                   setCreateLabelError(null);
                   setNewLabelName(candidate);
-                  setSelectedLabelId(`${PENDING_LABEL_PREFIX}${candidate}`);
                 }}
                 formatCreateLabel={(inputValue) =>
                   `Create label "${inputValue}"`
@@ -1858,16 +1899,24 @@ const openGenerateProblemModal = () => {
                 noOptionsMessage={({ inputValue }) =>
                   inputValue?.trim()
                     ? `No labels found. Create "${inputValue.trim()}"`
-                    : "No labels available. Type to create one."
+                    : "No labels available"
                 }
                 isValidNewOption={(inputValue) => {
                   const candidate = inputValue.trim();
                   if (!candidate) return false;
-                  return !labels.some(
+                  const isExistingLabel = labels.some(
                     (label) =>
                       label.name.trim().toLowerCase() ===
                       candidate.toLowerCase(),
                   );
+
+                  const isPendingLabel = pendingLabelDrafts.some(
+                    (draft) =>
+                      draft.name.trim().toLowerCase() ===
+                      candidate.toLowerCase(),
+                  );
+
+                  return !isExistingLabel && !isPendingLabel;
                 }}
                 formatOptionLabel={(option) => (
                   <div className="flex items-center gap-2">
@@ -1912,10 +1961,10 @@ const openGenerateProblemModal = () => {
                 className="react-select-container"
                 classNamePrefix="react-select"
               />
-              {pendingLabelDraft && (
+              {pendingLabelDrafts.length > 0 && (
                 <p className="mt-1 text-xs text-blue-700">
-                  New label "{pendingLabelDraft.name}"{pendingLabelDraft.isGlobal ? "(Global)" : "(Private)"} will be created when you
-                  click Finish.
+                  {pendingLabelDrafts.length} new label
+                  {pendingLabelDrafts.length === 1 ? "" : "s"} will be created when you click Finish.
                 </p>
               )}
               {labelsError && (
@@ -2595,7 +2644,7 @@ const openGenerateProblemModal = () => {
                     type="text"
                     value={newLabelName}
                     onChange={(e) => setNewLabelName(e.target.value)}
-                    placeholder="e.g. bug"
+                    placeholder=""
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -2603,7 +2652,7 @@ const openGenerateProblemModal = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Color
+                      Background colour
                     </label>
                     <input
                       type="color"
@@ -2614,7 +2663,7 @@ const openGenerateProblemModal = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Secondary color
+                      Text colour
                     </label>
                     <input
                       type="color"
@@ -2624,7 +2673,21 @@ const openGenerateProblemModal = () => {
                     />
                   </div>
                 </div>
-
+                <div className="flex flex-col items-center">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
+                    Preview
+                  </label>
+                  <span
+                                className="px-2 py-0.5 text-xs font-medium rounded-full border border-gray-200 "
+                                style={{
+                                  backgroundColor: newLabelColor || "#2563eb",
+                                  color: newLabelSecondaryColor || "#bfdbfe",
+                                }}
+                                title={`Label: ${newLabelName}`}
+                              >
+                                {newLabelName || "Preview"}
+                              </span>
+                </div>
                 {currentUser?.role === "admin" && (
                   <div>
                     <p className="block text-sm font-medium text-gray-700 mb-2">
