@@ -1480,6 +1480,16 @@ const openGenerateProblemModal = () => {
             </div>
             {leiaConfig.persona ? (
               <div className="space-y-3">
+                {leiaConfig.persona.spec.avatar && (
+                  <div className="flex justify-center">
+                    <img
+                      src={leiaConfig.persona.spec.avatar}
+                      alt={`${leiaConfig.persona.metadata.name} avatar`}
+                      className="h-28 w-28 rounded-xl object-cover border border-gray-200 bg-gray-100"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
                 <div className="p-3 bg-gray-50 rounded border border-gray-200">
                   <p className="text-xs text-gray-600 mt-1 line-clamp-3">
                     {leiaConfig.persona.spec.description}

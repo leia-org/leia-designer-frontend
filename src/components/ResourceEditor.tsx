@@ -262,6 +262,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               firstName: "",
               description: "",
               personality: "",
+              avatar: "",
               subjectPronoum: "",
               objectPronoum: "",
               possesivePronoum: "",

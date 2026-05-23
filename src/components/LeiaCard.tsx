@@ -28,6 +28,7 @@ interface LeiaCardProps {
   hideContentForInstructor?: boolean;
   onDelete?: () => void;
   resourceId?: string;
+  avatarUrl?: string;
 }
 
 export default function LeiaCard({
@@ -42,6 +43,7 @@ export default function LeiaCard({
   hideContentForInstructor = false,
   onDelete,
   resourceId,
+  avatarUrl,
 }: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -80,8 +82,20 @@ export default function LeiaCard({
         }`}
         onClick={onClick}
       >
-        <div className="flex justify-between items-start mb-1">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <div className="flex justify-between items-start mb-1 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {avatarUrl && (
+              <img
+                src={avatarUrl}
+                alt={`${title} avatar`}
+                className="h-12 w-12 flex-none rounded-lg object-cover border border-gray-200 bg-gray-100"
+                loading="lazy"
+              />
+            )}
+            <h3 className="text-lg font-semibold text-gray-900 truncate">
+              {title}
+            </h3>
+          </div>
           <div className="flex items-center gap-2">
             <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
               v{version}

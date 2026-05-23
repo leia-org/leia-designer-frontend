@@ -112,6 +112,11 @@ spec:
                 hideContentForInstructor={
                   isBehaviourColumn && isCurrentUserInstructor
                 }
+                avatarUrl={
+                  getResourceType() === "persona"
+                    ? (item as Persona).spec.avatar
+                    : undefined
+                }
                 onDelete={
                   onDelete ? () => onDelete(item, getResourceType()) : undefined
                 }

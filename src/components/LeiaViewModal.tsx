@@ -238,9 +238,19 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
             {viewMode === "persona" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Persona Information
-                  </h3>
+                  <div className="flex items-center gap-4 mb-2">
+                    {leia.spec?.persona?.spec?.avatar && (
+                      <img
+                        src={leia.spec.persona.spec.avatar}
+                        alt={`${leia.spec?.persona?.metadata?.name || "Persona"} avatar`}
+                        className="h-20 w-20 rounded-xl object-cover border border-gray-200 bg-gray-100"
+                        loading="lazy"
+                      />
+                    )}
+                    <h3 className="text-lg font-medium text-gray-900">
+                      Persona Information
+                    </h3>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <span className="font-medium text-gray-600">
