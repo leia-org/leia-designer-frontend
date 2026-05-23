@@ -61,12 +61,16 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
   }, [items, filterValue]);
 
   const generateItemYaml = (item: Persona | Behaviour | Problem) => {
+    const visibleSpec = Object.entries(item.spec).filter(
+      ([key]) => key !== "avatar",
+    );
+
     return `apiVersion: ${item.apiVersion}
 metadata:
   name: "${item.metadata.name}"
   version: "${item.metadata.version}"
 spec:
-  ${Object.entries(item.spec)
+  ${visibleSpec
     .map(([key, value]) => `${key}: "${value}"`)
     .join("\n  ")}`;
   };

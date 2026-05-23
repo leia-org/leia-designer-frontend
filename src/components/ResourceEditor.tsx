@@ -95,6 +95,19 @@ const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
   return segments.length ? segments : [{ text, highlight: false }];
 };
 
+const removeNonEditableFields = (resourceType: ResourceType, spec: unknown) => {
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+    return spec;
+  }
+
+  if (resourceType !== "persona") {
+    return spec;
+  }
+
+  const { avatar, ...editableSpec } = spec as Record<string, unknown>;
+  return editableSpec;
+};
+
 const HighlightableInput: React.FC<
   React.InputHTMLAttributes<HTMLInputElement>
 > = ({ value, className = "", placeholder, ...rest }) => {
@@ -251,8 +264,12 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   // Inicializar datos
   useEffect(() => {
     if (initialData?.spec) {
-      setVisualData(initialData.spec);
-      setJsonContent(JSON.stringify(initialData.spec, null, 2));
+      const editableSpec = removeNonEditableFields(
+        resourceType,
+        initialData.spec,
+      );
+      setVisualData(editableSpec);
+      setJsonContent(JSON.stringify(editableSpec, null, 2));
     } else {
       const emptySpec = (() => {
         switch (resourceType) {
@@ -262,7 +279,6 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
               firstName: "",
               description: "",
               personality: "",
-              avatar: "",
               subjectPronoum: "",
               objectPronoum: "",
               possesivePronoum: "",
