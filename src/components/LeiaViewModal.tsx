@@ -82,11 +82,18 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
       >
         <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {leia.metadata?.name || `LEIA ${leia.id}`}
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">View LEIA content</p>
+            <div className="flex items-center gap-4 min-w-0">
+              <Avatar
+                name={leia.metadata?.name || "LEIA"}
+                src={leia.spec?.avatar}
+                className="h-12 w-12 rounded-lg"
+              />
+              <div className="min-w-0">
+                <h2 className="text-xl font-semibold text-gray-900 truncate">
+                  {leia.metadata?.name || `LEIA ${leia.id}`}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">View LEIA content</p>
+              </div>
             </div>
             <button
               onClick={onClose}

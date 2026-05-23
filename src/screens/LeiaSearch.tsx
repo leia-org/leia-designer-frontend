@@ -17,6 +17,7 @@ import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
+import { Avatar } from "../components/Avatar";
 
 type VersionFilter = "" | "latest";
 
@@ -376,6 +377,11 @@ export const LeiaSearch: React.FC = () => {
                       key={leia.id}
                       className="flex items-start justify-between gap-4 p-4"
                     >
+                      <Avatar
+                        name={leia.metadata.name}
+                        src={leia.spec?.avatar}
+                        className="h-12 w-12 rounded-lg"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">

@@ -938,7 +938,10 @@ const openGenerateProblemModal = () => {
           delete newResource.user;
           delete newResource.metadata.version;
           delete newResource.isPublished;
-          if (key === "persona" || key === "problem") {
+          const isGeneratedProblem =
+            key === "problem" && String(newResource.id).startsWith("generated-");
+
+          if (key === "persona" || (key === "problem" && !isGeneratedProblem)) {
             delete newResource.spec?.avatar;
           }
           newResource.metadata.name =
