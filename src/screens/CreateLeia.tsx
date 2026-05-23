@@ -938,7 +938,7 @@ const openGenerateProblemModal = () => {
           delete newResource.user;
           delete newResource.metadata.version;
           delete newResource.isPublished;
-          if (key === "persona") {
+          if (key === "persona" || key === "problem") {
             delete newResource.spec?.avatar;
           }
           newResource.metadata.name =
@@ -1412,6 +1412,15 @@ const openGenerateProblemModal = () => {
             </div>
             {leiaConfig.problem ? (
               <div className="space-y-3">
+                {leiaConfig.problem.spec.avatar && (
+                  <div className="flex justify-center">
+                    <Avatar
+                      name={leiaConfig.problem.metadata.name}
+                      src={leiaConfig.problem.spec.avatar}
+                      className="h-28 w-28 rounded-xl"
+                    />
+                  </div>
+                )}
                 <div className="p-3 bg-gray-50 rounded border border-gray-200">
                   <p className="text-xs text-gray-600 mt-1 line-clamp-3">
                     {leiaConfig.problem.spec.description}

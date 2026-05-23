@@ -65,6 +65,7 @@ export interface Problem {
   },
   spec: {
     description: string,
+    avatar?: string,
     personaBackground: string,
     details: string,
     solution: string,
@@ -126,6 +127,7 @@ export interface Leia {
       },
       spec: {
         description: string,
+        avatar?: string,
         personaBackground: string,
         details: string,
         solution: string,

@@ -95,16 +95,13 @@ const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
   return segments.length ? segments : [{ text, highlight: false }];
 };
 
-const removeNonEditableFields = (resourceType: ResourceType, spec: unknown) => {
+const removeNonEditableFields = (_resourceType: ResourceType, spec: unknown) => {
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
     return spec;
   }
 
-  if (resourceType !== "persona") {
-    return spec;
-  }
-
-  const { avatar, ...editableSpec } = spec as Record<string, unknown>;
+  const editableSpec = { ...(spec as Record<string, unknown>) };
+  delete editableSpec.avatar;
   return editableSpec;
 };
 

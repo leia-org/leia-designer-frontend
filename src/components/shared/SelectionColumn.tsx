@@ -43,6 +43,7 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
     if (titleLower === "problem") return "problem";
     return "behaviour";
   };
+  const resourceType = getResourceType();
 
   const filteredItems = useMemo(() => {
     if (!filterValue.trim()) return items;
@@ -102,32 +103,37 @@ spec:
         <div className="space-y-3">
           {/* Filtered Items */}
           {filteredItems.length > 0 ? (
-            filteredItems.map((item) => (
-              <LeiaCard
-                key={item.id}
-                title={item.metadata.name}
-                description={item.spec.description || ""}
-                version={item.metadata.version}
-                selected={selectedItem?.id === item.id}
-                yaml={generateItemYaml(item)}
-                onClick={() => onSelect(item)}
-                user={item.user}
-                isPublished={item.isPublished}
-                hideContentForInstructor={
-                  isBehaviourColumn && isCurrentUserInstructor
-                }
-                avatarUrl={
-                  getResourceType() === "persona"
-                    ? (item as Persona).spec.avatar
-                    : undefined
-                }
-                showAvatarPlaceholder={getResourceType() === "persona"}
-                onDelete={
-                  onDelete ? () => onDelete(item, getResourceType()) : undefined
-                }
-                resourceId={item.id}
-              />
-            ))
+            filteredItems.map((item) => {
+              const supportsAvatar =
+                resourceType === "persona" || resourceType === "problem";
+
+              return (
+                <LeiaCard
+                  key={item.id}
+                  title={item.metadata.name}
+                  description={item.spec.description || ""}
+                  version={item.metadata.version}
+                  selected={selectedItem?.id === item.id}
+                  yaml={generateItemYaml(item)}
+                  onClick={() => onSelect(item)}
+                  user={item.user}
+                  isPublished={item.isPublished}
+                  hideContentForInstructor={
+                    isBehaviourColumn && isCurrentUserInstructor
+                  }
+                  avatarUrl={
+                    supportsAvatar
+                      ? (item as Persona | Problem).spec.avatar
+                      : undefined
+                  }
+                  showAvatarPlaceholder={supportsAvatar}
+                  onDelete={
+                    onDelete ? () => onDelete(item, resourceType) : undefined
+                  }
+                  resourceId={item.id}
+                />
+              );
+            })
           ) : (
             <div className="text-center py-8 text-gray-500">
               {filterValue ? "No results found" : "No items available"}

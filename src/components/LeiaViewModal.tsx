@@ -133,16 +133,25 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
 
           <div className="flex-1 p-6 overflow-y-auto">
             {viewMode === "problem" && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Problem Description
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-gray-700 leading-relaxed">
-                      {leia.spec?.problem?.spec?.description ||
-                        "No description available"}
-                    </p>
+              <div className="space-y-2">
+                <div className="flex gap-4 items-start">
+                  <div className="flex-shrink-0">
+                    <Avatar
+                      name={leia.spec?.problem?.metadata?.name || "Problem"}
+                      src={leia.spec?.problem?.spec?.avatar}
+                      className="h-20 w-20 rounded-xl"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Problem Description
+                    </h3>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-gray-700 leading-relaxed">
+                        {leia.spec?.problem?.spec?.description ||
+                          "No description available"}
+                      </p>
+                    </div>
                   </div>
                 </div>
                 {leia.spec?.problem?.spec?.details && (
