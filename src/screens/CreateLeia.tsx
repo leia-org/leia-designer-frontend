@@ -14,7 +14,7 @@ import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
-import { PersonaAvatar } from "../components/PersonaAvatar";
+import { Avatar } from "../components/Avatar";
 import { useAuth } from "../context";
 import type {
   Persona,
@@ -1509,7 +1509,7 @@ const openGenerateProblemModal = () => {
               <div className="space-y-3">
                 {leiaConfig.persona.spec.avatar && (
                   <div className="flex justify-center">
-                    <PersonaAvatar
+                    <Avatar
                       name={leiaConfig.persona.metadata.name}
                       src={leiaConfig.persona.spec.avatar}
                       className="h-28 w-28 rounded-xl"

@@ -3,7 +3,7 @@ import { useState, useEffect, lazy, Suspense, memo } from "react";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { PersonaAvatar } from "./PersonaAvatar";
+import { Avatar } from "./Avatar";
 
 // Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
@@ -240,7 +240,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-4 mb-2">
-                    <PersonaAvatar
+                    <Avatar
                       name={leia.spec?.persona?.metadata?.name || "Persona"}
                       src={leia.spec?.persona?.spec?.avatar}
                       className="h-20 w-20 rounded-xl"

@@ -3,7 +3,7 @@ import { Editor, loader } from "@monaco-editor/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "../context";
 import type { User } from "../models/User";
-import { PersonaAvatar } from "./PersonaAvatar";
+import { Avatar } from "./Avatar";
 
 // Ensure YAML language support is loaded
 loader.init().then((monaco) => {
@@ -88,7 +88,7 @@ export default function LeiaCard({
         <div className="flex justify-between items-start mb-1 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {(avatarUrl || showAvatarPlaceholder) && (
-              <PersonaAvatar name={title} src={avatarUrl} />
+              <Avatar name={title} src={avatarUrl} />
             )}
             <h3 className="text-lg font-semibold text-gray-900 truncate">
               {title}

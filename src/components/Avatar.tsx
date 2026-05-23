@@ -4,7 +4,7 @@ interface PersonaAvatarProps {
   className?: string;
 }
 
-export function PersonaAvatar({
+export function Avatar({
   name = "Persona",
   src,
   className = "h-12 w-12 rounded-lg",
