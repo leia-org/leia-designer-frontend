@@ -3,6 +3,7 @@ import { useState, useEffect, lazy, Suspense, memo } from "react";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { PersonaAvatar } from "./PersonaAvatar";
 
 // Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
@@ -239,19 +240,12 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-4 mb-2">
-                    {leia.spec?.persona?.spec?.avatar && (
-                      <img
-                        src={leia.spec.persona.spec.avatar}
-                        alt={`${leia.spec?.persona?.metadata?.name || "Persona"} avatar`}
-                        className="h-20 w-20 rounded-xl object-cover border border-gray-200 bg-gray-100"
-                        loading="lazy"
-                      />
-                    )}
-                    <h3 className="text-lg font-medium text-gray-900">
-                      Persona Information
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                    <PersonaAvatar
+                      name={leia.spec?.persona?.metadata?.name || "Persona"}
+                      src={leia.spec?.persona?.spec?.avatar}
+                      className="h-20 w-20 rounded-xl"
+                    />
+                    <div className="grid grid-cols-2 gap-4">
                     <div>
                       <span className="font-medium text-gray-600">
                         Full Name:
@@ -268,6 +262,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         {leia.spec?.persona?.spec?.firstName || "N/A"}
                       </p>
                     </div>
+                  </div>
                   </div>
                 </div>
 

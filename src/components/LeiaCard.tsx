@@ -3,6 +3,7 @@ import { Editor, loader } from "@monaco-editor/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "../context";
 import type { User } from "../models/User";
+import { PersonaAvatar } from "./PersonaAvatar";
 
 // Ensure YAML language support is loaded
 loader.init().then((monaco) => {
@@ -29,6 +30,7 @@ interface LeiaCardProps {
   onDelete?: () => void;
   resourceId?: string;
   avatarUrl?: string;
+  showAvatarPlaceholder?: boolean;
 }
 
 export default function LeiaCard({
@@ -44,6 +46,7 @@ export default function LeiaCard({
   onDelete,
   resourceId,
   avatarUrl,
+  showAvatarPlaceholder = false,
 }: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -84,13 +87,8 @@ export default function LeiaCard({
       >
         <div className="flex justify-between items-start mb-1 gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            {avatarUrl && (
-              <img
-                src={avatarUrl}
-                alt={`${title} avatar`}
-                className="h-12 w-12 flex-none rounded-lg object-cover border border-gray-200 bg-gray-100"
-                loading="lazy"
-              />
+            {(avatarUrl || showAvatarPlaceholder) && (
+              <PersonaAvatar name={title} src={avatarUrl} />
             )}
             <h3 className="text-lg font-semibold text-gray-900 truncate">
               {title}

@@ -117,6 +117,7 @@ spec:
                     ? (item as Persona).spec.avatar
                     : undefined
                 }
+                showAvatarPlaceholder={getResourceType() === "persona"}
                 onDelete={
                   onDelete ? () => onDelete(item, getResourceType()) : undefined
                 }
