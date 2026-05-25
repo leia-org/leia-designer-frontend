@@ -1566,7 +1566,7 @@ export const MyActivities: React.FC = () => {
                       {/* LEIAs Accordion */}
                       {expandedExperiments.has(experiment.id) && (
                         <div className="border-t border-gray-200">
-                          {experiment.leias && experiment.leias.length > 0 ? (
+                          
                             <div className="divide-y divide-gray-100">
                               {experiment.leias.map((leiaConfig, index) => {
                                 const leia =
@@ -1604,7 +1604,7 @@ export const MyActivities: React.FC = () => {
                                           </div>
 
                                           {/* Mode selector */}
-                                          {leiaConfig.configuration?.mode && (
+                                          {leiaConfig.configuration?.mode && !experiment.isMultiLeia && (
                                             <div className="flex items-center gap-2">
                                               <span className="font-medium text-gray-600 text-sm">
                                                 Mode:
@@ -1988,8 +1988,7 @@ export const MyActivities: React.FC = () => {
                                 );
                               })}
                             </div>
-                          ) : (
-                            <div className="p-6 flex flex-col items-center allign items-center gap-4">
+                            {!experiment.isPublished && <div className="p-5 flex flex-col items-center allign items-center gap-4">
                               <img
                                 src="/logo/leia_puzzle_black.png"
                                 alt="LEIA"
@@ -2001,23 +2000,8 @@ export const MyActivities: React.FC = () => {
                               >
                                 Add LEIA
                               </button>
-                            </div>
-                          )}
-                          {!experiment.isPublished && (
-                                        <div className="p-6 flex flex-col items-center allign items-center gap-4">
-                                          <img
-                                            src="/logo/leia_puzzle_black.png"
-                                            alt="LEIA"
-                                            className="w-8 h-8 mx-auto opacity-30"
-                                          />
-                                          <button
-                                            onClick={() => handleShowLeiaToActivity(experiment)}
-                                            className="h-8 px-3 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-1"
-                                          >
-                                            Add LEIA
-                                          </button>
-                                        </div>
-                                      )}
+                            </div>}
+                          
                         </div>
                       )}
                     </div>
