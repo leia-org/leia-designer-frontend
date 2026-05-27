@@ -88,6 +88,7 @@ export interface Leia {
   id: string,
   apiVersion: string,
   metadata: {
+    labels: Label[];
     name: string,
     version: string,
     label?: Label | null

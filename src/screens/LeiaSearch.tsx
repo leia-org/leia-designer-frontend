@@ -16,6 +16,7 @@ import { LeiaViewModal } from "../components/LeiaViewModal";
 import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
+import { LabelAddModal } from "../components/LabelAddModal";
 
 type VersionFilter = "" | "latest";
 
@@ -46,7 +47,7 @@ export const LeiaSearch: React.FC = () => {
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
-
+  const [openLabelModalLeia, setOpenLabelModalLeia] = useState<Leia | null>(null);
   // Estados para el modal de visualización de LEIA
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
@@ -228,7 +229,18 @@ export const LeiaSearch: React.FC = () => {
       setIsDeleting(false);
     }
   };
-
+  const updateLeiaLabels = async (leiaId: string, labelsIds: string[]) => {
+      try {
+        await api.patch(`/api/v1/leias/${leiaId}/labels`, {
+          labelsIds: labelsIds,
+        });
+        // Refrescar la lista de LEIAs
+      const response = await api.get<Leia[]>("/api/v1/leias", { params });
+      setLeias(response.data || []);
+      } catch (error) {
+        console.error("Error updating labels:", error);
+      }
+    };
   const closeDeleteModal = useCallback(() => {
     setDeleteModal({
       isOpen: false,
@@ -358,20 +370,7 @@ export const LeiaSearch: React.FC = () => {
                     leia.spec?.problem?.spec?.description ||
                     leia.spec?.persona?.spec?.description ||
                     "";
-                  const labelData = leia.metadata?.label;
-                  const labelName =
-                    typeof labelData === "string"
-                      ? labelData
-                      : labelData?.name || null;
-                  const labelColor =
-                    typeof labelData === "string"
-                      ? undefined
-                      : labelData?.color;
-                  const labelSecundaryColor =
-                    typeof labelData === "string"
-                      ? undefined
-                      : labelData?.secundaryColor;
-
+                  const labelData = leia.metadata?.labels;
                   return (
                     <li
                       key={leia.id}
@@ -395,17 +394,28 @@ export const LeiaSearch: React.FC = () => {
                             >
                               {leia.isPublished ? "Published" : "Unpublished"}
                             </span>
-                            {labelName && (
+                            {labelData?.length > 0 && labelData.map((label, index) => (
                               <span
+                                key={label._id || `${leia.id}-${label.name}-${index}`}
                                 className="px-2 py-0.5 text-xs font-medium rounded-full border border-gray-200"
                                 style={{
-                                  backgroundColor: labelColor || "#f3f4f6",
-                                  color: labelSecundaryColor || "#111827",
+                                  backgroundColor: label.color || "#f3f4f6",
+                                  color: label.secundaryColor || "#111827",
                                 }}
-                                title={`Label: ${labelName}`}
+                                title={`Label: ${label.name}`}
                               >
-                                {labelName}
+                                {label.name} 
+                                
                               </span>
+                              
+                            ))}
+                            {user && (user.role === "admin" || (leia.user && user.id === leia.user.id)) && (
+                              <button className="px-1.5 py-0.5 text-xs rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600" onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenLabelModalLeia(leia);
+                                  }}>
+                                    + Label
+                                  </button>
                             )}
                           </div>
                           {/* User information moved back to the right without margin */}
@@ -521,7 +531,20 @@ export const LeiaSearch: React.FC = () => {
         </div>
         <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-white via-white to-transparent pointer-events-none"></div>
       </div>
-
+      {/* Label Add Modal */}
+      {openLabelModalLeia && (
+        <LabelAddModal
+          leia={openLabelModalLeia}
+          allLabels={labels}
+          currentLabels={openLabelModalLeia.metadata.labels || []}
+          onLabelCreated={(created) => setLabels(prev => [...prev, created])}
+          onClose={() => setOpenLabelModalLeia(null)}
+          onSave={(leiaId, labelsIds) => {
+            updateLeiaLabels(leiaId, labelsIds);
+            setOpenLabelModalLeia(null);
+          }}
+        />
+      )}
       {/* LEIA View Modal */}
       {selectedLeia && (
         <LeiaViewModal
