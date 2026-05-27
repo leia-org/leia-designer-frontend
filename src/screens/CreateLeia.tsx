@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import { type InputActionMeta, type MultiValue } from "react-select";
@@ -14,6 +14,7 @@ import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
+import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
 import { useAuth } from "../context";
 import type {
   Persona,
@@ -21,6 +22,8 @@ import type {
   Problem,
   Leia as LeiaResource,
 } from "../models/Leia";
+import { useApiKeys } from "../hooks/useApiKeys";
+import { useProviders } from "../hooks/useProviders";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
 
@@ -101,6 +104,18 @@ export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuth();
+  const {
+    apiKeys,
+    isLoading: isApiKeysLoading,
+    error: apiKeysError,
+    getDefaultKey,
+  } = useApiKeys();
+  const {
+    apiKeyProvidersMapped,
+    defaultModel,
+    isLoading: isProvidersLoading,
+    error: providersError,
+  } = useProviders();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
     persona: null,
@@ -134,6 +149,11 @@ export const CreateLeia: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<Error | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
+  const [isTryMenuOpen, setIsTryMenuOpen] = useState(false);
+  const [tryConfig, setTryConfig] = useState<{
+    modelName: string;
+    apiKeyId: string | null;
+  }>({ modelName: "", apiKeyId: null });
   const [labelsError, setLabelsError] = useState<string | null>(null);
   const [showCreateLabelModal, setShowCreateLabelModal] = useState(false);
   const [creatingLabel, setCreatingLabel] = useState(false);
@@ -794,16 +814,107 @@ const openGenerateProblemModal = () => {
     return cleaned;
   };
 
+  const getValidModels = useCallback(
+    (apiKeyId: string | null | undefined) => {
+      const models = Object.values(apiKeyProvidersMapped || {}).flat();
+      if (!apiKeyId) return models;
+
+      const apiKey = apiKeys.find((key) => key.id === apiKeyId);
+      if (!apiKey || !apiKey.provider) return models;
+
+      return apiKeyProvidersMapped[apiKey.provider] || [];
+    },
+    [apiKeyProvidersMapped, apiKeys]
+  );
+
+  const getValidApiKeys = useCallback(
+    (modelName: string | null | undefined) => {
+      if (!modelName) return apiKeys;
+
+      const validProviders = Object.entries(apiKeyProvidersMapped || {})
+        .filter(([, models]) => models.includes(modelName))
+        .map(([provider]) => provider);
+
+      return apiKeys.filter((key) => validProviders.includes(key.provider));
+    },
+    [apiKeyProvidersMapped, apiKeys]
+  );
+
+  const ensureTryConfig = useCallback(() => {
+    setTryConfig((prev) => {
+      if (prev.modelName || prev.apiKeyId) return prev;
+
+      const defaultKey = getDefaultKey();
+      const validModels = getValidModels(defaultKey?.id);
+      const resolvedDefaultModel =
+        defaultModel && validModels.includes(defaultModel)
+          ? defaultModel
+          : "";
+
+      return {
+        modelName: resolvedDefaultModel,
+        apiKeyId: defaultKey?.id ?? null,
+      };
+    });
+  }, [defaultModel, getDefaultKey, getValidModels]);
+
+  const handleTryMenuToggle = useCallback(() => {
+    if (testingLeia) return;
+    setIsTryMenuOpen((prev) => !prev);
+    ensureTryConfig();
+  }, [ensureTryConfig, testingLeia]);
+
+  const handleTryModelChange = useCallback(
+    (modelName: string) => {
+      setTryConfig((prev) => {
+        const validApiKeys = getValidApiKeys(modelName);
+        const apiKeyId = validApiKeys.some((key) => key.id === prev.apiKeyId)
+          ? prev.apiKeyId
+          : null;
+
+        return {
+          ...prev,
+          modelName,
+          apiKeyId,
+        };
+      });
+    },
+    [getValidApiKeys]
+  );
+
+  const handleTryApiKeyChange = useCallback(
+    (apiKeyId: string | null) => {
+      setTryConfig((prev) => {
+        const validModels = getValidModels(apiKeyId);
+        const modelName = validModels.includes(prev.modelName)
+          ? prev.modelName
+          : "";
+
+        return {
+          ...prev,
+          apiKeyId,
+          modelName,
+        };
+      });
+    },
+    [getValidModels]
+  );
+
   const handleTestLeia = async () => {
     if (!generatedLeia) {
       console.error("No generated LEIA available");
       return;
     }
 
+    if (!tryConfig.modelName || !tryConfig.apiKeyId) {
+      return;
+    }
+
     try {
       setTestingLeia(true);
       const response = await api.post("/api/v1/runner/initialize", {
-        ...generatedLeia,
+        spec: generatedLeia.spec,
+        runnerConfiguration: tryConfig,
       });
       const { sessionId } = response.data;
       navigate(`/chat/${sessionId}`, {
@@ -825,6 +936,14 @@ const openGenerateProblemModal = () => {
     } finally {
       setTestingLeia(false);
     }
+  };
+
+  const handleStartTry = async () => {
+    if (!tryConfig.modelName || !tryConfig.apiKeyId) {
+      return;
+    }
+    setIsTryMenuOpen(false);
+    await handleTestLeia();
   };
 
   const handleNextStep = async () => {
@@ -1220,8 +1339,25 @@ const openGenerateProblemModal = () => {
 
   const isCurrentUserInstructor = currentUser?.role === "instructor";
 
-  const renderStep2 = () => (
-    <div className="space-y-6">
+  const renderStep2 = () => {
+    const isTryLoading = isApiKeysLoading || isProvidersLoading;
+    const validTryModels = getValidModels(tryConfig.apiKeyId);
+    const validTryApiKeys = getValidApiKeys(tryConfig.modelName);
+    const canStartTry =
+      Boolean(tryConfig.modelName && tryConfig.apiKeyId) && !isTryLoading;
+    const showNoApiKeys =
+      !isTryLoading &&
+      !providersError &&
+      !apiKeysError &&
+      apiKeys.length === 0;
+    const showNoMatchingKeys =
+      !isTryLoading &&
+      Boolean(tryConfig.modelName) &&
+      validTryApiKeys.length === 0 &&
+      apiKeys.length > 0;
+
+    return (
+      <div className="space-y-6">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Step 2: Edit</h2>
         <p className="text-gray-600">
@@ -1587,15 +1723,37 @@ const openGenerateProblemModal = () => {
             }
 
             return (
-              <button
-                onClick={handleTestLeia}
-                className="group relative px-2.5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all duration-300 flex items-center gap-2 overflow-hidden w-10 hover:w-22"
-              >
-                <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
-                <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                  Try
-                </span>
-              </button>
+              <div className="relative">
+                <button
+                  onClick={handleTryMenuToggle}
+                  className="group relative px-2.5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all duration-300 flex items-center gap-2 overflow-hidden w-10 hover:w-22"
+                  aria-expanded={isTryMenuOpen}
+                  aria-haspopup="dialog"
+                >
+                  <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                    Try
+                  </span>
+                </button>
+                <LeiaTryDropdown
+                  isOpen={isTryMenuOpen}
+                  onClose={() => setIsTryMenuOpen(false)}
+                  isLoading={isTryLoading}
+                  providersError={providersError}
+                  apiKeysError={apiKeysError}
+                  modelValue={tryConfig.modelName}
+                  apiKeyValue={tryConfig.apiKeyId}
+                  models={validTryModels}
+                  apiKeys={validTryApiKeys}
+                  onModelChange={handleTryModelChange}
+                  onApiKeyChange={handleTryApiKeyChange}
+                  canStart={canStartTry}
+                  onStart={handleStartTry}
+                  isStarting={testingLeia}
+                  showNoApiKeys={showNoApiKeys}
+                  showNoMatchingKeys={showNoMatchingKeys}
+                />
+              </div>
             );
           })()}
         </div>
@@ -1782,7 +1940,8 @@ const openGenerateProblemModal = () => {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   const renderStep3 = () => {
     const labelOptions: LabelOption[] = [

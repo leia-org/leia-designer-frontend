@@ -91,7 +91,7 @@ export interface Leia {
     labels: Label[];
     name: string,
     version: string,
-    label?: Label | null
+    labels?: Label[] | null
   },
   spec: {
     persona: {
