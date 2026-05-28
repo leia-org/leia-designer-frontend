@@ -2,8 +2,13 @@ import type React from "react";
 import { useState, useEffect, lazy, Suspense, memo } from "react";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowPathIcon,
+  ChevronDownIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { Avatar } from "./Avatar";
+import { regenerateAvatar } from "../services/avatarService";
 
 // Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
@@ -54,13 +59,19 @@ interface LeiaViewModalProps {
   leia: Leia | null;
   isOpen: boolean;
   onClose: () => void;
+  onLeiaChange?: (leia: Leia) => void;
 }
 
 export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
-  ({ leia, isOpen, onClose }) => {
+  ({ leia, isOpen, onClose, onLeiaChange }) => {
     const [viewMode, setViewMode] = useState<
       "problem" | "persona" | "behaviour"
     >("problem");
+    const [regeneratingAvatar, setRegeneratingAvatar] = useState<
+      "leia" | "problem" | "persona" | null
+    >(null);
+    const [showRegenerateMenu, setShowRegenerateMenu] = useState(false);
+    const [avatarError, setAvatarError] = useState<string | null>(null);
     const { user } = useAuth();
 
     useEffect(() => {
@@ -70,6 +81,65 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
     }, [leia?.id]);
 
     if (!isOpen || !leia) return null;
+
+    const handleRegenerateAvatar = async (
+      target: "leia" | "problem" | "persona",
+    ) => {
+      const targetId =
+        target === "leia" ? leia.id : leia.spec?.[target]?.id;
+
+      if (!targetId) {
+        return;
+      }
+
+      setRegeneratingAvatar(target);
+      setAvatarError(null);
+
+      try {
+        const regeneratedResource = await regenerateAvatar(target, targetId);
+        const nextLeia = structuredClone(leia) as Leia;
+
+        if (target === "leia") {
+          nextLeia.spec.avatar = regeneratedResource?.spec?.avatar;
+        } else {
+          nextLeia.spec[target].spec.avatar =
+            regeneratedResource?.spec?.avatar;
+        }
+
+        onLeiaChange?.(nextLeia);
+        setShowRegenerateMenu(false);
+      } catch (error) {
+        console.error("Error regenerating avatar:", error);
+        setAvatarError("Could not regenerate image");
+      } finally {
+        setRegeneratingAvatar(null);
+      }
+    };
+
+    const canRegenerateAvatar = (target: "leia" | "problem" | "persona") => {
+      if (!user) {
+        return false;
+      }
+
+      if (user.role === "admin") {
+        return true;
+      }
+
+      const owner =
+        target === "leia" ? leia.user : leia.spec?.[target]?.user;
+      return Boolean(owner?.id && owner.id === user.id);
+    };
+
+    const regenerateOptions = [
+      { target: "leia" as const, label: "LEIA" },
+      { target: "problem" as const, label: "Problem" },
+      { target: "persona" as const, label: "Persona" },
+    ].filter(({ target }) => canRegenerateAvatar(target));
+
+    const regeneratingLabel = regeneratingAvatar
+      ? regenerateOptions.find(({ target }) => target === regeneratingAvatar)
+          ?.label
+      : null;
 
     return (
       <div
@@ -83,24 +153,69 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
         <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center gap-4 min-w-0">
-              <Avatar
-                name={leia.metadata?.name || "LEIA"}
-                src={leia.spec?.avatar}
-                className="h-12 w-12 rounded-lg"
-              />
+              <div className="flex items-center gap-3">
+                <Avatar
+                  name={leia.metadata?.name || "LEIA"}
+                  src={leia.spec?.avatar}
+                  className="h-12 w-12 rounded-lg"
+                />
+              </div>
               <div className="min-w-0">
                 <h2 className="text-xl font-semibold text-gray-900 truncate">
                   {leia.metadata?.name || `LEIA ${leia.id}`}
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">View LEIA content</p>
+                {avatarError && (
+                  <p className="mt-1 text-sm text-red-600">{avatarError}</p>
+                )}
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <XMarkIcon className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-2">
+              {regenerateOptions.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowRegenerateMenu((open) => !open)}
+                    disabled={regeneratingAvatar !== null}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Regenerate image"
+                  >
+                    <ArrowPathIcon
+                      className={`h-4 w-4 ${
+                        regeneratingAvatar ? "animate-spin" : ""
+                      }`}
+                    />
+                    <span>
+                      {regeneratingLabel
+                        ? `Regenerating ${regeneratingLabel}...`
+                        : "Regenerate image"}
+                    </span>
+                    <ChevronDownIcon className="h-4 w-4" />
+                  </button>
+                  {showRegenerateMenu && regeneratingAvatar === null && (
+                    <div className="absolute right-0 z-10 mt-2 w-48 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                      {regenerateOptions.map(({ target, label }) => (
+                        <button
+                          key={target}
+                          type="button"
+                          onClick={() => handleRegenerateAvatar(target)}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          <ArrowPathIcon className="h-4 w-4" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
           <div className="flex border-b border-gray-200 flex-shrink-0">
@@ -256,11 +371,13 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-4 mb-2">
-                    <Avatar
-                      name={leia.spec?.persona?.metadata?.name || "Persona"}
-                      src={leia.spec?.persona?.spec?.avatar}
-                      className="h-20 w-20 rounded-xl"
-                    />
+                    <div className="flex-shrink-0">
+                      <Avatar
+                        name={leia.spec?.persona?.metadata?.name || "Persona"}
+                        src={leia.spec?.persona?.spec?.avatar}
+                        className="h-20 w-20 rounded-xl"
+                      />
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                     <div>
                       <span className="font-medium text-gray-600">

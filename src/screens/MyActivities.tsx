@@ -66,6 +66,21 @@ export const MyActivities: React.FC = () => {
   const [showLeiaModal, setShowLeiaModal] = useState(false);
   const [preloadModal, setPreloadModal] = useState(false);
 
+  const handleSelectedLeiaChange = (updatedLeia: Leia) => {
+    setSelectedLeia(updatedLeia);
+    setExperiments((prev) =>
+      prev?.map((experiment) => ({
+        ...experiment,
+        leias: experiment.leias.map((leiaConfig) =>
+          typeof leiaConfig.leia === "object" &&
+          leiaConfig.leia.id === updatedLeia.id
+            ? { ...leiaConfig, leia: updatedLeia }
+            : leiaConfig,
+        ),
+      })) || null,
+    );
+  };
+
   // Publishing state
   const [publishingExperiments, setPublishingExperiments] = useState<
     Set<string>
@@ -926,6 +941,7 @@ export const MyActivities: React.FC = () => {
         <LeiaViewModal
           leia={selectedLeia}
           isOpen={showLeiaModal}
+          onLeiaChange={handleSelectedLeiaChange}
           onClose={() => setShowLeiaModal(false)}
         />
       )}

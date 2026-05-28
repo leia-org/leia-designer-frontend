@@ -52,6 +52,13 @@ export const LeiaSearch: React.FC = () => {
   // Estados para el modal de visualización de LEIA
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
+  const handleSelectedLeiaChange = (updatedLeia: Leia) => {
+    setSelectedLeia(updatedLeia);
+    setLeias((prev) =>
+      prev.map((leia) => (leia.id === updatedLeia.id ? updatedLeia : leia)),
+    );
+  };
+
   // Estados para eliminación de LEIAs
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
@@ -556,6 +563,7 @@ export const LeiaSearch: React.FC = () => {
         <LeiaViewModal
           leia={selectedLeia}
           isOpen={isViewModalOpen}
+          onLeiaChange={handleSelectedLeiaChange}
           onClose={() => {
             setIsViewModalOpen(false);
             setSelectedLeia(null);

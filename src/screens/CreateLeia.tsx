@@ -224,7 +224,6 @@ export const CreateLeia: React.FC = () => {
   const [generateBehaviourError, setGenerateBehaviourError] = useState<
     string | null
   >(null);
-
   // Modal cuando se pulsa Finish
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
@@ -1415,15 +1414,13 @@ const openGenerateProblemModal = () => {
             </div>
             {leiaConfig.problem ? (
               <div className="space-y-3">
-                {leiaConfig.problem.spec.avatar && (
-                  <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-2">
                     <Avatar
                       name={leiaConfig.problem.metadata.name}
                       src={leiaConfig.problem.spec.avatar}
                       className="h-28 w-28 rounded-xl"
                     />
-                  </div>
-                )}
+                </div>
                 <div className="p-3 bg-gray-50 rounded border border-gray-200">
                   <p className="text-xs text-gray-600 mt-1 line-clamp-3">
                     {leiaConfig.problem.spec.description}
@@ -1519,15 +1516,13 @@ const openGenerateProblemModal = () => {
             </div>
             {leiaConfig.persona ? (
               <div className="space-y-3">
-                {leiaConfig.persona.spec.avatar && (
-                  <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-2">
                     <Avatar
                       name={leiaConfig.persona.metadata.name}
                       src={leiaConfig.persona.spec.avatar}
                       className="h-28 w-28 rounded-xl"
                     />
-                  </div>
-                )}
+                </div>
                 <div className="p-3 bg-gray-50 rounded border border-gray-200">
                   <p className="text-xs text-gray-600 mt-1 line-clamp-3">
                     {leiaConfig.persona.spec.description}
