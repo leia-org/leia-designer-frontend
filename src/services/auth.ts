@@ -1,4 +1,5 @@
 import axios from "axios";
+import { isTurnstileEnabled } from "../config/turnstile";
 
 export interface RegisterUserInput {
   email: string;
@@ -16,7 +17,9 @@ export const registerUser = async ({
     {
       email: email.trim(),
       password,
-      "cf-turnstile-response": turnstileToken,
+      ...(isTurnstileEnabled && {
+        "cf-turnstile-response": turnstileToken,
+      }),
     }
   );
 };

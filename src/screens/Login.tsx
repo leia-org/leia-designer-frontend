@@ -4,6 +4,7 @@ import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import axios from "axios";
 import { useAuth } from "../context";
 import { TurnstileWidget } from "../components/TurnstileWidget";
+import { isTurnstileEnabled } from "../config/turnstile";
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ export const Login = () => {
       setMessage("Please fill in all fields");
       return;
     }
-    if (!turnstileToken) {
+    if (isTurnstileEnabled && !turnstileToken) {
       setSuccess(false);
       setMessage("Please complete the verification challenge.");
       return;
@@ -44,7 +45,9 @@ export const Login = () => {
         {
           email: email.trim(),
           password: password.trim(),
-          "cf-turnstile-response": turnstileToken,
+          ...(isTurnstileEnabled && {
+            "cf-turnstile-response": turnstileToken,
+          }),
         }
       );
       const token = response.data.token;
@@ -190,13 +193,15 @@ export const Login = () => {
               {message}
             </div>
           )}
-          <TurnstileWidget
-            key={turnstileKey}
-            onTokenChange={handleTurnstileTokenChange}
-          />
+          {isTurnstileEnabled && (
+            <TurnstileWidget
+              key={turnstileKey}
+              onTokenChange={handleTurnstileTokenChange}
+            />
+          )}
           <button
             type="submit"
-            disabled={loading || !turnstileToken}
+            disabled={loading || (isTurnstileEnabled && !turnstileToken)}
             className="w-full py-3 px-4 text-white bg-blue-600 hover:bg-blue-700 rounded-xl font-medium transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-blue-600 flex items-center justify-center shadow-sm hover:shadow-md"
           >
             {loading ? (
