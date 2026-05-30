@@ -2,14 +2,17 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import axios from "axios";
-import { useAuth } from "../context";
+import { registerUser } from "../services/auth";
+import { validateRegisterForm } from "../validators/register";
 
-export const Login = () => {
+// type UserRole = "instructor" | "advanced"; lo hemos hardcodeado
+
+export const Register = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -17,9 +20,15 @@ export const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
+
+    const validationError = validateRegisterForm({
+      email,
+      password,
+      confirmPassword,
+    });
+    if (validationError) {
       setSuccess(false);
-      setMessage("Please fill in all fields");
+      setMessage(validationError);
       return;
     }
 
@@ -27,37 +36,23 @@ export const Login = () => {
     setMessage("");
 
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_AUTH_SERVICE_BACKEND}/api/v1/users/login`,
-        {
-          email: email.trim(),
-          password: password.trim(),
-        }
-      );
-      const token = response.data.token;
+      await registerUser({ email, password });
 
-      if (token) {
-        setSuccess(true);
-        setMessage("Logged in successfully!");
+      setSuccess(true);
+      setMessage("Account created successfully. You can now log in.");
 
-        login(token);
-
-        setTimeout(() => {
-          navigate("/");
-        }, 1000);
-      } else {
-        setSuccess(false);
-        setMessage("Something went wrong, please try again later.");
-      }
+      setTimeout(() => {
+        navigate("/login");
+      }, 1200);
     } catch (error: unknown) {
       setSuccess(false);
 
-      let errorMessage = "An error ocurred";
+      let errorMessage = "An error occurred while creating the account";
 
       if (axios.isAxiosError(error) && error.response) {
-        const { status, data } = error.response;
+        const { data } = error.response;
 
-        if (status === 400 && data?.validationErrors) {
+        if (data?.validationErrors) {
           const validationErrors = Object.values(
             data.validationErrors
           ) as string[];
@@ -74,9 +69,9 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50">
-      <div className="w-full max-w-md px-8 py-12 bg-white rounded-2xl shadow-xl">
-        <div className="text-center mb-10">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 px-4 py-10">
+      <div className="w-full max-w-md px-8 py-10 bg-white rounded-2xl shadow-xl">
+        <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center transform rotate-12 shadow-lg">
               <img
@@ -86,10 +81,13 @@ export const Login = () => {
               />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Designer</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Create account
+          </h1>
+          <p className="text-sm text-gray-500">Register to access Designer</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <label
               htmlFor="email"
@@ -97,29 +95,16 @@ export const Login = () => {
             >
               Email
             </label>
-            <div className="relative group">
-              <input
-                type="text"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out bg-gray-50 focus:bg-white group-hover:border-blue-300"
-                placeholder="Enter your email"
-                required
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none transition-opacity duration-200 ease-in-out opacity-50 group-hover:opacity-100">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-5 h-5 text-gray-400"
-                >
-                  <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
-                </svg>
-              </div>
-            </div>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out bg-gray-50 focus:bg-white hover:border-blue-300"
+              placeholder="Enter your email"
+              required
+            />
           </div>
-
           <div className="space-y-2">
             <label
               htmlFor="password"
@@ -127,13 +112,13 @@ export const Login = () => {
             >
               Password
             </label>
-            <div className="relative group">
+            <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out bg-gray-50 focus:bg-white group-hover:border-blue-300"
+                className="block w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out bg-gray-50 focus:bg-white hover:border-blue-300"
                 placeholder="Enter the password"
                 required
               />
@@ -149,6 +134,26 @@ export const Login = () => {
                   <EyeSlashIcon className="w-5 h-5 text-gray-400" />
                 )}
               </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Confirm password
+            </label>
+            <div className="relative">
+              <input
+                type="password"
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="block w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out bg-gray-50 focus:bg-white hover:border-blue-300"
+                placeholder="Confirm the password"
+                required
+              />
             </div>
           </div>
 
@@ -184,18 +189,18 @@ export const Login = () => {
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
-              "Login"
+              "Register"
             )}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-500">
-          Don't have an account?{" "}
+          Already have an account?{" "}
           <Link
-            to="/register"
+            to="/login"
             className="font-medium text-blue-600 hover:text-blue-700"
           >
-            Register
+            Log in
           </Link>
         </p>
       </div>

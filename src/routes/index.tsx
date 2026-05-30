@@ -5,6 +5,7 @@ import { CreateLeia } from "../screens/CreateLeia";
 import { Chat } from "../screens/Chat";
 import { Edit } from "../screens/Edit";
 import { Login } from "../screens/Login";
+import { Register } from "../screens/Register";
 import { Profile } from "../screens/Profile";
 import { ForbiddenPage } from "../screens/ForbiddenPage";
 import { LeiaSearch } from "../screens/LeiaSearch";
@@ -75,6 +76,7 @@ export const AppRoutes = () => {
         }
       />
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route
         path="/profile"
         element={
