@@ -11,6 +11,7 @@ import { ForbiddenPage } from "../screens/ForbiddenPage";
 import { LeiaSearch } from "../screens/LeiaSearch";
 import { UserManagement } from "../screens/UserManagement";
 import { MyActivities } from "../screens/MyActivities";
+import { ApiKeysPage } from "../screens/ApiKeys";
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -90,6 +91,14 @@ export const AppRoutes = () => {
         element={
           <AuthenticatedRoute>
             <CreateLeia />
+          </AuthenticatedRoute>
+        }
+      />
+      <Route
+        path="/api-keys"
+        element={
+          <AuthenticatedRoute>
+            <ApiKeysPage />
           </AuthenticatedRoute>
         }
       />

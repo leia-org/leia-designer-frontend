@@ -11,3 +11,14 @@ export interface ApiKey {
   updatedAt: string;
   isSystemApiKey?: boolean;
 }
+
+export interface ApiKeyFormData {
+  description: string | undefined;
+  provider: string | undefined;
+  baseUrl: string | undefined;
+  keyValue: string | undefined;
+  managementUrl?: string | undefined;
+  isActive: boolean | undefined;
+  isDefault?: boolean | undefined;
+  isSystemApiKey?: boolean | undefined;
+}
