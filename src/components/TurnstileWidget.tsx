@@ -63,5 +63,5 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
     };
   }, [onTokenChange]);
 
-  return <div ref={containerRef}></div>;
+  return <div ref={containerRef} className="flex justify-center"></div>;
 };
