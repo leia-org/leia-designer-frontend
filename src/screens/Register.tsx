@@ -22,6 +22,10 @@ export const Register = () => {
   const handleTurnstileTokenChange = useCallback((token: string) => {
     setTurnstileToken(token);
   }, []);
+  const resetTurnstile = () => {
+    setTurnstileToken("");
+    setTurnstileKey((key) => key + 1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +38,7 @@ export const Register = () => {
     if (validationError) {
       setSuccess(false);
       setMessage(validationError);
+      resetTurnstile();
       return;
     }
     if (!turnstileToken) {
@@ -73,8 +78,7 @@ export const Register = () => {
       }
 
       setMessage(errorMessage);
-      setTurnstileToken("");
-      setTurnstileKey((key) => key + 1);
+      resetTurnstile();
     } finally {
       setLoading(false);
     }
