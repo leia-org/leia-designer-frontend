@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import axios from "axios";
 import { registerUser } from "../services/auth";
 import { validateRegisterForm } from "../validators/register";
-
+import { TurnstileWidget } from "../components/TurnstileWidget";
 // type UserRole = "instructor" | "advanced"; lo hemos hardcodeado
 
 export const Register = () => {
@@ -17,6 +17,11 @@ export const Register = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileKey, setTurnstileKey] = useState(0);
+  const handleTurnstileTokenChange = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,12 +36,17 @@ export const Register = () => {
       setMessage(validationError);
       return;
     }
+    if (!turnstileToken) {
+      setSuccess(false);
+      setMessage("Please complete the verification challenge.");
+      return;
+    }
 
     setLoading(true);
     setMessage("");
 
     try {
-      await registerUser({ email, password });
+      await registerUser({ email, password, turnstileToken });
 
       setSuccess(true);
       setMessage("Account created successfully. You can now log in.");
@@ -63,6 +73,8 @@ export const Register = () => {
       }
 
       setMessage(errorMessage);
+      setTurnstileToken("");
+      setTurnstileKey((key) => key + 1);
     } finally {
       setLoading(false);
     }
@@ -180,7 +192,10 @@ export const Register = () => {
               {message}
             </div>
           )}
-
+          <TurnstileWidget
+            key={turnstileKey}
+            onTokenChange={handleTurnstileTokenChange}
+          />
           <button
             type="submit"
             disabled={loading}

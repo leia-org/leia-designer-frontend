@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import axios from "axios";
 import { useAuth } from "../context";
+import { TurnstileWidget } from "../components/TurnstileWidget";
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -14,12 +15,23 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileKey, setTurnstileKey] = useState(0);
+  const handleTurnstileTokenChange = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!email.trim() || !password.trim()) {
       setSuccess(false);
       setMessage("Please fill in all fields");
+      return;
+    }
+    if (!turnstileToken) {
+      setSuccess(false);
+      setMessage("Please complete the verification challenge.");
       return;
     }
 
@@ -32,6 +44,7 @@ export const Login = () => {
         {
           email: email.trim(),
           password: password.trim(),
+          "cf-turnstile-response": turnstileToken,
         }
       );
       const token = response.data.token;
@@ -68,6 +81,8 @@ export const Login = () => {
       }
 
       setMessage(errorMessage);
+      setTurnstileToken("");
+      setTurnstileKey((key) => key + 1);
     } finally {
       setLoading(false);
     }
@@ -175,7 +190,10 @@ export const Login = () => {
               {message}
             </div>
           )}
-
+          <TurnstileWidget
+            key={turnstileKey}
+            onTokenChange={handleTurnstileTokenChange}
+          />
           <button
             type="submit"
             disabled={loading}
