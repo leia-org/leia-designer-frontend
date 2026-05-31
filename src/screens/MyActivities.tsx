@@ -159,12 +159,30 @@ export const MyActivities: React.FC = () => {
       setNewExperimentName("");
       setShowCreateModal(false);
     } catch (error) {
-      if (error instanceof Error) {
-        toast.error("Could not create new activity: " + error.message, {
+      const axiosError = error as {
+        response?: { status?: number; data?: { message?: string } };
+        message?: string;
+      };
+
+      if (axiosError.response?.status === 409) {
+        toast.error(
+          axiosError.response.data?.message || "An activity with that name already exists",
+          {
+            position: "bottom-right",
+            autoClose: 5000,
+          }
+        );
+        return;
+      }
+
+      toast.error(
+        "Could not create new activity: " +
+          (axiosError.response?.data?.message || axiosError.message || "Unknown error"),
+        {
           position: "bottom-right",
           autoClose: 5000,
-        });
-      }
+        }
+      );
     } finally {
       setCreatingNewExperiment(false);
     }

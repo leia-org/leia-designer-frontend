@@ -6,6 +6,7 @@ import {
   PuzzlePieceIcon,
   EyeIcon,
   TrashIcon,
+  BeakerIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { useApiKeys } from "../hooks/useApiKeys";
@@ -20,6 +21,7 @@ import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
+import type { Experiment } from "../models/Experiment";
 
 type VersionFilter = "" | "latest";
 
@@ -62,6 +64,8 @@ export const LeiaSearch: React.FC = () => {
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
+  const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
+  const [nameActivityReplication, setNameActivityReplication] = useState("");
   const [openLabelModalLeia, setOpenLabelModalLeia] = useState<Leia | null>(null);
   const [tryMenuOpenId, setTryMenuOpenId] = useState<string | null>(null);
   const [tryConfigByLeia, setTryConfigByLeia] = useState<
@@ -313,6 +317,106 @@ export const LeiaSearch: React.FC = () => {
     setDeleteError(null);
   }, []);
 
+
+  const handleQuickReplication = useCallback(async (leia: Leia) => {
+    try {
+      const activityExists = await api.get(`api/v1/experiments/${leia.metadata.name}/exists`);
+      const replicationExists = await api.get(`api/v1/workbench/replications/${leia.metadata.name}/exists`);
+      if (!activityExists.data.exists && !replicationExists.data.exists) {
+        const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
+        leiaId: leia.id,
+        leiaName: leia.metadata.name,
+      });
+
+      const replication = await api.post(
+        `/api/v1/workbench/replications`,
+        {
+          name: leia.metadata.name.trim(),
+          experiment: activity.id,
+        }
+      );
+      toast.success("LEIA replicated successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      const workbenchBaseUrl =
+      import.meta.env.VITE_WORKBENCH_URL;
+      const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/replications/${encodeURIComponent(replication.data.id)}`;
+      const newWindow = window.open(replicationUrl);
+      if (!newWindow) {
+        toast.error("Popup blocked or could not open replication", {
+          position: "bottom-right",
+          autoClose: 2000,
+          });
+    }      }
+      else {
+        setNameActivityReplication(leia.metadata.name+`-v2`);
+        setSelectedLeia(leia);
+        setShowActivityReplicationModal(true);
+        return null;
+      }
+      
+    } catch (error) {
+      console.error("Error quick replicating LEIA:", error);
+    }
+  }, []);
+
+  const closeActivityReplicationModal = useCallback(() => {
+    setShowActivityReplicationModal(false);
+    setSelectedLeia(null);
+    setNameActivityReplication("");
+  }, []);
+
+  const confirmActivityReplication = useCallback(async () => {
+    if (!selectedLeia) return;
+    try {
+      const activityExists = await api.get(`api/v1/experiments/${nameActivityReplication}/exists`);
+      const replicationExists = await api.get(`api/v1/workbench/replications/${nameActivityReplication}/exists`);
+      if (!activityExists.data.exists && !replicationExists.data.exists) {
+      const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
+        leiaId: selectedLeia.id,
+        leiaName: nameActivityReplication.trim(),
+      });
+
+      const replication = await api.post(
+        `/api/v1/workbench/replications`,
+        {
+          name: nameActivityReplication.trim(),
+          experiment: activity.id,
+        }
+      );
+      toast.success("LEIA replicated successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      closeActivityReplicationModal();
+      setNameActivityReplication("");
+      const workbenchBaseUrl =
+      import.meta.env.VITE_WORKBENCH_URL;
+      const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/replications/${encodeURIComponent(replication.data.id)}`;
+      const newWindow = window.open(replicationUrl);
+      if (!newWindow) {
+        toast.error("Popup blocked or could not open replication", {
+          position: "bottom-right",
+          autoClose: 2000,
+          });
+            }
+          } else {
+        toast.error("An activity or replication with that name already exists. Please choose a different name.", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+      }
+    } catch (error) {
+      console.error("Error replicating LEIA:", error);
+        toast.error("Error replicating LEIA. Please try again.", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+    }
+  }, [closeActivityReplicationModal, nameActivityReplication, selectedLeia]);
+
+
   const confirmDeleteLeia = async (leia: Leia) => {
     setIsDeleting(true);
     setDeleteError(null);
@@ -419,6 +523,52 @@ export const LeiaSearch: React.FC = () => {
           handleCloseExperimentsModal();
         }}
       />
+      {showActivityReplicationModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeActivityReplicationModal();
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+            <div className="p-6" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-xl font-semibold text-gray-900">
+                Replicate activity
+              </h2>
+
+              <label className="mt-5 block text-sm font-medium text-gray-700">
+                Activity and Replication name
+              </label>
+              <input
+                type="text"
+                value={nameActivityReplication}
+                onChange={(e) => setNameActivityReplication(e.target.value)}
+                placeholder="Activity replication name"
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                autoFocus
+              />
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeActivityReplicationModal}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmActivityReplication}
+                  disabled={!nameActivityReplication.trim()}
+                  className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  Replicate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
         <div className="flex items-end gap-4 mb-6">
           <div className="flex-1">
@@ -606,7 +756,7 @@ export const LeiaSearch: React.FC = () => {
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <button
-                          className="group relative px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-40"
+                          className="group relative px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-40"
                           onClick={() => handlePersonalize(leia)}
                         >
                           <SwatchIcon className="w-4 h-4 flex-shrink-0" />
@@ -615,7 +765,7 @@ export const LeiaSearch: React.FC = () => {
                           </span>
                         </button>
                         <button
-                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-20"
+                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-20"
                           onClick={() => handleViewLeiaContent(leia)}
                           title="View LEIA content"
                         >
@@ -629,7 +779,7 @@ export const LeiaSearch: React.FC = () => {
                             className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
                               initializingId === leia.id
                                 ? "w-30"
-                                : "w-10 hover:w-20"
+                                : "w-9 hover:w-20"
                             }`}
                             onClick={() => handleTryMenuToggle(leia.id)}
                             disabled={initializingId === leia.id}
@@ -675,7 +825,7 @@ export const LeiaSearch: React.FC = () => {
                             className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
                               selectedLeia?.id === leia.id
                                 ? "w-42"
-                                : "w-10 hover:w-38"
+                                : "w-9 hover:w-38"
                             }`}
                             onClick={() => {
                               setSelectedLeia(leia);
@@ -696,9 +846,18 @@ export const LeiaSearch: React.FC = () => {
                             </span>
                           </button>
                         )}
+                        <button
+                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-40"
+                          onClick={() => handleQuickReplication(leia)}
+                        >
+                          <BeakerIcon className="w-4 h-4 flex-shrink-0" />
+                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                            Quick Replication
+                          </span>
+                        </button>
                         {canDeleteLeia(leia) && (
                           <button
-                            className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-22"
+                            className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-22"
                             onClick={() => handleDeleteLeia(leia)}
                             title="Delete LEIA"
                           >
