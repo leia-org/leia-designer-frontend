@@ -11,7 +11,8 @@ declare global {
           "expired-callback": () => void;
           "error-callback": () => void;
           "response-field": boolean;
-          theme: "light";
+          theme: string;
+          language: string;
         }
       ) => string;
       remove: (widgetId: string) => void;
@@ -42,6 +43,7 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
         "error-callback": () => onTokenChange(""),
         "response-field": false,
         theme: "light",
+        language: "en",
       });
       if (intervalId) {
         window.clearInterval(intervalId);
