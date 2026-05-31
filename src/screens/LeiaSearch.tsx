@@ -320,8 +320,9 @@ export const LeiaSearch: React.FC = () => {
 
   const handleQuickReplication = useCallback(async (leia: Leia) => {
     try {
-      const activityExists = await api.get(`api/v1/experiments/${leia.metadata.name}/exists`);
-      const replicationExists = await api.get(`api/v1/workbench/replications/${leia.metadata.name}/exists`);
+      const encodedLeiaName = encodeURIComponent(leia.metadata.name);
+      const activityExists = await api.get(`api/v1/experiments/exists/${encodedLeiaName}`);
+      const replicationExists = await api.get(`api/v1/workbench/replications/exists/${encodedLeiaName}`);
       if (!activityExists.data.exists && !replicationExists.data.exists) {
         const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
         leiaId: leia.id,
@@ -370,8 +371,9 @@ export const LeiaSearch: React.FC = () => {
   const confirmActivityReplication = useCallback(async () => {
     if (!selectedLeia) return;
     try {
-      const activityExists = await api.get(`api/v1/experiments/${nameActivityReplication}/exists`);
-      const replicationExists = await api.get(`api/v1/workbench/replications/${nameActivityReplication}/exists`);
+      const encodedActivityName = encodeURIComponent(nameActivityReplication);
+      const activityExists = await api.get(`api/v1/experiments/exists/${encodedActivityName}`);
+      const replicationExists = await api.get(`api/v1/workbench/replications/exists/${encodedActivityName}`);
       if (!activityExists.data.exists && !replicationExists.data.exists) {
       const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
         leiaId: selectedLeia.id,
