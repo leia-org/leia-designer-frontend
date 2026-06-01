@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import type { ApiKey } from "../models/ApiKeys";
 
 interface LeiaTryDropdownProps {
@@ -93,8 +94,17 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
           </div>
         )}
         {showNoApiKeys && (
-          <div className="mt-2 text-xs text-gray-500">
-            No API keys available for your account
+          <div className="mt-2">
+            <div className="text-xs text-gray-500">
+              No API keys available for your account
+            </div>
+            <Link
+              to="/api-keys"
+              onClick={onClose}
+              className="mt-2 inline-flex rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+            >
+              Create API key
+            </Link>
           </div>
         )}
         {showNoMatchingKeys && (

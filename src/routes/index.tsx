@@ -5,11 +5,13 @@ import { CreateLeia } from "../screens/CreateLeia";
 import { Chat } from "../screens/Chat";
 import { Edit } from "../screens/Edit";
 import { Login } from "../screens/Login";
+import { Register } from "../screens/Register";
 import { Profile } from "../screens/Profile";
 import { ForbiddenPage } from "../screens/ForbiddenPage";
 import { LeiaSearch } from "../screens/LeiaSearch";
 import { UserManagement } from "../screens/UserManagement";
 import { MyActivities } from "../screens/MyActivities";
+import { ApiKeysPage } from "../screens/ApiKeys";
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -75,6 +77,7 @@ export const AppRoutes = () => {
         }
       />
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route
         path="/profile"
         element={
@@ -88,6 +91,14 @@ export const AppRoutes = () => {
         element={
           <AuthenticatedRoute>
             <CreateLeia />
+          </AuthenticatedRoute>
+        }
+      />
+      <Route
+        path="/api-keys"
+        element={
+          <AuthenticatedRoute>
+            <ApiKeysPage />
           </AuthenticatedRoute>
         }
       />
