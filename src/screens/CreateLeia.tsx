@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import { type InputActionMeta, type MultiValue } from "react-select";
 import CreatableSelect from "react-select/creatable";
+import { driver } from "driver.js";
+import "driver.js/dist/driver.css";
 import {
   LightBulbIcon,
   CpuChipIcon,
@@ -73,6 +75,7 @@ interface NavigationState {
     problem: Problem | null;
     behaviour: Behaviour | null;
   };
+  startTourFromSearch?: boolean;
   save?: {
     currentStep: WizardStep;
     leiaConfig: LeiaConfig;
@@ -104,6 +107,7 @@ export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuth();
+  const tourRef = useRef<ReturnType<typeof driver> | null>(null);
   const {
     apiKeys,
     isLoading: isApiKeysLoading,
@@ -117,6 +121,7 @@ export const CreateLeia: React.FC = () => {
     error: providersError,
   } = useProviders();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
+  const [tourRequested, setTourRequested] = useState(false);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
     persona: null,
     problem: null,
@@ -253,6 +258,188 @@ export const CreateLeia: React.FC = () => {
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
 
+  const startGuidedTour = useCallback((startStep: WizardStep = 2) => {
+    tourRef.current?.destroy();
+    setIsTryMenuOpen(false);
+    setShowGenerateModal(false);
+    setShowGenerateBehaviourModal(false);
+    setShowCreateLabelModal(false);
+    setShowFinishModal(false);
+    setShowAddToActivityModal(false);
+    setEditingResource({
+      resource: null,
+      content: null,
+      apiVersion: "v1", 
+    });
+    setCurrentStep(startStep);
+    setTourRequested(true);
+  }, []);
+
+
+  useEffect(() => {
+    if (!tourRequested || loading) {
+      return;
+    }
+
+    let tour: ReturnType<typeof driver> | null = null;
+
+    tour = driver({
+      animate: true,
+      smoothScroll: true,
+      allowClose: true,
+      showProgress: true,
+      progressText: "Paso {{current}} de {{total}}",
+      onNextClick: (_element, _step, options) => {
+        const activeIndex = options.driver.getActiveIndex();
+        if (activeIndex === 1) {
+          setCurrentStep(1);
+          window.setTimeout(() => {
+            options.driver.moveNext();
+          }, 150);
+          return;
+        }
+        if (activeIndex === 3) {
+          setCurrentStep(2);
+          window.setTimeout(() => {
+            options.driver.moveNext();
+          }, 150);
+          return;
+        }
+
+        if (activeIndex === 4) {
+          setCurrentStep(3);
+          
+          window.setTimeout(() => {
+            options.driver.moveNext();
+          }, 150);
+          return;
+        }
+        
+        options.driver.moveNext();
+      },
+      onPrevClick: (_element, _step, options) => {
+        const activeIndex = options.driver.getActiveIndex();
+
+        if (activeIndex === 2) {
+          setCurrentStep(2);
+          window.setTimeout(() => {
+            options.driver.movePrevious();
+          }, 100);
+          return;
+        }
+
+        if (activeIndex === 4) {
+          setCurrentStep(2);
+          window.setTimeout(() => {
+            options.driver.movePrevious();
+          }, 150);
+          return;
+        }
+
+        if (activeIndex === 5) {
+          setCurrentStep(2);
+          window.setTimeout(() => {
+            options.driver.movePrevious();
+          }, 150);
+          return;
+        }
+
+        options.driver.movePrevious();
+      },
+      steps: [
+        {
+          element: "#create-preview-panel",
+          popover: {
+            title: "Step 2: review",
+            description:
+              "Right here you can see the Behaviour, Problem and Persona that compose this LEIA. You can edit them and create new ones",
+            side: "top",
+          },
+        },
+        {
+          element: "#create-previous-button",
+          popover: {
+            title: "Previous",
+            description:
+              "This button takes you back to the previous step.",
+            side: "top",
+          },
+        },
+        {
+          element: "#create-selection-grid",
+          popover: {
+            title: "Step 1: selection",
+            description:
+              "You could also select different components for the LEIA by clicking on these cards.",
+            side: "top",
+          },
+        },
+        
+        {
+          element: "#create-next-button",
+          popover: {
+            title: "Next",
+            description:
+              "This button takes you to the editor and preview. The tutorial moves to the next stage along with the page.",
+            side: "top",
+          },
+        },
+        
+        {
+          element: "#try-button",
+          popover: {
+            title: "Try",
+            description:
+              "Try chatting with it to see how it behaves",
+            side: "top",
+          },
+        },
+        {
+          element: "#create-final-form",
+          popover: {
+            title: "Step 3: creation",
+            description:
+              "Here you complete the final name and labels before clicking Finish to save the LEIA.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#create-next-button",
+          popover: {
+            title: "Final create",
+            description:
+              "Here you complete the final name and labels before clicking Finish to save the LEIA, and return to the main page",
+            side: "left",
+            onNextClick: () => {
+              tour?.destroy();
+              navigate("/", {
+                state: {
+                  continueTour: 3,
+                },
+              });
+            },
+          },
+        },
+      ],
+      onDestroyed: () => {
+        if (tourRef.current === tour) {
+          tourRef.current = null;
+        }
+      },
+    });
+      
+    tourRef.current = tour;
+    setTourRequested(false);
+    tour.drive();
+  }, [currentStep, loading, tourRequested]);
+
+  useEffect(() => {
+    return () => {
+      tourRef.current?.destroy();
+      tourRef.current = null;
+    };
+  }, []);
+  
   // Cargar datos al montar el componente
   useEffect(() => {
     loadData();
@@ -262,6 +449,7 @@ export const CreateLeia: React.FC = () => {
   // Aplicar preset si viene desde navegación
   useEffect(() => {
     const navigationState = location.state as NavigationState;
+    if (!navigationState) return;
     const preset = navigationState?.preset;
     if (preset) {
       setLeiaConfig({
@@ -272,7 +460,14 @@ export const CreateLeia: React.FC = () => {
       setLeiaConfigSnapShot(preset);
       setCurrentStep(2);
     }
-  }, [location.state]);
+    if (navigationState?.startTourFromSearch) {
+      startGuidedTour(2);
+      try {
+        navigate(location.pathname, { replace: true, state: undefined as unknown as NavigationState });
+      } catch (e) {
+        console.error("Error clearing navigation state after starting tour:", e);}
+    }
+  }, [location.pathname, location.state, navigate, startGuidedTour]);
 
   // Restaurar estado cuando se vuelve del chat
   useEffect(() => {
@@ -1250,7 +1445,7 @@ const openGenerateProblemModal = () => {
 
       {/* Show actual content when not loading */}
       {!loading && (
-        <div className="grid grid-cols-3">
+        <div id="create-selection-grid" className="grid grid-cols-3">
           {/* Columna 1: Behaviour */}
           <div className="h-full">
             <SelectionColumn
@@ -1366,7 +1561,7 @@ const openGenerateProblemModal = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6 h-full">
+      <div id="create-preview-panel" className="grid grid-cols-3 gap-6 h-full">
         {/* Columna 1: Behaviour */}
         <div className="space-y-4 flex flex-col">
           <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
@@ -1729,6 +1924,7 @@ const openGenerateProblemModal = () => {
                   className="group relative px-2.5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all duration-300 flex items-center gap-2 overflow-hidden w-10 hover:w-22"
                   aria-expanded={isTryMenuOpen}
                   aria-haspopup="dialog"
+                  id= "try-button"
                 >
                   <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
                   <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
@@ -1975,7 +2171,7 @@ const openGenerateProblemModal = () => {
             Update the fields of the required resources and complete the process
           </p>
         </div>
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div id="create-final-form" className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="font-semibold text-gray-900 mb-4">LEIA</h3>
         <div className="space-y-4">
           <div>
@@ -2697,11 +2893,12 @@ const openGenerateProblemModal = () => {
       <Header
         title="Design"
         description="Create your own LEIAs and test them!"
+        
       />
 
       {/* Main Content */}
       <div className="flex-1 container mx-auto px-6 py-8">
-        {renderStepIndicator()}
+        <div id="create-step-indicator">{renderStepIndicator()}</div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
           {currentStep === 1 && renderStep1()}
@@ -2714,6 +2911,7 @@ const openGenerateProblemModal = () => {
           <button
             onClick={handlePrevStep}
             disabled={currentStep === 1}
+            id= "create-previous-button"
             className={`px-6 py-2 rounded-lg transition-colors ${
               currentStep === 1
                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
@@ -2746,6 +2944,7 @@ const openGenerateProblemModal = () => {
           </div>
 
           <button
+            id="create-next-button"
             onClick={handleNextStep}
             disabled={
               (currentStep === 1 && !isStep1Complete) ||

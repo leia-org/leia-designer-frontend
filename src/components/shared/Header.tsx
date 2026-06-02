@@ -22,21 +22,29 @@ interface HeaderProps {
   title: string;
   description: string;
   rightContent?: React.ReactNode;
+  leftContent?: React.ReactNode;
   menuItems?: MenuItem[];
   showNavigation?: boolean;
+  dropdownTour?: boolean; // Para tour
 }
 
 export const Header: React.FC<HeaderProps> = ({
   title,
   description,
   rightContent,
+  leftContent,
   menuItems,
   showNavigation = true,
+  dropdownTour, // Para tour
 }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-
+  const [dropdownOpen, setDropdownOpen] = useState(dropdownTour);
+  console.log("Header render - dropdownTour:", dropdownTour, "dropdownOpen:", dropdownOpen);
+  useEffect(() => {
+    setDropdownOpen(dropdownTour);
+  }, [dropdownTour]);
+  
   // Default menu items if none provided
   const defaultMenuItems: MenuItem[] = [
     {
@@ -120,6 +128,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-4 flex-shrink-0 ml-6">
+          {leftContent && <div>{leftContent}</div>}
           {user?.email && (
             <span className="text-sm text-gray-500 font-medium">
               {user.email}
@@ -132,6 +141,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center justify-center w-10 h-10 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title="Navigation menu"
+                id="navigation-menu"
               >
                 <Bars3Icon className="w-5 h-5" />
               </button>
@@ -142,6 +152,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {visibleItems.map((item, index) => (
                       <button
                         key={index}
+                        id={item.label === "My Activities" ? "myActivities-button" : undefined}
                         onClick={() => {
                           if (item.onClick) {
                             item.onClick();
@@ -162,6 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
           )}
+          
           {rightContent && <div>{rightContent}</div>}
         </div>
       </div>
