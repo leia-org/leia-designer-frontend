@@ -4,7 +4,9 @@ import type { AxiosResponse, AxiosError } from 'axios';
 const api = axios.create({
   baseURL: import.meta.env.VITE_APP_BACKEND,
 });
-
+export const authApi = axios.create({
+  baseURL: import.meta.env.VITE_AUTH_SERVICE_BACKEND,
+});
 const getToken = (): string | null => {
   return localStorage.getItem('token');
 };
@@ -38,7 +40,7 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response) {
       const status = error.response.status;
-      
+
       switch (status) {
         case 401:
           logout();
@@ -50,9 +52,45 @@ api.interceptors.response.use(
           break;
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
 
+authApi.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+authApi.interceptors.response.use(
+  (response: AxiosResponse) => {
+    return response;
+  },
+  (error: AxiosError) => {
+    if (error.response) {
+      const status = error.response.status;
+
+      switch (status) {
+        case 401:
+          logout();
+          break;
+        case 403:
+          forbidden();
+          break;
+        default:
+          break;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 export default api;
