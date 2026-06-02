@@ -1,6 +1,6 @@
 import type React from "react";
 import { Header } from "../components/shared/Header";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { Experiment, LeiaConfig } from "../models/Experiment";
 import type { Leia } from "../models/Leia";
 import api from "../lib/axios";
@@ -26,10 +26,12 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import Select from "react-select";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import * as Tabs from "@radix-ui/react-tabs";
 import "../styles/monaco-tooltip-fix.css";
+import { driver } from "driver.js";
+import "driver.js/dist/driver.css";
 
 interface TranscriptionMessage {
   text: string;
@@ -50,6 +52,7 @@ const TranscriptionArraySchema = z
 
 export const MyActivities: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [experiments, setExperiments] = useState<Experiment[] | null>(null);
   const [loadingExperiments, setLoadingExperiments] = useState(false);
   const [errorLoadingExperiments, setErrorLoadingExperiments] = useState("");
@@ -243,7 +246,85 @@ export const MyActivities: React.FC = () => {
       });
     }
   };
+      
+  
+  const tourRef = useRef<ReturnType<typeof driver> | null>(null);
+  const startGuidedTour = useCallback(() => {
+      let tour: ReturnType<typeof driver> | null = null;
+      tourRef.current?.destroy();
+      tour = driver({
+                animate: true,
+                smoothScroll: true,
+                allowClose: true,
+                showProgress: true,
+                progressText: "Paso {{current}} de {{total}}",
+                steps: [
+            {
+          element: "",
+          popover: {
+            title: "Activities",
+            description:
+              "Here is the list of Activities you can use.",
+            side: "bottom",
+            onNextClick: () => {
+              const firstActivity = experiments?.[0]?.id;
+              console.log("First activity ID for tour:", firstActivity);
+              if (firstActivity) {
+                toggleExperiment(firstActivity);
+              }
+            }
+          }
+        },
+        {
+          element: "#first-activity-open",
+          popover: {
+            title: "Leias",
+            description:
+              "You can see your related Leias, and change their mode to be standard or transcription.",
+            side: "bottom",
+          }
+        },
+        {
+          element: "#first-activity-open",
+          popover: {
+            title: "Leias",
+            description:
+              "You can see your related Leias, and change their mode to be standard or transcription.",
+            side: "bottom",
+          }
+        },
+      ],
+        onDestroyed: () => {
+        if (tourRef.current === tour) {
+          tourRef.current = null;
+          toggleExperiment("");
+        }
+      }
+      });
+      tourRef.current = tour;
+        tour.drive();
 
+    }, [experiments]);
+    const [pendingTour, setPendingTour] = useState(false);
+    useEffect(() => {
+          const navigationState = location.state;
+          if (!navigationState) return;
+          if (navigationState.isTour) {
+            setPendingTour(true);
+            startGuidedTour();
+            try {
+            navigate(location.pathname, { replace: true, state: undefined });
+          } catch (e) {
+            console.error("Error clearing navigation state after starting tour:", e);}
+        }
+        }, [location.pathname, location.state, navigate, startGuidedTour]);
+      
+        useEffect(() => {
+  if (pendingTour && experiments && experiments.length > 0 && !loadingExperiments) {
+    setPendingTour(false);
+    startGuidedTour();
+  }
+}, [pendingTour, experiments, loadingExperiments, startGuidedTour]);
   const handleDeleteExperimentLeia = async (
     experimentId: string,
     leiaConfigId: string
@@ -861,7 +942,7 @@ export const MyActivities: React.FC = () => {
                 Create New Activity
               </h2>
 
-              <div className="space-y-4">
+              <div id="activities" className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Activity Name
@@ -1354,13 +1435,14 @@ export const MyActivities: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {experiments.filter((experiment) => experiment.name.toLowerCase().includes(searchQuery.toLowerCase())).map((experiment) => (
+                  {experiments.filter((experiment) => experiment.name.toLowerCase().includes(searchQuery.toLowerCase())).map((experiment, index) => (
                     <div
                       key={experiment.id}
+                      id = {index === 0 ? "first-activity-open" : undefined}
                       className="bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow duration-200"
                     >
                       {/* Experiment Header */}
-                      <div className="p-6 pb-4">
+                      <div id={index === 0 ? "first-activity" : undefined} className="p-6 pb-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h3 className="text-lg font-medium text-gray-900 mb-2">

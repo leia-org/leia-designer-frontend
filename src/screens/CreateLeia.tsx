@@ -380,7 +380,7 @@ export const CreateLeia: React.FC = () => {
           popover: {
             title: "Next",
             description:
-              "This button takes you to the editor and preview. The tutorial moves to the next stage along with the page.",
+              "Let's go to the next step.",
             side: "top",
           },
         },

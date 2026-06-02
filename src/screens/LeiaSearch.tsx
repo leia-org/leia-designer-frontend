@@ -142,7 +142,6 @@ export const LeiaSearch: React.FC = () => {
             onNextClick: () => {
             tour?.destroy();
             const firstLeia = leias[1];
-            sessionStorage.setItem('tourStep', '3');
             if (firstLeia){
             handlePersonalize(firstLeia, true);
             }
@@ -224,8 +223,12 @@ export const LeiaSearch: React.FC = () => {
             side: "bottom",
             onNextClick: () => {
             tour?.destroy();
-            navigate("/users/me/activities");
-            }
+            navigate("/users/me/activities", {
+              state: {
+                isTour: true,
+              },
+            });
+            },
           },
         },
           ],
@@ -248,7 +251,6 @@ export const LeiaSearch: React.FC = () => {
       const navigationState = location.state;
       if (!navigationState) return;
       if (navigationState.continueTour) {
-        console.log("Starting guided tour from navigation state with step:", navigationState.continueTour);
         startGuidedTour(navigationState.continueTour);
         try {
         navigate(location.pathname, { replace: true, state: undefined });
