@@ -57,7 +57,12 @@ export async function uploadProblemChatFile(chatId: string, file: File): Promise
 /** Send a chat turn (or a tool-result continuation). */
 export async function sendProblemChatMessage(
   chatId: string,
-  body: { message?: string; tools?: ProblemChatTool[]; toolResults?: ProblemChatToolResult[] },
+  body: {
+    message?: string;
+    tools?: ProblemChatTool[];
+    toolResults?: ProblemChatToolResult[];
+    fileIds?: string[];
+  },
 ): Promise<ProblemChatResponse> {
   const { data } = await api.post(
     `/api/v1/runner/problem-chat/${chatId}/messages`,

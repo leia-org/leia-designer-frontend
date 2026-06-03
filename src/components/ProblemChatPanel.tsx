@@ -168,7 +168,13 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
 
   // One user turn → loop while the model returns tool calls.
   const runTurn = async (chatId: string, message: string): Promise<string> => {
-    let response = await sendProblemChatMessage(chatId, { message, tools: CHAT_TOOLS });
+    // Send the uploaded PDF ids with the turn so the runner attaches them even
+    // if the session was re-opened; it only attaches each one once.
+    let response = await sendProblemChatMessage(chatId, {
+      message,
+      tools: CHAT_TOOLS,
+      fileIds: attachments.map((a) => a.fileId),
+    });
     for (let i = 0; i < 8; i++) {
       const calls = response.toolCalls;
       if (!Array.isArray(calls) || calls.length === 0) break;
