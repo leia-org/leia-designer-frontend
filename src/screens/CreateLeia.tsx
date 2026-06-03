@@ -112,6 +112,7 @@ export const CreateLeia: React.FC = () => {
   } = useApiKeys();
   const {
     apiKeyProvidersMapped,
+    providerProviderModuleMap,
     defaultModel,
     isLoading: isProvidersLoading,
     error: providersError,
@@ -1341,10 +1342,30 @@ const openGenerateProblemModal = () => {
 
   const renderStep2 = () => {
     const isTryLoading = isApiKeysLoading || isProvidersLoading;
-    const validTryModels = getValidModels(tryConfig.apiKeyId);
-    const validTryApiKeys = getValidApiKeys(tryConfig.modelName);
+    // Widgets / tool-functions only work through a tool-capable runner provider
+    // (the openai-responses module). When the problem declares widgets, the Try
+    // is restricted to those models/keys — today that means OpenAI.
+    const problemHasWidgets =
+      Array.isArray(leiaConfig.problem?.spec?.widgets) &&
+      (leiaConfig.problem?.spec?.widgets?.length ?? 0) > 0;
+    const toolCapableProviders = Object.entries(providerProviderModuleMap || {})
+      .filter(([, moduleName]) => moduleName === "openai-responses")
+      .map(([provider]) => provider);
+    const toolCapableModels = toolCapableProviders.flatMap(
+      (provider) => apiKeyProvidersMapped[provider] || []
+    );
+    let validTryModels = getValidModels(tryConfig.apiKeyId);
+    let validTryApiKeys = getValidApiKeys(tryConfig.modelName);
+    if (problemHasWidgets) {
+      validTryModels = validTryModels.filter((m) => toolCapableModels.includes(m));
+      validTryApiKeys = validTryApiKeys.filter((k) =>
+        toolCapableProviders.includes(k.provider)
+      );
+    }
     const canStartTry =
-      Boolean(tryConfig.modelName && tryConfig.apiKeyId) && !isTryLoading;
+      Boolean(tryConfig.modelName && tryConfig.apiKeyId) &&
+      !isTryLoading &&
+      (!problemHasWidgets || toolCapableModels.includes(tryConfig.modelName));
     const showNoApiKeys =
       !isTryLoading &&
       !providersError &&
@@ -1745,6 +1766,7 @@ const openGenerateProblemModal = () => {
                   apiKeyValue={tryConfig.apiKeyId}
                   models={validTryModels}
                   apiKeys={validTryApiKeys}
+                  toolsRestricted={problemHasWidgets}
                   onModelChange={handleTryModelChange}
                   onApiKeyChange={handleTryApiKeyChange}
                   canStart={canStartTry}
