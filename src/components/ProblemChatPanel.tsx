@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   PaperClipIcon,
   PaperAirplaneIcon,
   SparklesIcon,
 } from "@heroicons/react/24/solid";
 import type { Problem, ProblemSpec } from "../models/Leia";
+import { useApiKeys } from "../hooks/useApiKeys";
+import { useProviders } from "../hooks/useProviders";
 import {
   openProblemChat,
   uploadProblemChatFile,
@@ -15,9 +18,9 @@ import {
 } from "../lib/problemChat";
 
 // The editor-driving tools the model can call. apply_problem's parameters ARE
-// the Problem spec — this is how we get structured output via function calling
-// (same pattern as the workbench widget tools). get_current_problem lets the
-// model read the editor to iterate on an existing problem.
+// the Problem spec — structured output via function calling (same pattern as the
+// workbench widget tools). get_current_problem lets the model read the editor
+// to iterate on an existing problem.
 const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "get_current_problem",
@@ -62,18 +65,49 @@ interface ChatMessage {
 }
 
 interface ProblemChatPanelProps {
-  modelName: string | null | undefined;
-  apiKeyId: string | null | undefined;
   currentProblem: Problem | null;
   onApplyProblem: (spec: ProblemSpec) => void;
 }
 
 export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
-  modelName,
-  apiKeyId,
   currentProblem,
   onApplyProblem,
 }) => {
+  const { apiKeys, getDefaultKey, isLoading: apiKeysLoading } = useApiKeys();
+  const { apiKeyProvidersMapped, defaultModel, isLoading: providersLoading } = useProviders();
+
+  // The problem-chat always runs on OpenAI (Responses API + PDF input), so only
+  // OpenAI models/keys are selectable here.
+  const openaiKeys = useMemo(
+    () => apiKeys.filter((k) => k.provider === "openai"),
+    [apiKeys],
+  );
+  const openaiModels = useMemo(
+    () => apiKeyProvidersMapped?.openai || [],
+    [apiKeyProvidersMapped],
+  );
+
+  const [selectedApiKeyId, setSelectedApiKeyId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>("");
+
+  const optionsLoading = apiKeysLoading || providersLoading;
+
+  // Seed sensible defaults once the keys/models load (default OpenAI key + model).
+  useEffect(() => {
+    if (optionsLoading) return;
+    setSelectedApiKeyId((prev) => {
+      if (prev && openaiKeys.some((k) => k.id === prev)) return prev;
+      const def = getDefaultKey();
+      if (def && def.provider === "openai") return def.id;
+      return openaiKeys[0]?.id ?? null;
+    });
+    setSelectedModel((prev) => {
+      if (prev && openaiModels.includes(prev)) return prev;
+      if (defaultModel && openaiModels.includes(defaultModel)) return defaultModel;
+      return openaiModels[0] ?? "";
+    });
+  }, [optionsLoading, openaiKeys, openaiModels, defaultModel, getDefaultKey]);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -88,7 +122,13 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const currentProblemRef = useRef<Problem | null>(currentProblem);
   currentProblemRef.current = currentProblem;
 
-  const ready = Boolean(modelName && apiKeyId);
+  const ready = Boolean(selectedModel && selectedApiKeyId);
+  const hasOpenaiKeys = openaiKeys.length > 0;
+
+  // Changing the model/key invalidates the server-side session.
+  useEffect(() => {
+    chatIdRef.current = null;
+  }, [selectedModel, selectedApiKeyId]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
@@ -99,11 +139,11 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (chatIdRef.current) return chatIdRef.current;
-    if (!modelName || !apiKeyId) throw new Error("Select a model and API key first");
-    const chatId = await openProblemChat(modelName, apiKeyId);
+    if (!selectedModel || !selectedApiKeyId) throw new Error("Select a model and API key first");
+    const chatId = await openProblemChat(selectedModel, selectedApiKeyId);
     chatIdRef.current = chatId;
     return chatId;
-  }, [modelName, apiKeyId]);
+  }, [selectedModel, selectedApiKeyId]);
 
   const handleAttach = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -126,10 +166,15 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     }
   };
 
-  // One user turn → loop while the model returns tool calls. apply_problem
-  // writes to the editor; get_current_problem reads it back.
+  // One user turn → loop while the model returns tool calls.
   const runTurn = async (chatId: string, message: string): Promise<string> => {
-    let response = await sendProblemChatMessage(chatId, { message, tools: CHAT_TOOLS });
+    // Send the uploaded PDF ids with the turn so the runner attaches them even
+    // if the session was re-opened; it only attaches each one once.
+    let response = await sendProblemChatMessage(chatId, {
+      message,
+      tools: CHAT_TOOLS,
+      fileIds: attachments.map((a) => a.fileId),
+    });
     for (let i = 0; i < 8; i++) {
       const calls = response.toolCalls;
       if (!Array.isArray(calls) || calls.length === 0) break;
@@ -189,19 +234,64 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
         <SparklesIcon className="h-4 w-4 text-blue-600" />
         <span className="text-sm font-semibold text-gray-800">AI Assistant</span>
-        <span className="ml-auto text-[11px] text-gray-400">
-          {modelName ? modelName : "no model"}
-        </span>
       </div>
 
-      {!ready && (
-        <div className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-b border-amber-200">
-          Select a model and API key (Try settings) to use the assistant.
-        </div>
-      )}
+      {/* Model + API key selectors (OpenAI only — the assistant runs on OpenAI). */}
+      <div className="px-3 py-2 border-b border-gray-100">
+        {hasOpenaiKeys ? (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-medium text-gray-500 mb-1">Model</label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={optionsLoading}
+                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">{optionsLoading ? "Loading…" : "-- model --"}</option>
+                {openaiModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-gray-500 mb-1">API Key</label>
+              <select
+                value={selectedApiKeyId ?? ""}
+                onChange={(e) => setSelectedApiKeyId(e.target.value || null)}
+                disabled={optionsLoading}
+                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">{optionsLoading ? "Loading…" : "-- key --"}</option>
+                {openaiKeys.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="text-[11px] text-amber-700">
+            {optionsLoading ? (
+              "Loading API keys…"
+            ) : (
+              <>
+                No OpenAI API key available.{" "}
+                <Link to="/administration/api-keys" className="text-blue-600 underline">
+                  Create one
+                </Link>{" "}
+                to use the assistant.
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Transcript */}
-      <div ref={transcriptRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3 min-h-[200px]">
+      <div ref={transcriptRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3 min-h-[160px]">
         {messages.length === 0 ? (
           <div className="text-xs text-gray-400 italic">
             Attach a PDF of a past exercise and ask me to turn it into a problem, or describe a
@@ -281,7 +371,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             onKeyDown={handleKeyDown}
             disabled={!ready || sending}
             rows={1}
-            placeholder={ready ? "Describe the problem or ask to convert the PDF…" : "Select a model first…"}
+            placeholder={ready ? "Describe the problem or ask to convert the PDF…" : "Select a model and key…"}
             className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50"
             style={{ maxHeight: 120 }}
           />
