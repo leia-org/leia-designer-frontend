@@ -8,6 +8,7 @@ import {
 import type { Problem, ProblemSpec } from "../models/Leia";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
+import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
   uploadProblemChatFile,
@@ -17,21 +18,40 @@ import {
   type UploadedFile,
 } from "../lib/problemChat";
 
-// The editor-driving tools the model can call. apply_problem's parameters ARE
-// the Problem spec — structured output via function calling (same pattern as the
-// workbench widget tools). get_current_problem lets the model read the editor
-// to iterate on an existing problem.
+// Widget catalog context for the model: available widgetTypes + their tool
+// functions, so it can decide whether the activity needs a widget (e.g. a
+// coding exercise) and configure each tool's usage.
+const WIDGET_TYPES = WIDGET_CATALOG.map((w) => w.widgetType);
+const WIDGET_TOOL_NAMES = Array.from(
+  new Set(WIDGET_CATALOG.flatMap((w) => w.tools.map((t) => t.name))),
+);
+const WIDGET_CATALOG_DOC = WIDGET_CATALOG.length
+  ? WIDGET_CATALOG.map(
+      (w) =>
+        `- "${w.widgetType}": ${w.description} Tools: ${w.tools
+          .map((t) => `${t.name} (${t.description})`)
+          .join("; ")}`,
+    ).join("\n")
+  : "(none available)";
+
+// The editor-driving tools. apply_problem's parameters ARE the full Problem
+// spec (structured output via function calling, like the workbench widget
+// tools). get_current_problem lets the model read the editor to iterate.
 const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "get_current_problem",
     description:
-      "Returns the problem currently in the editor (its spec fields). Call it before modifying an existing problem, or to match its style/solutionFormat.",
+      "Returns the problem currently in the editor (its full spec, including any widgets). Call it before modifying an existing problem, or to match its style/solutionFormat.",
     parameters: { type: "object", properties: {} },
   },
   {
     name: "apply_problem",
     description:
-      "Writes a COMPLETE problem into the editor, replacing the current one. Call it once you have enough information (from the conversation and/or an attached PDF) to produce a coherent problem.",
+      "Writes a COMPLETE problem into the editor, replacing the current one. Fill every field you reasonably can.\n\n" +
+      "Advanced fields — leave as empty objects {} unless explicitly composing: `extends` (inherit from a base problem), `overrides` (override inherited fields), `constrainedTo` (constraints on the interaction/solution).\n\n" +
+      "Add `widgets` ONLY when the activity needs an interactive tool (e.g. a coding exercise needs the code editor). Available widgets and their tool functions:\n" +
+      WIDGET_CATALOG_DOC +
+      "\nFor each widget tool you may set `enabled` and a `usage` note telling LEIA when to use it in this activity.",
     parameters: {
       type: "object",
       properties: {
@@ -42,15 +62,66 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         },
         details: { type: "string", description: "Specific requirements, constraints and expected features." },
         solution: { type: "string", description: "The expected solution, in the chosen solutionFormat." },
+        initialSolution: {
+          type: "string",
+          description: "Optional starting solution shown to the student (empty string if none).",
+        },
         solutionFormat: {
           type: "string",
           enum: ["text", "mermaid", "yaml", "markdown", "html", "json", "xml"],
           description: "Format of the solution (use 'mermaid' for diagrams).",
         },
+        evaluationPrompt: {
+          type: "string",
+          description: "Optional instructions for grading the student's solution (empty string if none).",
+        },
         process: {
           type: "array",
-          items: { type: "string" },
-          description: "Optional process tags, e.g. ['requirements-elicitation'].",
+          items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
+          description: "Optional process tags.",
+        },
+        extends: {
+          type: "object",
+          description: "Advanced: inherit from a base problem/template. Empty object {} unless explicitly composing.",
+        },
+        overrides: {
+          type: "object",
+          description: "Advanced: field overrides applied on top of `extends`. Empty object {} unless overriding.",
+        },
+        constrainedTo: {
+          type: "object",
+          description: "Advanced: constraints on the interaction/solution. Empty object {} unless constraining.",
+        },
+        widgets: {
+          type: "array",
+          description:
+            "Interactive widgets for the activity (and their tool functions). Include ONLY if the activity needs one.",
+          items: {
+            type: "object",
+            properties: {
+              widgetType: { type: "string", enum: WIDGET_TYPES, description: "Which widget." },
+              slot: { type: "string", enum: ["left", "right", "main"], description: "Where it mounts." },
+              params: {
+                type: "object",
+                description:
+                  "Widget configuration. codeEditor: { fnName, description, starter: { javascript, python }, tests: [{ name, args, expected }] }.",
+              },
+              tools: {
+                type: "array",
+                description: "Per-tool config for this widget's tool functions.",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", enum: WIDGET_TOOL_NAMES, description: "The tool function." },
+                    enabled: { type: "boolean", description: "Whether LEIA may use it (default true)." },
+                    usage: { type: "string", description: "When LEIA should use this tool in this activity." },
+                  },
+                  required: ["name"],
+                },
+              },
+            },
+            required: ["widgetType"],
+          },
         },
       },
       required: ["description", "personaBackground", "details", "solution"],
