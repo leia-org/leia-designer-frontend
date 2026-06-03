@@ -577,10 +577,11 @@ export const LeiaSearch: React.FC = () => {
   // Función para determinar si el usuario puede eliminar una LEIA
   const canDeleteLeia = useCallback(
     (leia: Leia) => {
-      return (
-        user &&
-        (user.role === "admin" || (leia.user && user.id === leia.user.id))
-      );
+      if (!user) return false;
+      if (user.role === "admin") return true;
+      
+      const leiaUserId = typeof leia.user === "object" ? leia.user?.id : leia.user;
+      return user.id === leiaUserId;
     },
     [user]
   );
@@ -904,7 +905,7 @@ export const LeiaSearch: React.FC = () => {
                             showNoMatchingKeys={showNoMatchingKeys}
                           />
                         </div>
-                        {user?.role === "admin" && (
+                        {(user?.role === "admin" || user?.role === "advanced") && (
                           <button
                             className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
                               selectedLeia?.id === leia.id

@@ -48,7 +48,15 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 
   return <>{children}</>;
 };
+const AdvancedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoading, isAuthenticated } = useAuth();
 
+  if (isLoading) return <div>Loading...</div>;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!["admin", "advanced"].includes(user?.role ?? "")) return <ForbiddenPage />;
+
+  return <>{children}</>;
+};
 export const AppRoutes = () => {
   return (
     <Routes>
@@ -124,9 +132,9 @@ export const AppRoutes = () => {
       <Route
         path="/users/me/activities"
         element={
-          <AdminRoute>
+          <AdvancedRoute>
             <MyActivities />
-          </AdminRoute>
+          </AdvancedRoute>
         }
       />
       <Route path="/forbidden" element={<ForbiddenPage />} />

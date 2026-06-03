@@ -17,6 +17,7 @@ interface MenuItem {
   icon?: React.ReactNode;
   show?: boolean;
   onClick?: () => void;
+  id?: string;
 }
 
 interface HeaderProps {
@@ -41,7 +42,6 @@ export const Header: React.FC<HeaderProps> = ({
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(dropdownTour);
-  console.log("Header render - dropdownTour:", dropdownTour, "dropdownOpen:", dropdownOpen);
   useEffect(() => {
     setDropdownOpen(dropdownTour);
   }, [dropdownTour]);
@@ -53,18 +53,21 @@ export const Header: React.FC<HeaderProps> = ({
       href: "/profile",
       icon: <UsersIcon className="w-4 h-4" />,
       show: true,
+      id: "profile-button"
     },
     {
       label: "Search LEIAs",
       href: "/",
       icon: <MagnifyingGlassIcon className="w-4 h-4" />,
       show: true,
+      id: "searchLeias-button"
     },
     {
       label: "Design a new LEIA",
       href: "/create",
       icon: <PlusIcon className="w-4 h-4" />,
       show: true,
+      id: "designLeia-button"
     },
     {
       label: "My API Keys",
@@ -77,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
       label: "My Activities",
       href: "/users/me/activities",
       icon: <PuzzlePieceIcon className="w-4 h-4" />,
-      show: user?.role === "admin",
+      show: user?.role === "admin" || user?.role === "advanced",
       id: "myActivities-button"
     },
     {
@@ -85,11 +88,13 @@ export const Header: React.FC<HeaderProps> = ({
       href: "/administration/users",
       icon: <UsersIcon className="w-4 h-4" />,
       show: user?.role === "admin",
+      id: "manageUsers-button"
     },
     {
       label: "Logout",
       icon: <ArrowRightStartOnRectangleIcon className="w-4 h-4" />,
       show: true,
+      id: "logout-button",
       onClick: logout,
     },
   ];

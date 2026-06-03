@@ -3201,15 +3201,17 @@ const openGenerateProblemModal = () => {
         </div>
       )}
 
-      <AddLeiaToAnActivity
-        isOpen={showAddToActivityModal}
-        selectedLeia={createdLeiaResource}
-        onClose={() => {setShowAddToActivityModal(false); navigate("/leias")}}
-        onSuccess={() => {
-          setShowAddToActivityModal(false);
-          navigate("/leias");
-        }}
-      />
+      {(currentUser?.role === "admin" || currentUser?.role === "advanced") && (
+        <AddLeiaToAnActivity
+          isOpen={showAddToActivityModal}
+          selectedLeia={createdLeiaResource}
+          onClose={() => {setShowAddToActivityModal(false); navigate("/leias")}}
+          onSuccess={() => {
+            setShowAddToActivityModal(false);
+            navigate("/leias");
+          }}
+        />
+      )}
 
       {/* Modal mostrado despues de crear la LEIA*/}
       {showFinishModal && (
