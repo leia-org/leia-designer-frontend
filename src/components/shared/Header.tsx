@@ -7,6 +7,7 @@ import {
   UsersIcon,
   ArrowRightStartOnRectangleIcon,
   PuzzlePieceIcon,
+  KeyIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/useAuth";
 
@@ -63,6 +64,12 @@ export const Header: React.FC<HeaderProps> = ({
       label: "Design a new LEIA",
       href: "/create",
       icon: <PlusIcon className="w-4 h-4" />,
+      show: true,
+    },
+    {
+      label: "My API Keys",
+      href: "/api-keys",
+      icon: <KeyIcon className="w-4 h-4" />,
       show: true,
     },
     {
