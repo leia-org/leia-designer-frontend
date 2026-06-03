@@ -6,7 +6,7 @@ import {
   PuzzlePieceIcon,
   EyeIcon,
   TrashIcon,
-  BeakerIcon,
+  BookOpenIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { useApiKeys } from "../hooks/useApiKeys";
@@ -852,7 +852,7 @@ export const LeiaSearch: React.FC = () => {
                           className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-40"
                           onClick={() => handleQuickReplication(leia)}
                         >
-                          <BeakerIcon className="w-4 h-4 flex-shrink-0" />
+                          <BookOpenIcon className="w-4 h-4 flex-shrink-0" />
                           <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
                             Quick Replication
                           </span>
