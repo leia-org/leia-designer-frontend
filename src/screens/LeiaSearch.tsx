@@ -848,7 +848,7 @@ export const LeiaSearch: React.FC = () => {
                             </span>
                           </button>
                         )}
-                        <button
+                        {user?.role==="admin" && (<button
                           className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-40"
                           onClick={() => handleQuickReplication(leia)}
                         >
@@ -856,7 +856,7 @@ export const LeiaSearch: React.FC = () => {
                           <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
                             Quick Replication
                           </span>
-                        </button>
+                        </button>)}
                         {canDeleteLeia(leia) && (
                           <button
                             className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-22"
