@@ -18,6 +18,24 @@ interface DonkeyOptions {
 
 let donkeyPromise: Promise<DonkeyInstance> | null = null;
 
+const HIDDEN_TERMINAL_ID = "leia-py-hidden-terminal";
+
+// donkey always pipes Python stdout/stderr into a terminal element, and its
+// execute()/evaluate() helpers fail if that target is missing. The previous
+// `config: { terminal: false }` left the terminal null and broke every run with
+// `'JsNull' object has no attribute 'terminal'`. Per the PyScript docs, the
+// supported way to keep the terminal off-screen is to point the top-level
+// `terminal` option at a hidden (display:none) container.
+function ensureHiddenTerminal(): string {
+    if (typeof document !== "undefined" && !document.getElementById(HIDDEN_TERMINAL_ID)) {
+        const el = document.createElement("div");
+        el.id = HIDDEN_TERMINAL_ID;
+        el.style.display = "none";
+        document.body.appendChild(el);
+    }
+    return `#${HIDDEN_TERMINAL_ID}`;
+}
+
 function loadDonkey(): Promise<DonkeyInstance> {
     if (donkeyPromise) return donkeyPromise;
     donkeyPromise = (async () => {
@@ -29,13 +47,10 @@ function loadDonkey(): Promise<DonkeyInstance> {
         const instance = await mod.donkey({
             type: "py",
             persistent: true,
-            // Disable the auto-injected <py-terminal> element. PyScript
-            // creates it via the inner script's config; setting
-            // config.terminal=false at the PyScript level prevents the
-            // DOM injection (the top-level `terminal` option is just a
-            // CSS selector for an existing element and doesn't disable).
-            config: { terminal: false },
-        } as unknown as DonkeyOptions);
+            // Off-screen terminal target so donkey has a valid (but invisible)
+            // place to render output; execute()/evaluate() need it to exist.
+            terminal: ensureHiddenTerminal(),
+        });
         return instance;
     })();
     return donkeyPromise;
