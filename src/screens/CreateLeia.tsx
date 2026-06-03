@@ -1398,8 +1398,6 @@ const openGenerateProblemModal = () => {
       {/* AI Assistant: chat + PDF attachments → writes the problem into the editor */}
       <div className="h-[440px]">
         <ProblemChatPanel
-          modelName={tryConfig.modelName}
-          apiKeyId={tryConfig.apiKeyId}
           currentProblem={leiaConfig.problem}
           onApplyProblem={applyChatProblem}
         />
