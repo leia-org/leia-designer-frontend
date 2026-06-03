@@ -844,22 +844,53 @@ const openGenerateProblemModal = () => {
   );
 
   const ensureTryConfig = useCallback(() => {
+    // When the problem declares widgets, tools only run on a tool-capable
+    // provider (openai-responses), so the Try must seed an OpenAI model/key —
+    // even if the user's DEFAULT key belongs to another provider.
+    const problemWidgets = leiaConfig.problem?.spec?.widgets;
+    const requiresTools = Array.isArray(problemWidgets) && problemWidgets.length > 0;
+    const toolCapableProviders = Object.entries(providerProviderModuleMap || {})
+      .filter(([, moduleName]) => moduleName === "openai-responses")
+      .map(([provider]) => provider);
+    const toolCapableModels = toolCapableProviders.flatMap(
+      (provider) => apiKeyProvidersMapped[provider] || []
+    );
+    const candidateKeys = requiresTools
+      ? apiKeys.filter((key) => toolCapableProviders.includes(key.provider))
+      : apiKeys;
+
     setTryConfig((prev) => {
-      if (prev.modelName || prev.apiKeyId) return prev;
+      const prevKeyValid = Boolean(prev.apiKeyId && candidateKeys.some((k) => k.id === prev.apiKeyId));
+      const prevModelValid = Boolean(
+        prev.modelName && (!requiresTools || toolCapableModels.includes(prev.modelName))
+      );
+      // Keep a still-valid selection; otherwise (re)seed from the candidates.
+      if ((prev.modelName || prev.apiKeyId) && prevKeyValid && prevModelValid) {
+        return prev;
+      }
 
       const defaultKey = getDefaultKey();
-      const validModels = getValidModels(defaultKey?.id);
-      const resolvedDefaultModel =
+      const key =
+        defaultKey && candidateKeys.some((k) => k.id === defaultKey.id)
+          ? defaultKey
+          : candidateKeys[0] ?? null;
+      const validModels = requiresTools ? toolCapableModels : getValidModels(key?.id);
+      const model =
         defaultModel && validModels.includes(defaultModel)
           ? defaultModel
-          : "";
+          : validModels[0] ?? "";
 
-      return {
-        modelName: resolvedDefaultModel,
-        apiKeyId: defaultKey?.id ?? null,
-      };
+      return { modelName: model, apiKeyId: key?.id ?? null };
     });
-  }, [defaultModel, getDefaultKey, getValidModels]);
+  }, [
+    leiaConfig.problem,
+    providerProviderModuleMap,
+    apiKeyProvidersMapped,
+    apiKeys,
+    defaultModel,
+    getDefaultKey,
+    getValidModels,
+  ]);
 
   const handleTryMenuToggle = useCallback(() => {
     if (testingLeia) return;
@@ -1233,7 +1264,14 @@ const openGenerateProblemModal = () => {
             name: prev.problem?.metadata?.name || "ai-generated-problem",
             version: "1.0.0",
           },
-          spec: { ...incomingSpec, extends: {}, overrides: {}, constrainedTo: {} },
+          // Preserve extends/overrides/constrainedTo and widgets the model set;
+          // default the composition objects to {} only when absent.
+          spec: {
+            ...incomingSpec,
+            extends: incomingSpec.extends ?? {},
+            overrides: incomingSpec.overrides ?? {},
+            constrainedTo: incomingSpec.constrainedTo ?? {},
+          },
           id: `generated-${Date.now()}`,
           edited: true,
           createdAt: new Date().toISOString(),
