@@ -71,12 +71,14 @@ export const Header: React.FC<HeaderProps> = ({
       href: "/api-keys",
       icon: <KeyIcon className="w-4 h-4" />,
       show: true,
+      id: "myApiKeys-button",
     },
     {
       label: "My Activities",
       href: "/users/me/activities",
       icon: <PuzzlePieceIcon className="w-4 h-4" />,
       show: user?.role === "admin",
+      id: "myActivities-button"
     },
     {
       label: "Manage users",
@@ -159,7 +161,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {visibleItems.map((item, index) => (
                       <button
                         key={index}
-                        id={item.label === "My Activities" ? "myActivities-button" : undefined}
+                        id={item.id}
                         onClick={() => {
                           if (item.onClick) {
                             item.onClick();

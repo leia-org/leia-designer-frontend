@@ -260,17 +260,28 @@ export const MyActivities: React.FC = () => {
                 progressText: "Paso {{current}} de {{total}}",
                 steps: [
             {
-          element: "",
+          element: "#activities",
           popover: {
             title: "Activities",
             description:
               "Here is the list of Activities you can use.",
+            side: "bottom",
+            
+          },
+        },
+        {
+          element: "#first-activity-open",
+          popover: {
+            title: "Activity",
+            description:
+              "You can publish your activity in order to start the replication, or delete it if you don't need it anymore.",
             side: "bottom",
             onNextClick: () => {
               const firstActivity = experiments?.[0]?.id;
               console.log("First activity ID for tour:", firstActivity);
               if (firstActivity) {
                 toggleExperiment(firstActivity);
+                setTimeout(() => tourRef.current?.moveNext(), 300);
               }
             }
           }
@@ -278,18 +289,19 @@ export const MyActivities: React.FC = () => {
         {
           element: "#first-activity-open",
           popover: {
-            title: "Leias",
+            title: "Activity",
             description:
               "You can see your related Leias, and change their mode to be standard or transcription.",
             side: "bottom",
+            
           }
         },
         {
-          element: "#first-activity-open",
+          element: "#activities",
           popover: {
-            title: "Leias",
+            title: "End of tour",
             description:
-              "You can see your related Leias, and change their mode to be standard or transcription.",
+              "This is the end of the tour. Now you know everything you need to know to start using LEIA.",
             side: "bottom",
           }
         },

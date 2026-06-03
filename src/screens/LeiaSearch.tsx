@@ -215,6 +215,15 @@ export const LeiaSearch: React.FC = () => {
         },
         },
         {
+          element: "#myApiKeys-button",
+          popover: {
+            title: "API Keys",
+            description:
+              "In this section you can configure your API Keys with the models you like",
+            side: "bottom",
+          },
+        },
+        {
           element: "#myActivities-button",
           popover: {
             title: "Activity",
