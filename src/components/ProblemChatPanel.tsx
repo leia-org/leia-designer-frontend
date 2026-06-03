@@ -34,6 +34,19 @@ const WIDGET_CATALOG_DOC = WIDGET_CATALOG.length
     ).join("\n")
   : "(none available)";
 
+// extends / overrides / constrainedTo are keyed by component (persona /
+// behaviour / problem); each component is { spec: {...}, apiVersion? }.
+const COMPONENT_SCOPED_PROPS = {
+  persona: { type: "object", properties: { spec: { type: "object" }, apiVersion: { type: "string" } } },
+  behaviour: { type: "object", properties: { spec: { type: "object" }, apiVersion: { type: "string" } } },
+  problem: { type: "object", properties: { spec: { type: "object" }, apiVersion: { type: "string" } } },
+};
+const componentScoped = (description: string) => ({
+  type: "object",
+  description,
+  properties: COMPONENT_SCOPED_PROPS,
+});
+
 // The editor-driving tools. apply_problem's parameters ARE the full Problem
 // spec (structured output via function calling, like the workbench widget
 // tools). get_current_problem lets the model read the editor to iterate.
@@ -48,7 +61,8 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     name: "apply_problem",
     description:
       "Writes a COMPLETE problem into the editor, replacing the current one. Fill every field you reasonably can.\n\n" +
-      "Advanced fields — leave as empty objects {} unless explicitly composing: `extends` (inherit from a base problem), `overrides` (override inherited fields), `constrainedTo` (constraints on the interaction/solution).\n\n" +
+      "`extends` / `overrides` / `constrainedTo` customize the persona / behaviour / problem this activity is paired with. Each is keyed by component (`persona`, `behaviour`, `problem`); each component is `{ spec: { ...fields }, apiVersion?: \"v1\" }`. extends ADDS to a spec, overrides REPLACES fields, constrainedTo CONSTRAINS/limits. persona.spec fields: fullName, firstName, description, personality, subjectPronoum, objectPronoum, possesivePronoum, possesiveAdjective. behaviour.spec fields: description, role, process. Use them ONLY when the user asks to customize the persona/behaviour for this problem; otherwise leave them as {}. Example:\n" +
+      '{ "extends": { "persona": { "spec": { "personality": ["amigable", "despistado"] } } }, "overrides": { "behaviour": { "spec": { "role": "alumno de instituto" } } }, "constrainedTo": { "behaviour": { "spec": { "process": ["requirements-elicitation"] }, "apiVersion": "v1" } } }\n\n' +
       "Add `widgets` ONLY when the activity needs an interactive tool (e.g. a coding exercise needs the code editor). Available widgets and their tool functions:\n" +
       WIDGET_CATALOG_DOC +
       "\nFor each widget tool you may set `enabled` and a `usage` note telling LEIA when to use it in this activity.",
@@ -80,18 +94,15 @@ const CHAT_TOOLS: ProblemChatTool[] = [
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
           description: "Optional process tags.",
         },
-        extends: {
-          type: "object",
-          description: "Advanced: inherit from a base problem/template. Empty object {} unless explicitly composing.",
-        },
-        overrides: {
-          type: "object",
-          description: "Advanced: field overrides applied on top of `extends`. Empty object {} unless overriding.",
-        },
-        constrainedTo: {
-          type: "object",
-          description: "Advanced: constraints on the interaction/solution. Empty object {} unless constraining.",
-        },
+        extends: componentScoped(
+          "ADD to the paired persona/behaviour/problem spec (e.g. add persona personality traits). Empty object {} unless asked to compose.",
+        ),
+        overrides: componentScoped(
+          "REPLACE fields in the paired persona/behaviour/problem spec (e.g. set the behaviour role). Empty object {} unless asked to override.",
+        ),
+        constrainedTo: componentScoped(
+          "CONSTRAIN/limit the paired persona/behaviour/problem (e.g. restrict the behaviour process). Empty object {} unless asked to constrain.",
+        ),
         widgets: {
           type: "array",
           description:
