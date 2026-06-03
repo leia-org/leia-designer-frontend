@@ -772,7 +772,7 @@ export const LeiaSearch: React.FC = () => {
                               </span>
                               
                             ))}
-                            {user && (user.role === "admin" || (leia.user && user.id === leia.user.id)) && (
+                            {user && (user.role === "admin" || (user.id === (leia.user as unknown as string))) && (
                               <button className="px-1.5 py-0.5 text-xs rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600" onClick={(e) => {
                                     e.stopPropagation();
                                     setOpenLabelModalLeia(leia);
