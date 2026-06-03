@@ -15,11 +15,13 @@ import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
+import { ProblemChatPanel } from "../components/ProblemChatPanel";
 import { useAuth } from "../context";
 import type {
   Persona,
   Behaviour,
   Problem,
+  ProblemSpec,
   Leia as LeiaResource,
 } from "../models/Leia";
 import { useApiKeys } from "../hooks/useApiKeys";
@@ -1217,6 +1219,33 @@ const openGenerateProblemModal = () => {
     </div>
   );
 
+  // Applies a problem produced by the AI assistant's apply_problem tool: wraps
+  // the returned spec into a Problem and selects it (full replace), mirroring
+  // the one-shot generate flow.
+  const applyChatProblem = useCallback(
+    (spec: ProblemSpec) => {
+      const incomingSpec = spec as unknown as Record<string, unknown>;
+      setLeiaConfig((prev) => ({
+        ...prev,
+        problem: {
+          apiVersion: "v1",
+          metadata: {
+            name: prev.problem?.metadata?.name || "ai-generated-problem",
+            version: "1.0.0",
+          },
+          spec: { ...incomingSpec, extends: {}, overrides: {}, constrainedTo: {} },
+          id: `generated-${Date.now()}`,
+          edited: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isPublished: false,
+          user: currentUser!,
+        } as unknown as Problem,
+      }));
+    },
+    [currentUser],
+  );
+
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center mb-8">
@@ -1385,6 +1414,16 @@ const openGenerateProblemModal = () => {
           Modify any of the resources, see changes in real-time and test your
           creation
         </p>
+      </div>
+
+      {/* AI Assistant: chat + PDF attachments → writes the problem into the editor */}
+      <div className="h-[440px]">
+        <ProblemChatPanel
+          modelName={tryConfig.modelName}
+          apiKeyId={tryConfig.apiKeyId}
+          currentProblem={leiaConfig.problem}
+          onApplyProblem={applyChatProblem}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-6 h-full">
