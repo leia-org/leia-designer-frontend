@@ -90,184 +90,6 @@ export const LeiaSearch: React.FC = () => {
 
   const tourRef = useRef<ReturnType<typeof driver> | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
-  const startGuidedTour = useCallback((startStep: number = 0) => {
-    let tour: ReturnType<typeof driver> | null = null;
-    tourRef.current?.destroy();
-    
-    tour = driver({
-          animate: true,
-          smoothScroll: true,
-          allowClose: true,
-          showProgress: true,
-          progressText: "Paso {{current}} de {{total}}",
-          onNextClick: (_element, _step, options) => {
-          const activeIndex = options.driver.getActiveIndex();
-
-          if (activeIndex === 8) {
-            setShowDropdown(true);
-            window.setTimeout(() => {
-              options.driver.moveNext();
-            }, 300);
-            return;
-          }
-
-          options.driver.moveNext();
-        },
-          steps: [
-            {
-          element: "#search-results",
-          popover: {
-            title: "Leias",
-            description:
-              "Here is the list of LEIAs you can use.",
-            side: "bottom",
-          },
-        },
-        {
-          element: "#first-leia",
-          popover: {
-            title: "Leias",
-            description:
-              "Let's get into this first LEIA.",
-            side: "bottom",
-          },
-        },
-        {
-          element: "#first-design-from-this-button",
-          popover: {
-            title: "Leias",
-            description:
-              "You can create your own LEIA based on this one with this button.",
-            side: "bottom",
-            onNextClick: () => {
-            tour?.destroy();
-            const firstLeia = leias[1];
-            if (firstLeia){
-            handlePersonalize(firstLeia, true);
-            }
-          },
-        },
-      },
-      {
-          element: "#first-leia",
-          popover: {
-            title: "Leias",
-            description:
-              "Let's continue",
-            side: "bottom",
-          },
-        },
-        {
-          element: "#view-button",
-          popover: {
-            title: "View",
-            description:
-              "Another look at the LEIA content can be done with this button.",
-            side: "bottom",
-          },
-        },
-        {
-          element: "#try-button",
-          popover: {
-            title: "Try",
-            description:
-              "You can also try your LEIA using this button.",
-            side: "bottom",
-          },
-        },
-        {
-          element: "#activity-button",
-          popover: {
-            title: "Activity",
-            description:
-              "In order to continue with the Design process, you'll have to add the LEIA to an Activity",
-            side: "bottom",
-            onNextClick: () => {
-            setShowExperimentsModal(true);
-            window.setTimeout(() => {
-            tourRef.current?.moveNext(); // avanza cuando ya está en el DOM
-          }, 100);
-          },
-        },
-      },
-        {
-          element: "#activity-modal",
-          popover: {
-            title: "Activity",
-            description:
-              "You can add the LEIA to an already created activity or into a new one",
-            side: "bottom",
-            onNextClick: () => {
-            setShowExperimentsModal(false);
-            window.setTimeout(() => {
-            tourRef.current?.moveNext();
-          }, 200);
-          },
-          },
-        },
-        {
-          element: "#navigation-menu",
-          popover: {
-            title: "Menu",
-            description:
-              "Let's go to the main menu",
-            side: "bottom",
-        },
-        },
-        {
-          element: "#myApiKeys-button",
-          popover: {
-            title: "API Keys",
-            description:
-              "In this section you can configure your API Keys with the models you like",
-            side: "bottom",
-          },
-        },
-        {
-          element: "#myActivities-button",
-          popover: {
-            title: "Activity",
-            description:
-              "In this section you can find all your activities",
-            side: "bottom",
-            onNextClick: () => {
-            tour?.destroy();
-            navigate("/users/me/activities", {
-              state: {
-                isTour: true,
-              },
-            });
-            },
-          },
-        },
-          ],
-        onDestroyed: () => {
-          setShowDropdown(false);
-        if (tourRef.current === tour) {
-          tourRef.current = null;
-        }
-      }
-      });
-        tourRef.current = tour;
-        tour.drive(startStep);
-        if (tour.getActiveIndex() === 7) {
-          setShowDropdown(true);
-        }
-        
-  }, [leias]);
-
-    useEffect(() => {
-      const navigationState = location.state;
-      if (!navigationState) return;
-      if (navigationState.continueTour) {
-        startGuidedTour(navigationState.continueTour);
-        try {
-        navigate(location.pathname, { replace: true, state: undefined });
-      } catch (e) {
-        console.error("Error clearing navigation state after starting tour:", e);}
-    }
-    }, [location.pathname, location.state, navigate, startGuidedTour]);
-
 
 
   useEffect(() => {
@@ -310,7 +132,7 @@ export const LeiaSearch: React.FC = () => {
     };
     fetchLabels();
   }, []);
-  const handlePersonalize = async (leia: Leia, fromTour: boolean) => {
+  const handlePersonalize = useCallback(async (leia: Leia, fromTour: boolean) => {
     try {
       const [personaResp, problemResp, behaviourResp] = await Promise.all([
         api.get<Persona>(`/api/v1/personas/${leia.spec.persona.id}`),
@@ -330,8 +152,219 @@ export const LeiaSearch: React.FC = () => {
     } catch {
       setError("Could not load preset data");
     }
-  };
+  }, [navigate]);
+    const startGuidedTour = useCallback((startStep: number = 0) => {
+    let tour: ReturnType<typeof driver> | null = null;
+    tourRef.current?.destroy();
+    type StepWithRoles = Parameters<ReturnType<typeof driver>["setSteps"]>[0][number] & {
+    roles?: string[];
+    };
+    const allSteps: StepWithRoles[] = [
+            {
+          element: "#search-results",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "Here is the list of LEIAs you can use.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#first-leia",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "Let's get into this first LEIA.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#first-design-from-this-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "You can create your own LEIA based on this one with this button.",
+            side: "bottom",
+            onNextClick: () => {
+            tour?.destroy();
+            const firstLeia = leias[1];
+            if (firstLeia){
+            handlePersonalize(firstLeia, true);
+            }
+          },
+        },
+      },
+      {
+          element: "#first-leia",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "Let's continue",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#view-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "View",
+            description:
+              "Another look at the LEIA content can be done with this button.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#try-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Try",
+            description:
+              "You can also try your LEIA using this button.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#activity-button",
+          roles: ["admin", "advanced"],
+          popover: {
+            title: "Activity",
+            description:
+              "In order to continue with the Design process, you'll have to add the LEIA to an Activity",
+            side: "bottom",
+            onNextClick: () => {
+            setShowExperimentsModal(true);
+            window.setTimeout(() => {
+            tourRef.current?.moveNext();
+          }, 100);
+          },
+        },
+      },
+        {
+          element: "#activity-modal",
+          roles: ["admin", "advanced"],
+          popover: {
+            title: "Activity",
+            description:
+              "You can add the LEIA to an already created activity or into a new one",
+            side: "bottom",
+            onNextClick: () => {
+            setShowExperimentsModal(false);
+            window.setTimeout(() => {
+            tourRef.current?.moveNext();
+          }, 200);
+          },
+          },
+        },
+        {
+          element: "#navigation-menu",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Menu",
+            description:
+              "Let's go to the main menu",
+            side: "bottom",
+        },
+        },
+        {
+          element: "#myApiKeys-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "API Keys",
+            description:
+              "In this section you can configure your API Keys with the models you like",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#myActivities-button",
+          roles: ["admin", "advanced"],
+          popover: {
+            title: "Activity",
+            description:
+              "In this section you can find all your activities",
+            side: "bottom",
+            onNextClick: () => {
+            tour?.destroy();
+            navigate("/users/me/activities", {
+              state: {
+                isTour: true,
+              },
+            });
+            },
+          },
+        },
+        {
+          roles: ["instructor"],
+          popover: {
+            title: "End of tour",
+            description:
+              "This is the end of the tour. Now you know everything you need to know to start using LEIA.",
+            side: "bottom",
+          },
+        }
+          ];
+      const filteredSteps = allSteps.filter(
+      ({ roles }) => !roles || roles.includes(user?.role ?? "")
+      );
+    tour = driver({
+          animate: true,
+          smoothScroll: true,
+          allowClose: true,
+          showProgress: true,
+          progressText: "Paso {{current}} de {{total}}",
+          steps: filteredSteps,
+          onNextClick: (_element, _step, options) => {
+          const activeIndex = options.driver.getActiveIndex();
 
+          if (activeIndex === 8 && (user?.role === "advanced" || user?.role === "admin")) {
+            setShowDropdown(true);
+            window.setTimeout(() => {
+              options.driver.moveNext();
+            }, 300);
+            return;
+          }
+          if (activeIndex === 6 && user?.role === "instructor") {
+            setShowDropdown(true);
+            window.setTimeout(() => {
+              options.driver.moveNext();
+            }, 300);
+            return;
+          }
+          options.driver.moveNext();
+        },
+          
+        onDestroyed: () => {
+          setShowDropdown(false);
+        if (tourRef.current === tour) {
+          tourRef.current = null;
+        }
+      }
+      });
+        tourRef.current = tour;
+        tour.drive(startStep);
+        if (tour.getActiveIndex() === 7) {
+          setShowDropdown(true);
+        }
+        
+
+  }, [handlePersonalize, leias, navigate, user?.role]);
+
+    useEffect(() => {
+      const navigationState = location.state;
+      if (!navigationState) return;
+      if (navigationState.continueTour) {
+        startGuidedTour(navigationState.continueTour);
+        try {
+        navigate(location.pathname, { replace: true, state: undefined });
+      } catch (e) {
+        console.error("Error clearing navigation state after starting tour:", e);}
+    }
+    }, [location.pathname, location.state, navigate, startGuidedTour]);
+    
   const getValidModels = useCallback(
     (apiKeyId: string | null | undefined) => {
       const models = Object.values(apiKeyProvidersMapped || {}).flat();
