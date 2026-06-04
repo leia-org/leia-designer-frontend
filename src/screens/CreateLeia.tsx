@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import { type InputActionMeta, type MultiValue } from "react-select";
 import CreatableSelect from "react-select/creatable";
@@ -157,6 +157,67 @@ export const CreateLeia: React.FC = () => {
     modelName: string;
     apiKeyId: string | null;
   }>({ modelName: "", apiKeyId: null });
+  // Per-LEIA background supervisor (instructor-authored). Persisted into
+  // spec.supervisorConfig; runs on the LEIA's own key in the workbench.
+  const [supervisorConfig, setSupervisorConfig] = useState<{
+    enabled: boolean;
+    instructions: string;
+    sensitivity: "low" | "medium" | "high";
+    cadence: "everyN" | "onFinish";
+    everyN: number;
+    intervene: boolean;
+    interveneInstructions: string;
+    // The supervisor always runs on OpenAI (independent of the LEIA's own
+    // provider), so it gets its own OpenAI key + model.
+    apiKeyId: string | null;
+    model: string;
+  }>({
+    enabled: false,
+    instructions: "",
+    sensitivity: "medium",
+    cadence: "everyN",
+    everyN: 4,
+    intervene: false,
+    interveneInstructions: "",
+    apiKeyId: null,
+    model: "",
+  });
+  // OpenAI keys/models available to the supervisor (it always runs on OpenAI).
+  const supervisorOpenaiKeys = useMemo(
+    () => apiKeys.filter((k) => k.provider === "openai"),
+    [apiKeys],
+  );
+  const supervisorOpenaiModels = useMemo(
+    () => apiKeyProvidersMapped?.openai || [],
+    [apiKeyProvidersMapped],
+  );
+  // Seed a sensible default OpenAI key + model once the supervisor is enabled.
+  useEffect(() => {
+    if (!supervisorConfig.enabled) return;
+    setSupervisorConfig((prev) => {
+      if (!prev.enabled) return prev;
+      let next = prev;
+      if (!prev.apiKeyId || !supervisorOpenaiKeys.some((k) => k.id === prev.apiKeyId)) {
+        const def = getDefaultKey?.();
+        const seeded = def && def.provider === "openai" ? def.id : supervisorOpenaiKeys[0]?.id ?? null;
+        if (seeded !== prev.apiKeyId) next = { ...next, apiKeyId: seeded };
+      }
+      if (!prev.model || !supervisorOpenaiModels.includes(prev.model)) {
+        const seededModel =
+          defaultModel && supervisorOpenaiModels.includes(defaultModel)
+            ? defaultModel
+            : supervisorOpenaiModels[0] ?? "";
+        if (seededModel !== next.model) next = { ...next, model: seededModel };
+      }
+      return next;
+    });
+  }, [
+    supervisorConfig.enabled,
+    supervisorOpenaiKeys,
+    supervisorOpenaiModels,
+    defaultModel,
+    getDefaultKey,
+  ]);
   const [labelsError, setLabelsError] = useState<string | null>(null);
   const [showCreateLabelModal, setShowCreateLabelModal] = useState(false);
   const [creatingLabel, setCreatingLabel] = useState(false);
@@ -1108,6 +1169,25 @@ const openGenerateProblemModal = () => {
         } else {
           leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
         }
+      }
+      // Attach the per-LEIA supervisor config (only when enabled). The
+      // supervisor runs on OpenAI with its own key — stored together with the
+      // owning user id so the workbench can resolve it at runtime (BYOK).
+      if (supervisorConfig.enabled) {
+        leia.spec.supervisorConfig = {
+          enabled: true,
+          instructions: supervisorConfig.instructions.trim(),
+          sensitivity: supervisorConfig.sensitivity,
+          cadence: supervisorConfig.cadence,
+          everyN: supervisorConfig.everyN,
+          intervene: supervisorConfig.intervene,
+          interveneInstructions: supervisorConfig.intervene
+            ? supervisorConfig.interveneInstructions.trim()
+            : "",
+          apiKeyId: supervisorConfig.apiKeyId || undefined,
+          apiKeyRequesterId: supervisorConfig.apiKeyId ? currentUser?.id : undefined,
+          model: supervisorConfig.model || undefined,
+        };
       }
       try {
         // Construir la URL con el query parameter publish
@@ -2313,6 +2393,198 @@ const openGenerateProblemModal = () => {
           )}
         </div>
       </div>
+
+      {/* Supervisor: una IA en segundo plano que observa la actividad del
+          alumno (texto y audio) para marcar comportamientos al instructor. */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Supervisor (AI background monitor)</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              A background AI that reads what the student does during the activity
+              (both text chat and Luke audio) and flags behaviours for you — e.g.
+              a student trying to get the AI to write the code for them, or
+              behavioural patterns in a research setting. Flags are private to the
+              instructor; the student never sees them.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={supervisorConfig.enabled}
+              onChange={(e) =>
+                setSupervisorConfig((prev) => ({ ...prev, enabled: e.target.checked }))
+              }
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+          </label>
+        </div>
+
+        {supervisorConfig.enabled && (
+          <div className="mt-5 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                OpenAI key &amp; model for the supervisor
+              </label>
+              {supervisorOpenaiKeys.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <select
+                    value={supervisorConfig.apiKeyId ?? ""}
+                    onChange={(e) =>
+                      setSupervisorConfig((prev) => ({ ...prev, apiKeyId: e.target.value || null }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
+                  >
+                    <option value="">-- API key --</option>
+                    {supervisorOpenaiKeys.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.description}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={supervisorConfig.model}
+                    onChange={(e) =>
+                      setSupervisorConfig((prev) => ({ ...prev, model: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
+                  >
+                    <option value="">-- model --</option>
+                    {supervisorOpenaiModels.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-sm text-amber-700">
+                  No OpenAI API key available.{" "}
+                  <Link to="/administration/api-keys" className="text-blue-600 underline">
+                    Create one
+                  </Link>{" "}
+                  — the supervisor runs on OpenAI even if this LEIA uses another provider.
+                </p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                The supervisor always uses OpenAI, independent of the LEIA's own model.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                What should the supervisor watch for?
+              </label>
+              <textarea
+                value={supervisorConfig.instructions}
+                onChange={(e) =>
+                  setSupervisorConfig((prev) => ({ ...prev, instructions: e.target.value }))
+                }
+                rows={4}
+                placeholder="e.g. Flag whenever the student asks the AI to write or complete the code for them instead of guiding them. Note signs of off-task conversation or frustration."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sensitivity
+                </label>
+                <select
+                  value={supervisorConfig.sensitivity}
+                  onChange={(e) =>
+                    setSupervisorConfig((prev) => ({
+                      ...prev,
+                      sensitivity: e.target.value as "low" | "medium" | "high",
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
+                >
+                  <option value="low">Low (only clear cases)</option>
+                  <option value="medium">Medium (balanced)</option>
+                  <option value="high">High (even borderline)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  When it runs
+                </label>
+                <select
+                  value={supervisorConfig.cadence}
+                  onChange={(e) =>
+                    setSupervisorConfig((prev) => ({
+                      ...prev,
+                      cadence: e.target.value as "everyN" | "onFinish",
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
+                >
+                  <option value="everyN">Every N messages (live)</option>
+                  <option value="onFinish">Only at the end</option>
+                </select>
+              </div>
+              {supervisorConfig.cadence === "everyN" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Every how many messages
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={supervisorConfig.everyN}
+                    onChange={(e) =>
+                      setSupervisorConfig((prev) => ({
+                        ...prev,
+                        everyN: Math.max(1, Math.min(50, Number(e.target.value) || 1)),
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={supervisorConfig.intervene}
+                  onChange={(e) =>
+                    setSupervisorConfig((prev) => ({ ...prev, intervene: e.target.checked }))
+                  }
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Let the supervisor nudge the student
+                </span>
+              </label>
+              <p className="mt-1 text-xs text-gray-500">
+                When enabled, the supervisor can send the student a short, gentle
+                coaching message (delivered on their next turn) in addition to
+                flagging you.
+              </p>
+              {supervisorConfig.intervene && (
+                <textarea
+                  value={supervisorConfig.interveneInstructions}
+                  onChange={(e) =>
+                    setSupervisorConfig((prev) => ({
+                      ...prev,
+                      interveneInstructions: e.target.value,
+                    }))
+                  }
+                  rows={2}
+                  placeholder="e.g. If the student keeps asking for the full solution, encourage them to try writing it themselves first."
+                  className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div
         className={`grid gap-6 ${
           isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
