@@ -23,13 +23,19 @@ export interface TestRunSummary {
     durationMs: number;
 }
 
+/** Editor language. "text" is a plain-text editor with no execution/tests. */
+export type EditorLanguage = "javascript" | "python" | "text";
+
 export interface ProblemDef {
     /** Function name the user must implement. */
     fnName: string;
     description: string;
+    /** Language the instructor fixed for this activity. The student cannot change it. */
+    language?: EditorLanguage;
     starter: {
         javascript: string;
         python: string;
+        text?: string;
     };
     tests: TestCase[];
 }
