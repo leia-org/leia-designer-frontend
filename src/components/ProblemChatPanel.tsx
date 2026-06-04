@@ -191,6 +191,38 @@ const CHAT_TOOLS: ProblemChatTool[] = [
       required: ["firstName", "description"],
     },
   },
+  {
+    name: "list_behaviours",
+    description:
+      "Lists EXISTING behaviours the instructor already has, so you can REUSE one (by id) instead of creating a new one. Returns [{ id, name, role, description }]. Prefer reusing a suitable existing behaviour; only create a new one with apply_behaviour when none fits.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "use_behaviour",
+    description:
+      "Selects an EXISTING behaviour (by its id, from list_behaviours) as the LEIA's behaviour, instead of creating a new one. Returns { status, name } or { error }.",
+    parameters: {
+      type: "object",
+      properties: { id: { type: "string", description: "The behaviour id from list_behaviours." } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "list_personas",
+    description:
+      "Lists EXISTING personas the instructor already has, so you can REUSE one (by id) instead of creating a new one. Returns [{ id, name, firstName, description }]. Prefer reusing a suitable existing persona; only create a new one with apply_persona when none fits.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "use_persona",
+    description:
+      "Selects an EXISTING persona (by its id, from list_personas) as the LEIA's persona, instead of creating a new one. Returns { status, name } or { error }.",
+    parameters: {
+      type: "object",
+      properties: { id: { type: "string", description: "The persona id from list_personas." } },
+      required: ["id"],
+    },
+  },
 ];
 
 type ChatRole = "user" | "assistant" | "system";
@@ -203,18 +235,26 @@ interface ProblemChatPanelProps {
   currentProblem: Problem | null;
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
+  behaviours: Behaviour[];
+  personas: Persona[];
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
+  onUseBehaviour: (id: string) => { ok: boolean; name?: string };
+  onUsePersona: (id: string) => { ok: boolean; name?: string };
 }
 
 export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblem,
   currentBehaviour,
   currentPersona,
+  behaviours,
+  personas,
   onApplyProblem,
   onApplyBehaviour,
   onApplyPersona,
+  onUseBehaviour,
+  onUsePersona,
 }) => {
   const { apiKeys, getDefaultKey, isLoading: apiKeysLoading } = useApiKeys();
   const { apiKeyProvidersMapped, defaultModel, isLoading: providersLoading } = useProviders();
@@ -281,6 +321,11 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviourRef.current = currentBehaviour;
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
+  // Latest lists of existing resources the chat can reuse by id.
+  const behavioursRef = useRef<Behaviour[]>(behaviours);
+  behavioursRef.current = behaviours;
+  const personasRef = useRef<Persona[]>(personas);
+  personasRef.current = personas;
 
   const ready = Boolean(selectedModel && selectedApiKeyId);
   const hasOpenaiKeys = openaiKeys.length > 0;
@@ -372,6 +417,38 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           output = currentBehaviourRef.current?.spec ?? null;
         } else if (call.name === "get_current_persona") {
           output = currentPersonaRef.current?.spec ?? null;
+        } else if (call.name === "list_behaviours") {
+          output = behavioursRef.current.map((b) => ({
+            id: b.id,
+            name: b.metadata?.name,
+            role: b.spec?.role,
+            description: typeof b.spec?.description === "string" ? b.spec.description.slice(0, 240) : undefined,
+          }));
+        } else if (call.name === "use_behaviour") {
+          const id = typeof args.id === "string" ? args.id : "";
+          const res = onUseBehaviour(id);
+          if (res.ok) {
+            pushMessage("system", `✓ Using existing behaviour${res.name ? ` ("${res.name}")` : ""}.`);
+            output = { status: "selected", name: res.name };
+          } else {
+            output = { error: `no behaviour with id '${id}'` };
+          }
+        } else if (call.name === "list_personas") {
+          output = personasRef.current.map((p) => ({
+            id: p.id,
+            name: p.metadata?.name,
+            firstName: p.spec?.firstName,
+            description: typeof p.spec?.description === "string" ? p.spec.description.slice(0, 240) : undefined,
+          }));
+        } else if (call.name === "use_persona") {
+          const id = typeof args.id === "string" ? args.id : "";
+          const res = onUsePersona(id);
+          if (res.ok) {
+            pushMessage("system", `✓ Using existing persona${res.name ? ` ("${res.name}")` : ""}.`);
+            output = { status: "selected", name: res.name };
+          } else {
+            output = { error: `no persona with id '${id}'` };
+          }
         } else {
           output = { error: `unknown tool '${call.name}'` };
         }
