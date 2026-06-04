@@ -16,6 +16,7 @@ import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
 import { ProblemChatPanel } from "../components/ProblemChatPanel";
+import { Avatar } from "../components/shared/Avatar";
 import { useAuth } from "../context";
 import type {
   Persona,
@@ -962,6 +963,7 @@ const openGenerateProblemModal = () => {
             customizations,
           },
           problemDescription: generatedLeia.spec.problem.spec.description,
+          personaAvatar: generatedLeia.spec.persona.spec.avatar || "",
         },
       });
     } catch (error) {
@@ -1606,12 +1608,20 @@ const openGenerateProblemModal = () => {
               </div>
               {leiaConfig.problem && (
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-medium text-gray-900">
-                    {leiaConfig.problem.metadata.name}
-                  </span>
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                    v{leiaConfig.problem.metadata.version}
-                  </span>
+                  <Avatar
+                    src={leiaConfig.problem.spec.avatar}
+                    alt={`${leiaConfig.problem.metadata.name} avatar`}
+                    label={leiaConfig.problem.metadata.name}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {leiaConfig.problem.metadata.name}
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                      v{leiaConfig.problem.metadata.version}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1701,12 +1711,20 @@ const openGenerateProblemModal = () => {
               </div>
               {leiaConfig.persona && (
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-medium text-gray-900">
-                    {leiaConfig.persona.metadata.name}
-                  </span>
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                    v{leiaConfig.persona.metadata.version}
-                  </span>
+                  <Avatar
+                    src={leiaConfig.persona.spec.avatar}
+                    alt={`${leiaConfig.persona.metadata.name} avatar`}
+                    label={leiaConfig.persona.metadata.name}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {leiaConfig.persona.metadata.name}
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                      v{leiaConfig.persona.metadata.version}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

@@ -219,6 +219,11 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const pushMessage = (role: ChatRole, text: string) =>
     setMessages((prev) => [...prev, { role, text }]);
 
+  const stripAvatar = (spec: Record<string, unknown>): ProblemSpec => {
+    const { avatar: _avatar, ...rest } = spec;
+    return rest as unknown as ProblemSpec;
+  };
+
   const ensureSession = useCallback(async (): Promise<string> => {
     if (chatIdRef.current) return chatIdRef.current;
     if (!selectedModel || !selectedApiKeyId) throw new Error("Select a model and API key first");
@@ -270,7 +275,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           args = {};
         }
         if (call.name === "apply_problem") {
-          onApplyProblem(args as unknown as ProblemSpec);
+          onApplyProblem(stripAvatar(args));
           pushMessage("system", "✓ Problem applied to the editor.");
           output = { status: "applied" };
         } else if (call.name === "get_current_problem") {

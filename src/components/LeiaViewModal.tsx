@@ -3,6 +3,7 @@ import { useState, useEffect, lazy, Suspense, memo } from "react";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { Avatar } from "./shared/Avatar";
 
 // Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
@@ -133,6 +134,22 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
           <div className="flex-1 p-6 overflow-y-auto">
             {viewMode === "problem" && (
               <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    src={leia.spec?.problem?.spec?.avatar}
+                    alt={`${leia.spec?.problem?.metadata?.name || "Problem"} avatar`}
+                    label={leia.spec?.problem?.metadata?.name || "Problem"}
+                    size="lg"
+                  />
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">
+                      {leia.spec?.problem?.metadata?.name || "Problem"}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      v{leia.spec?.problem?.metadata?.version || "N/A"}
+                    </p>
+                  </div>
+                </div>
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     Problem Description
@@ -237,6 +254,24 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
 
             {viewMode === "persona" && (
               <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    src={leia.spec?.persona?.spec?.avatar}
+                    alt={`${leia.spec?.persona?.spec?.fullName || "Persona"} avatar`}
+                    label={leia.spec?.persona?.spec?.fullName || "Persona"}
+                    size="lg"
+                  />
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">
+                      {leia.spec?.persona?.spec?.fullName ||
+                        leia.spec?.persona?.metadata?.name ||
+                        "Persona"}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      v{leia.spec?.persona?.metadata?.version || "N/A"}
+                    </p>
+                  </div>
+                </div>
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     Persona Information

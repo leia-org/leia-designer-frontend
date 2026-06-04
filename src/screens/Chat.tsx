@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
+import { Avatar } from "../components/shared/Avatar";
 import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
@@ -41,6 +41,7 @@ interface NavigationState {
     };
   };
   problemDescription?: string;
+  personaAvatar?: string;
   experimentTranscription?: {
     experimentId: string;
     leiaConfigId: string;
@@ -111,6 +112,29 @@ function extractWidgetsFromState(
   );
 }
 
+function extractPersonaAvatarFromState(
+  navState: NavigationState | null,
+): string {
+  const avatarFromResource = (resource: unknown): string => {
+    const avatar = (resource as { spec?: { avatar?: unknown } } | null | undefined)
+      ?.spec?.avatar;
+    return typeof avatar === "string" ? avatar : "";
+  };
+  const avatarFromLeia = (leia: unknown): string => {
+    const avatar = (leia as { spec?: { persona?: unknown } } | null | undefined)
+      ?.spec?.persona;
+    return avatarFromResource(avatar);
+  };
+
+  return (
+    navState?.personaAvatar ||
+    avatarFromResource(navState?.save?.leiaConfig?.persona) ||
+    avatarFromResource(navState?.preset?.persona) ||
+    avatarFromLeia(navState?.experimentTranscription?.leiaConfig?.leia) ||
+    ""
+  );
+}
+
 export const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -130,6 +154,7 @@ export const Chat = () => {
   const [problemWidgets, setProblemWidgets] = useState<ProblemWidget[] | undefined>(
     undefined,
   );
+  const [personaAvatar, setPersonaAvatar] = useState("");
 
   // Mount the activity's widgets in a side panel (text mode). Any non-left
   // slot is shown on the right so a "main"-slotted widget still appears.
@@ -246,11 +271,12 @@ export const Chat = () => {
       setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
     }
 
-    setProblemWidgets(
-      extractWidgetsFromState(navigationState || parseSavedNavigationState()),
-    );
+    const resolvedNavigationState = navigationState || parseSavedNavigationState();
 
-    configureEditState(navigationState || parseSavedNavigationState());
+    setPersonaAvatar(extractPersonaAvatarFromState(resolvedNavigationState));
+    setProblemWidgets(extractWidgetsFromState(resolvedNavigationState));
+
+    configureEditState(resolvedNavigationState);
   }, [location.state]);
 
   useEffect(() => {
@@ -554,7 +580,13 @@ export const Chat = () => {
                 }`}
               >
                 {msg.isLeia ? (
-                  <UserCircleIcon className="w-5 h-5 text-blue-700" />
+                  <Avatar
+                    src={personaAvatar}
+                    alt="Persona avatar"
+                    label="Persona"
+                    size="sm"
+                    className="border-blue-100 bg-blue-50"
+                  />
                 ) : (
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -581,9 +613,13 @@ export const Chat = () => {
           ))}
           {sendingMessage && (
             <div className="flex items-end gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                <UserCircleIcon className="w-5 h-5 text-blue-700" />
-              </div>
+              <Avatar
+                src={personaAvatar}
+                alt="Persona avatar"
+                label="Persona"
+                size="sm"
+                className="border-blue-100 bg-blue-50"
+              />
               <div className="min-w-[60px] bg-white border border-gray-200 rounded-t-2xl rounded-r-2xl rounded-bl-md px-4 py-3">
                 <TypingAnimation />
               </div>

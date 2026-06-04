@@ -474,6 +474,7 @@ export const MyActivities: React.FC = () => {
           state: {
             problemDescription:
               leiaConfig.leia.spec?.problem?.spec?.description || "",
+            personaAvatar: leiaConfig.leia.spec?.persona?.spec?.avatar || "",
             experimentTranscription: {
               experimentId,
               leiaConfigId,

@@ -16,6 +16,8 @@ type ProblemEditorData = {
   solution?: unknown;
 };
 
+type EditableSpec = Record<string, unknown>;
+
 type MermaidParser = {
   initialize: (config: { startOnLoad: boolean }) => void;
   parse: (text: string) => Promise<unknown>;
@@ -62,6 +64,37 @@ const getMermaidErrorMessage = (error: unknown): string => {
   }
 
   return "Invalid Mermaid syntax";
+};
+
+const stripAvatar = (data: unknown): unknown => {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return data;
+  }
+
+  const { avatar: _avatar, ...rest } = data as EditableSpec;
+  return rest;
+};
+
+const restoreOriginalAvatar = (
+  data: unknown,
+  initialData?: Partial<Persona> | Partial<Problem> | Partial<Behaviour>,
+): unknown => {
+  const originalAvatar = (initialData?.spec as { avatar?: unknown } | undefined)
+    ?.avatar;
+
+  if (
+    typeof originalAvatar !== "string" ||
+    !data ||
+    typeof data !== "object" ||
+    Array.isArray(data)
+  ) {
+    return data;
+  }
+
+  return {
+    ...(data as EditableSpec),
+    avatar: originalAvatar,
+  };
 };
 
 const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
@@ -252,8 +285,9 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   // Inicializar datos
   useEffect(() => {
     if (initialData?.spec) {
-      setVisualData(initialData.spec);
-      setJsonContent(JSON.stringify(initialData.spec, null, 2));
+      const editableSpec = stripAvatar(initialData.spec);
+      setVisualData(editableSpec);
+      setJsonContent(JSON.stringify(editableSpec, null, 2));
     } else {
       const emptySpec = (() => {
         switch (resourceType) {
@@ -301,7 +335,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   // Sincronizar de visual a código
   useEffect(() => {
     if (activeTab === "code") {
-      setJsonContent(JSON.stringify(visualData, null, 2));
+      setJsonContent(JSON.stringify(stripAvatar(visualData), null, 2));
     }
   }, [activeTab, visualData]);
 
@@ -342,7 +376,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
     try {
       if (value) {
-        const parsed = JSON.parse(value);
+        const parsed = stripAvatar(JSON.parse(value));
         setVisualData(parsed);
       }
     } catch (err) {
@@ -356,7 +390,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
     if (activeTab === "code") {
       try {
-        const parsed = JSON.parse(jsonContent);
+        const parsed = stripAvatar(JSON.parse(jsonContent));
         dataToSave = parsed;
       } catch (err) {
         setJsonError("Cannot save: Invalid JSON format");
@@ -373,7 +407,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
       }
     }
 
-    onSave(dataToSave, currentApiVersion);
+    onSave(
+      restoreOriginalAvatar(stripAvatar(dataToSave), initialData),
+      currentApiVersion,
+    );
   };
 
   const renderPersonaForm = () => (
