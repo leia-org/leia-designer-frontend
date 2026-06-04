@@ -17,7 +17,8 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
   const [formData, setFormData] = useState<Partial<ApiKey>>({});
   const [, setInitialFormData] = useState<Partial<ApiKey> | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { apiKeysProviderSet, isLoading: isLoadingProviders } = useProviders();
+  const { apiKeysProviderSet, apiKeyProvidersMapped, isLoading: isLoadingProviders } = useProviders();
+  const providerModels = (formData.provider && apiKeyProvidersMapped?.[formData.provider]) || [];
 
   useEffect(() => {
     if (isOpen) {
@@ -30,6 +31,7 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
           description: "",
           keyValue: "",
           provider: "",
+          model: "",
           isActive: true,
           baseUrl: "",
           managementUrl: "",
@@ -49,6 +51,9 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
       setFormData(prev => ({ ...prev, [name]: checked }));
     } else if (name === 'isActive') {
       setFormData(prev => ({ ...prev, isActive: value === 'Active' }));
+    } else if (name === 'provider') {
+      // Changing provider invalidates the chosen model.
+      setFormData(prev => ({ ...prev, provider: value, model: "" }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -120,6 +125,32 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Default Model <span className="text-gray-400 font-normal">(Optional)</span></label>
+              <select
+                name="model"
+                value={formData.model || ""}
+                onChange={handleChange}
+                disabled={!formData.provider || isLoadingProviders || providerModels.length === 0}
+                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+              >
+                <option value="">
+                  {!formData.provider
+                    ? "Select a provider first"
+                    : providerModels.length === 0
+                      ? "No models for this provider"
+                      : "-- none --"}
+                </option>
+                {providerModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Preselected wherever this key is used (you can still change it there).
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Base URL<span className="text-gray-400 font-normal">(Required for local providers)</span></label>

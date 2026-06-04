@@ -875,10 +875,13 @@ const openGenerateProblemModal = () => {
           ? defaultKey
           : candidateKeys[0] ?? null;
       const validModels = requiresTools ? toolCapableModels : getValidModels(key?.id);
+      // Preselect the chosen key's default model, then fall back.
       const model =
-        defaultModel && validModels.includes(defaultModel)
-          ? defaultModel
-          : validModels[0] ?? "";
+        key?.model && validModels.includes(key.model)
+          ? key.model
+          : defaultModel && validModels.includes(defaultModel)
+            ? defaultModel
+            : validModels[0] ?? "";
 
       return { modelName: model, apiKeyId: key?.id ?? null };
     });
@@ -920,9 +923,14 @@ const openGenerateProblemModal = () => {
     (apiKeyId: string | null) => {
       setTryConfig((prev) => {
         const validModels = getValidModels(apiKeyId);
+        const key = apiKeys.find((k) => k.id === apiKeyId);
+        // Keep the current model if still valid, else preselect the key's
+        // default model, else clear.
         const modelName = validModels.includes(prev.modelName)
           ? prev.modelName
-          : "";
+          : key?.model && validModels.includes(key.model)
+            ? key.model
+            : "";
 
         return {
           ...prev,
@@ -931,7 +939,7 @@ const openGenerateProblemModal = () => {
         };
       });
     },
-    [getValidModels]
+    [getValidModels, apiKeys]
   );
 
   const handleTestLeia = async () => {

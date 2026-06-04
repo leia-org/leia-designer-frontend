@@ -174,21 +174,34 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
 
   const optionsLoading = apiKeysLoading || providersLoading;
 
-  // Seed sensible defaults once the keys/models load (default OpenAI key + model).
+  // Seed sensible defaults once the keys/models load (default OpenAI key, and
+  // the model preselected from that key's default model).
   useEffect(() => {
     if (optionsLoading) return;
-    setSelectedApiKeyId((prev) => {
-      if (prev && openaiKeys.some((k) => k.id === prev)) return prev;
+    let keyId = selectedApiKeyId && openaiKeys.some((k) => k.id === selectedApiKeyId) ? selectedApiKeyId : null;
+    if (!keyId) {
       const def = getDefaultKey();
-      if (def && def.provider === "openai") return def.id;
-      return openaiKeys[0]?.id ?? null;
-    });
+      keyId = def && def.provider === "openai" ? def.id : (openaiKeys[0]?.id ?? null);
+      if (keyId !== selectedApiKeyId) setSelectedApiKeyId(keyId);
+    }
+    const keyModel = openaiKeys.find((k) => k.id === keyId)?.model;
     setSelectedModel((prev) => {
       if (prev && openaiModels.includes(prev)) return prev;
+      if (keyModel && openaiModels.includes(keyModel)) return keyModel;
       if (defaultModel && openaiModels.includes(defaultModel)) return defaultModel;
       return openaiModels[0] ?? "";
     });
-  }, [optionsLoading, openaiKeys, openaiModels, defaultModel, getDefaultKey]);
+  }, [optionsLoading, openaiKeys, openaiModels, defaultModel, getDefaultKey, selectedApiKeyId]);
+
+  // Manually choosing a key preselects that key's default model.
+  const handleSelectApiKey = useCallback(
+    (id: string | null) => {
+      setSelectedApiKeyId(id);
+      const keyModel = openaiKeys.find((k) => k.id === id)?.model;
+      if (keyModel && openaiModels.includes(keyModel)) setSelectedModel(keyModel);
+    },
+    [openaiKeys, openaiModels],
+  );
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -342,7 +355,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
               <label className="block text-[11px] font-medium text-gray-500 mb-1">API Key</label>
               <select
                 value={selectedApiKeyId ?? ""}
-                onChange={(e) => setSelectedApiKeyId(e.target.value || null)}
+                onChange={(e) => handleSelectApiKey(e.target.value || null)}
                 disabled={optionsLoading}
                 className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
