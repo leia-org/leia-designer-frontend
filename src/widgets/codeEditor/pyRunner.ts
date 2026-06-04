@@ -18,27 +18,25 @@ interface DonkeyOptions {
 
 let donkeyPromise: Promise<DonkeyInstance> | null = null;
 
-const HIDDEN_TERMINAL_ID = "leia-py-hidden-terminal";
+const HIDDEN_TERMINAL_STYLE_ID = "leia-py-terminal-hidden-style";
 
-// donkey always pipes Python stdout/stderr into a terminal element, and its
-// execute()/evaluate() helpers fail if that target is missing. The previous
-// `config: { terminal: false }` left the terminal null and broke every run with
-// `'JsNull' object has no attribute 'terminal'`. Per the PyScript docs, the
-// supported way to keep the terminal off-screen is to point the top-level
-// `terminal` option at a hidden (display:none) container.
-function ensureHiddenTerminal(): string {
-    if (typeof document !== "undefined" && !document.getElementById(HIDDEN_TERMINAL_ID)) {
-        const el = document.createElement("div");
-        el.id = HIDDEN_TERMINAL_ID;
-        el.style.display = "none";
-        document.body.appendChild(el);
+// donkey always pipes Python stdout/stderr into a terminal. Passing a null or
+// unresolved terminal target makes Pyodide fail inside stdio with
+// `'JsNull' object has no attribute 'terminal'`. Let PyScript create its
+// default terminal, but hide that terminal before the module loads.
+function hideAutoTerminal(): void {
+    if (typeof document !== "undefined" && !document.getElementById(HIDDEN_TERMINAL_STYLE_ID)) {
+        const style = document.createElement("style");
+        style.id = HIDDEN_TERMINAL_STYLE_ID;
+        style.textContent = "py-terminal { display: none !important; }";
+        document.head.appendChild(style);
     }
-    return `#${HIDDEN_TERMINAL_ID}`;
 }
 
 function loadDonkey(): Promise<DonkeyInstance> {
     if (donkeyPromise) return donkeyPromise;
     donkeyPromise = (async () => {
+        hideAutoTerminal();
         // Dynamic import from the CDN — the URL is intentionally external
         // and not bundled by Vite. Tell Vite to leave it alone.
         const url = "https://pyscript.net/releases/2026.3.1/core.js";
@@ -47,9 +45,6 @@ function loadDonkey(): Promise<DonkeyInstance> {
         const instance = await mod.donkey({
             type: "py",
             persistent: true,
-            // Off-screen terminal target so donkey has a valid (but invisible)
-            // place to render output; execute()/evaluate() need it to exist.
-            terminal: ensureHiddenTerminal(),
         });
         return instance;
     })();
