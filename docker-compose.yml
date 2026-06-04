@@ -1,0 +1,11 @@
+services:
+  designer-frontend:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: designer-frontend
+    environment:
+      - PORT=80
+    ports:
+      - '8081:80'

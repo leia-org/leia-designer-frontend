@@ -17,11 +17,13 @@ import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
+import { ProblemChatPanel } from "../components/ProblemChatPanel";
 import { useAuth } from "../context";
 import type {
   Persona,
   Behaviour,
   Problem,
+  ProblemSpec,
   Leia as LeiaResource,
 } from "../models/Leia";
 import { useApiKeys } from "../hooks/useApiKeys";
@@ -116,6 +118,7 @@ export const CreateLeia: React.FC = () => {
   } = useApiKeys();
   const {
     apiKeyProvidersMapped,
+    providerProviderModuleMap,
     defaultModel,
     isLoading: isProvidersLoading,
     error: providersError,
@@ -1036,22 +1039,53 @@ const openGenerateProblemModal = () => {
   );
 
   const ensureTryConfig = useCallback(() => {
+    // When the problem declares widgets, tools only run on a tool-capable
+    // provider (openai-responses), so the Try must seed an OpenAI model/key —
+    // even if the user's DEFAULT key belongs to another provider.
+    const problemWidgets = leiaConfig.problem?.spec?.widgets;
+    const requiresTools = Array.isArray(problemWidgets) && problemWidgets.length > 0;
+    const toolCapableProviders = Object.entries(providerProviderModuleMap || {})
+      .filter(([, moduleName]) => moduleName === "openai-responses")
+      .map(([provider]) => provider);
+    const toolCapableModels = toolCapableProviders.flatMap(
+      (provider) => apiKeyProvidersMapped[provider] || []
+    );
+    const candidateKeys = requiresTools
+      ? apiKeys.filter((key) => toolCapableProviders.includes(key.provider))
+      : apiKeys;
+
     setTryConfig((prev) => {
-      if (prev.modelName || prev.apiKeyId) return prev;
+      const prevKeyValid = Boolean(prev.apiKeyId && candidateKeys.some((k) => k.id === prev.apiKeyId));
+      const prevModelValid = Boolean(
+        prev.modelName && (!requiresTools || toolCapableModels.includes(prev.modelName))
+      );
+      // Keep a still-valid selection; otherwise (re)seed from the candidates.
+      if ((prev.modelName || prev.apiKeyId) && prevKeyValid && prevModelValid) {
+        return prev;
+      }
 
       const defaultKey = getDefaultKey();
-      const validModels = getValidModels(defaultKey?.id);
-      const resolvedDefaultModel =
+      const key =
+        defaultKey && candidateKeys.some((k) => k.id === defaultKey.id)
+          ? defaultKey
+          : candidateKeys[0] ?? null;
+      const validModels = requiresTools ? toolCapableModels : getValidModels(key?.id);
+      const model =
         defaultModel && validModels.includes(defaultModel)
           ? defaultModel
-          : "";
+          : validModels[0] ?? "";
 
-      return {
-        modelName: resolvedDefaultModel,
-        apiKeyId: defaultKey?.id ?? null,
-      };
+      return { modelName: model, apiKeyId: key?.id ?? null };
     });
-  }, [defaultModel, getDefaultKey, getValidModels]);
+  }, [
+    leiaConfig.problem,
+    providerProviderModuleMap,
+    apiKeyProvidersMapped,
+    apiKeys,
+    defaultModel,
+    getDefaultKey,
+    getValidModels,
+  ]);
 
   const handleTryMenuToggle = useCallback(() => {
     if (testingLeia) return;
@@ -1411,6 +1445,40 @@ const openGenerateProblemModal = () => {
     </div>
   );
 
+  // Applies a problem produced by the AI assistant's apply_problem tool: wraps
+  // the returned spec into a Problem and selects it (full replace), mirroring
+  // the one-shot generate flow.
+  const applyChatProblem = useCallback(
+    (spec: ProblemSpec) => {
+      const incomingSpec = spec as unknown as Record<string, unknown>;
+      setLeiaConfig((prev) => ({
+        ...prev,
+        problem: {
+          apiVersion: "v1",
+          metadata: {
+            name: prev.problem?.metadata?.name || "ai-generated-problem",
+            version: "1.0.0",
+          },
+          // Preserve extends/overrides/constrainedTo and widgets the model set;
+          // default the composition objects to {} only when absent.
+          spec: {
+            ...incomingSpec,
+            extends: incomingSpec.extends ?? {},
+            overrides: incomingSpec.overrides ?? {},
+            constrainedTo: incomingSpec.constrainedTo ?? {},
+          },
+          id: `generated-${Date.now()}`,
+          edited: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isPublished: false,
+          user: currentUser!,
+        } as unknown as Problem,
+      }));
+    },
+    [currentUser],
+  );
+
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center mb-8">
@@ -1536,10 +1604,30 @@ const openGenerateProblemModal = () => {
 
   const renderStep2 = () => {
     const isTryLoading = isApiKeysLoading || isProvidersLoading;
-    const validTryModels = getValidModels(tryConfig.apiKeyId);
-    const validTryApiKeys = getValidApiKeys(tryConfig.modelName);
+    // Widgets / tool-functions only work through a tool-capable runner provider
+    // (the openai-responses module). When the problem declares widgets, the Try
+    // is restricted to those models/keys — today that means OpenAI.
+    const problemHasWidgets =
+      Array.isArray(leiaConfig.problem?.spec?.widgets) &&
+      (leiaConfig.problem?.spec?.widgets?.length ?? 0) > 0;
+    const toolCapableProviders = Object.entries(providerProviderModuleMap || {})
+      .filter(([, moduleName]) => moduleName === "openai-responses")
+      .map(([provider]) => provider);
+    const toolCapableModels = toolCapableProviders.flatMap(
+      (provider) => apiKeyProvidersMapped[provider] || []
+    );
+    let validTryModels = getValidModels(tryConfig.apiKeyId);
+    let validTryApiKeys = getValidApiKeys(tryConfig.modelName);
+    if (problemHasWidgets) {
+      validTryModels = validTryModels.filter((m) => toolCapableModels.includes(m));
+      validTryApiKeys = validTryApiKeys.filter((k) =>
+        toolCapableProviders.includes(k.provider)
+      );
+    }
     const canStartTry =
-      Boolean(tryConfig.modelName && tryConfig.apiKeyId) && !isTryLoading;
+      Boolean(tryConfig.modelName && tryConfig.apiKeyId) &&
+      !isTryLoading &&
+      (!problemHasWidgets || toolCapableModels.includes(tryConfig.modelName));
     const showNoApiKeys =
       !isTryLoading &&
       !providersError &&
@@ -1559,6 +1647,14 @@ const openGenerateProblemModal = () => {
           Modify any of the resources, see changes in real-time and test your
           creation
         </p>
+      </div>
+
+      {/* AI Assistant: chat + PDF attachments → writes the problem into the editor */}
+      <div className="h-[440px]">
+        <ProblemChatPanel
+          currentProblem={leiaConfig.problem}
+          onApplyProblem={applyChatProblem}
+        />
       </div>
 
       <div id="create-preview-panel" className="grid grid-cols-3 gap-6 h-full">
@@ -1941,6 +2037,7 @@ const openGenerateProblemModal = () => {
                   apiKeyValue={tryConfig.apiKeyId}
                   models={validTryModels}
                   apiKeys={validTryApiKeys}
+                  toolsRestricted={problemHasWidgets}
                   onModelChange={handleTryModelChange}
                   onApiKeyChange={handleTryApiKeyChange}
                   canStart={canStartTry}
