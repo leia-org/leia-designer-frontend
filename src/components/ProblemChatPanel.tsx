@@ -5,7 +5,7 @@ import {
   PaperAirplaneIcon,
   SparklesIcon,
 } from "@heroicons/react/24/solid";
-import type { Problem, ProblemSpec } from "../models/Leia";
+import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import { WIDGET_CATALOG } from "../widgets/catalog";
@@ -69,6 +69,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     parameters: {
       type: "object",
       properties: {
+        name: { type: "string", description: "Short kebab-case name for the problem resource (e.g. 'deadlock-detection'). Set it so the instructor doesn't have to rename it." },
         description: { type: "string", description: "What the scenario/problem is about." },
         personaBackground: {
           type: "string",
@@ -138,6 +139,58 @@ const CHAT_TOOLS: ProblemChatTool[] = [
       required: ["description", "personaBackground", "details", "solution"],
     },
   },
+  {
+    name: "get_current_behaviour",
+    description:
+      "Returns the behaviour currently selected for the LEIA (its spec). Call it before modifying an existing behaviour, or to match its style.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "apply_behaviour",
+    description:
+      "Writes a COMPLETE behaviour into the editor, replacing the current one. The behaviour defines the role the AI plays opposite the student (e.g. a client being interviewed, a teammate). Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Short kebab-case name for the behaviour resource (e.g. 'client-interviewee')." },
+        description: { type: "string", description: "Detailed behavioural instructions for the role the AI plays (how it acts, what it knows/withholds)." },
+        role: { type: "string", description: "Role name the AI plays (e.g. 'cliente', 'alumno de instituto')." },
+        process: {
+          type: "array",
+          items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
+          description: "Optional process tags.",
+        },
+        tooltip: { type: "string", description: "Short helper tooltip describing this behaviour." },
+      },
+      required: ["description", "role"],
+    },
+  },
+  {
+    name: "get_current_persona",
+    description:
+      "Returns the persona currently selected for the LEIA (its spec). Call it before modifying an existing persona, or to match its style.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "apply_persona",
+    description:
+      "Writes a COMPLETE persona into the editor, replacing the current one. The persona is the character the AI embodies (name, background, personality, pronouns). Set `name` so the instructor doesn't have to rename it.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Short kebab-case name for the persona resource (e.g. 'marta-product-owner')." },
+        fullName: { type: "string", description: "Full name of the persona." },
+        firstName: { type: "string", description: "First name of the persona." },
+        description: { type: "string", description: "Who this persona is: background, context, what they care about." },
+        personality: { type: "string", description: "Personality traits (e.g. 'amigable, despistada, impaciente')." },
+        subjectPronoum: { type: "string", description: "Subject pronoun (e.g. 'ella', 'he')." },
+        objectPronoum: { type: "string", description: "Object pronoun (e.g. 'la', 'him')." },
+        possesivePronoum: { type: "string", description: "Possessive pronoun (e.g. 'suyo', 'his')." },
+        possesiveAdjective: { type: "string", description: "Possessive adjective (e.g. 'su', 'his')." },
+      },
+      required: ["firstName", "description"],
+    },
+  },
 ];
 
 type ChatRole = "user" | "assistant" | "system";
@@ -148,12 +201,20 @@ interface ChatMessage {
 
 interface ProblemChatPanelProps {
   currentProblem: Problem | null;
-  onApplyProblem: (spec: ProblemSpec) => void;
+  currentBehaviour: Behaviour | null;
+  currentPersona: Persona | null;
+  onApplyProblem: (spec: ProblemSpec, name?: string) => void;
+  onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
+  onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
 }
 
 export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblem,
+  currentBehaviour,
+  currentPersona,
   onApplyProblem,
+  onApplyBehaviour,
+  onApplyPersona,
 }) => {
   const { apiKeys, getDefaultKey, isLoading: apiKeysLoading } = useApiKeys();
   const { apiKeyProvidersMapped, defaultModel, isLoading: providersLoading } = useProviders();
@@ -213,9 +274,13 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
-  // Always read the freshest problem when the model calls get_current_problem.
+  // Always read the freshest resources when the model calls get_current_*.
   const currentProblemRef = useRef<Problem | null>(currentProblem);
   currentProblemRef.current = currentProblem;
+  const currentBehaviourRef = useRef<Behaviour | null>(currentBehaviour);
+  currentBehaviourRef.current = currentBehaviour;
+  const currentPersonaRef = useRef<Persona | null>(currentPersona);
+  currentPersonaRef.current = currentPersona;
 
   const ready = Boolean(selectedModel && selectedApiKeyId);
   const hasOpenaiKeys = openaiKeys.length > 0;
@@ -282,12 +347,31 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         } catch {
           args = {};
         }
+        const takeName = () => {
+          const { name, ...rest } = args as { name?: unknown };
+          return { name: typeof name === "string" && name.trim() ? name.trim() : undefined, spec: rest };
+        };
         if (call.name === "apply_problem") {
-          onApplyProblem(args as unknown as ProblemSpec);
-          pushMessage("system", "✓ Problem applied to the editor.");
+          const { name, spec } = takeName();
+          onApplyProblem(spec as unknown as ProblemSpec, name);
+          pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
+          output = { status: "applied" };
+        } else if (call.name === "apply_behaviour") {
+          const { name, spec } = takeName();
+          onApplyBehaviour(spec, name);
+          pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
+          output = { status: "applied" };
+        } else if (call.name === "apply_persona") {
+          const { name, spec } = takeName();
+          onApplyPersona(spec, name);
+          pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "get_current_problem") {
           output = currentProblemRef.current?.spec ?? null;
+        } else if (call.name === "get_current_behaviour") {
+          output = currentBehaviourRef.current?.spec ?? null;
+        } else if (call.name === "get_current_persona") {
+          output = currentPersonaRef.current?.spec ?? null;
         } else {
           output = { error: `unknown tool '${call.name}'` };
         }
@@ -389,8 +473,9 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       <div ref={transcriptRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3 min-h-[160px]">
         {messages.length === 0 ? (
           <div className="text-xs text-gray-400 italic">
-            Attach a PDF of a past exercise and ask me to turn it into a problem, or describe a
-            new one (e.g. "make a problem about deadlock detection"). I'll write it into the editor.
+            Attach a PDF of a past exercise or describe what you want, and I'll build the whole
+            LEIA — problem, behaviour and persona — writing each into its editor with a name.
+            E.g. "create a requirements-elicitation activity about a library booking system".
           </div>
         ) : (
           messages.map((msg, i) => {

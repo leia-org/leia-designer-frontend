@@ -1262,14 +1262,14 @@ const openGenerateProblemModal = () => {
   // the returned spec into a Problem and selects it (full replace), mirroring
   // the one-shot generate flow.
   const applyChatProblem = useCallback(
-    (spec: ProblemSpec) => {
+    (spec: ProblemSpec, name?: string) => {
       const incomingSpec = spec as unknown as Record<string, unknown>;
       setLeiaConfig((prev) => ({
         ...prev,
         problem: {
           apiVersion: "v1",
           metadata: {
-            name: prev.problem?.metadata?.name || "ai-generated-problem",
+            name: name || prev.problem?.metadata?.name || "ai-generated-problem",
             version: "1.0.0",
           },
           // Preserve extends/overrides/constrainedTo and widgets the model set;
@@ -1287,6 +1287,54 @@ const openGenerateProblemModal = () => {
           isPublished: false,
           user: currentUser!,
         } as unknown as Problem,
+      }));
+    },
+    [currentUser],
+  );
+
+  // The chat can author the whole LEIA: behaviour + persona too (each written
+  // into its editor with a name, marked edited so it's created on save).
+  const applyChatBehaviour = useCallback(
+    (spec: Record<string, unknown>, name?: string) => {
+      setLeiaConfig((prev) => ({
+        ...prev,
+        behaviour: {
+          apiVersion: "v1",
+          metadata: {
+            name: name || prev.behaviour?.metadata?.name || "ai-generated-behaviour",
+            version: "1.0.0",
+          },
+          spec: { ...spec },
+          id: `generated-${Date.now()}`,
+          edited: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isPublished: false,
+          user: currentUser!,
+        } as unknown as Behaviour,
+      }));
+    },
+    [currentUser],
+  );
+
+  const applyChatPersona = useCallback(
+    (spec: Record<string, unknown>, name?: string) => {
+      setLeiaConfig((prev) => ({
+        ...prev,
+        persona: {
+          apiVersion: "v1",
+          metadata: {
+            name: name || prev.persona?.metadata?.name || "ai-generated-persona",
+            version: "1.0.0",
+          },
+          spec: { ...spec },
+          id: `generated-${Date.now()}`,
+          edited: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isPublished: false,
+          user: currentUser!,
+        } as unknown as Persona,
       }));
     },
     [currentUser],
@@ -1466,7 +1514,11 @@ const openGenerateProblemModal = () => {
       <div className="h-[440px]">
         <ProblemChatPanel
           currentProblem={leiaConfig.problem}
+          currentBehaviour={leiaConfig.behaviour}
+          currentPersona={leiaConfig.persona}
           onApplyProblem={applyChatProblem}
+          onApplyBehaviour={applyChatBehaviour}
+          onApplyPersona={applyChatPersona}
         />
       </div>
 
