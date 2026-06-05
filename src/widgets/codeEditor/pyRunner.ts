@@ -1,54 +1,33 @@
 import type { TestCase, TestResult } from "./types";
 
-// PyScript Donkey API exposed by core.js. Loaded once on first use and
-// kept around as a singleton (Pyodide is ~10MB so we don't want to pay
-// the download more than once per page).
-interface DonkeyInstance {
-    execute: (statement: string) => Promise<unknown>;
-    evaluate: (expression: string) => Promise<unknown>;
-    process?: (code: string) => Promise<unknown>;
+interface PyodideInstance {
+    runPythonAsync: (code: string) => Promise<unknown>;
+    globals: {
+        set: (name: string, value: unknown) => void;
+        get: (name: string) => unknown;
+    };
 }
 
-interface DonkeyOptions {
-    type?: "py" | "mpy";
-    persistent?: boolean;
-    terminal?: string | false;
-    config?: Record<string, unknown>;
+interface PyodideModule {
+    loadPyodide: (options?: {
+        stdout?: (text: string) => void;
+        stderr?: (text: string) => void;
+    }) => Promise<PyodideInstance>;
 }
 
-let donkeyPromise: Promise<DonkeyInstance> | null = null;
+let pyodidePromise: Promise<PyodideInstance> | null = null;
 
-const HIDDEN_TERMINAL_STYLE_ID = "leia-py-terminal-hidden-style";
-
-// donkey always pipes Python stdout/stderr into a terminal. Passing a null or
-// unresolved terminal target makes Pyodide fail inside stdio with
-// `'JsNull' object has no attribute 'terminal'`. Let PyScript create its
-// default terminal, but hide that terminal before the module loads.
-function hideAutoTerminal(): void {
-    if (typeof document !== "undefined" && !document.getElementById(HIDDEN_TERMINAL_STYLE_ID)) {
-        const style = document.createElement("style");
-        style.id = HIDDEN_TERMINAL_STYLE_ID;
-        style.textContent = "py-terminal { display: none !important; }";
-        document.head.appendChild(style);
-    }
-}
-
-function loadDonkey(): Promise<DonkeyInstance> {
-    if (donkeyPromise) return donkeyPromise;
-    donkeyPromise = (async () => {
-        hideAutoTerminal();
-        // Dynamic import from the CDN — the URL is intentionally external
-        // and not bundled by Vite. Tell Vite to leave it alone.
-        const url = "https://pyscript.net/releases/2026.3.1/core.js";
-        const mod: { donkey: (opts: DonkeyOptions) => Promise<DonkeyInstance> } =
-            await import(/* @vite-ignore */ url);
-        const instance = await mod.donkey({
-            type: "py",
-            persistent: true,
+function loadPyodideRuntime(): Promise<PyodideInstance> {
+    if (pyodidePromise) return pyodidePromise;
+    pyodidePromise = (async () => {
+        const url = "https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.mjs";
+        const mod = (await import(/* @vite-ignore */ url)) as PyodideModule;
+        return mod.loadPyodide({
+            stdout: () => undefined,
+            stderr: () => undefined,
         });
-        return instance;
     })();
-    return donkeyPromise;
+    return pyodidePromise;
 }
 
 // Convert a JS value (possibly a Pyodide proxy) into a plain comparable
@@ -93,24 +72,29 @@ export async function runPyTests(
     fnName: string,
     tests: TestCase[],
 ): Promise<{ results?: TestResult[]; error?: string }> {
-    let py: DonkeyInstance;
+    let py: PyodideInstance;
     try {
-        py = await loadDonkey();
+        py = await loadPyodideRuntime();
     } catch (err) {
-        return { error: `Failed to load PyScript: ${err instanceof Error ? err.message : String(err)}` };
+        return { error: `Failed to load Pyodide: ${err instanceof Error ? err.message : String(err)}` };
     }
 
-    // Define the user's code. If it raises a syntax error, surface it
-    // as a compile error.
+    py.globals.set("__leia_user_code", code);
+    py.globals.set("__leia_fn_name", fnName);
+
     try {
-        await py.execute(code);
+        await py.runPythonAsync(`
+__leia_namespace = {}
+exec(__leia_user_code, __leia_namespace)
+`);
     } catch (err) {
         return { error: `Compile error: ${err instanceof Error ? err.message : String(err)}` };
     }
 
     // Verify the function exists.
     try {
-        const exists = await py.evaluate(`callable(globals().get(${JSON.stringify(fnName)}))`);
+        await py.runPythonAsync("__leia_exists = callable(__leia_namespace.get(__leia_fn_name))");
+        const exists = py.globals.get("__leia_exists");
         if (!exists) {
             return { error: `Function "${fnName}" is not defined in the submitted code.` };
         }
@@ -122,15 +106,26 @@ export async function runPyTests(
     for (const t of tests) {
         try {
             // Marshal arguments via JSON to avoid string-quoting traps.
-            const argsLiteral = JSON.stringify(JSON.stringify(t.args));
-            const expr = `${fnName}(*__import__('json').loads(${argsLiteral}))`;
-            const raw = await py.evaluate(expr);
+            py.globals.set("__leia_args_json", JSON.stringify(t.args));
+            await py.runPythonAsync(`
+import json
+__leia_result = __leia_namespace[__leia_fn_name](*json.loads(__leia_args_json))
+`);
+            const raw = py.globals.get("__leia_result");
             const actual = toPlain(raw);
             const ok = deepEqual(actual, t.expected);
             results.push({ name: t.name, ok, expected: t.expected, actual });
         } catch (err) {
             results.push({ name: t.name, ok: false, error: err instanceof Error ? err.message : String(err) });
         }
+    }
+    try {
+        await py.runPythonAsync(`
+for __leia_key in ("__leia_user_code", "__leia_fn_name", "__leia_args_json", "__leia_namespace", "__leia_exists", "__leia_result"):
+    globals().pop(__leia_key, None)
+`);
+    } catch {
+        // ignore cleanup errors
     }
     return { results };
 }
