@@ -20,6 +20,7 @@ interface AddLeiaToAnActivityProps {
   selectedLeia: Leia | null;
   onClose: () => void;
   onSuccess?: () => void;
+  idModal?: string; // Para tour
 }
 
 export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
@@ -27,6 +28,7 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   selectedLeia,
   onClose,
   onSuccess,
+  idModal,
 }) => {
   const [draftActivities, setDraftActivities] = useState<Activity[] | null>(
     null,
@@ -177,7 +179,7 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       }}
     >
       <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4">
-        <div className="p-6" onClick={(e) => e.stopPropagation()}>
+        <div id={idModal} className="p-6" onClick={(e) => e.stopPropagation()}>
           <h2 className="text-xl font-semibold mb-4">
             Add {selectedLeia?.metadata.name || ""} LEIA to an Activity
           </h2>

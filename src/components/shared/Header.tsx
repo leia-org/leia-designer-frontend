@@ -17,27 +17,35 @@ interface MenuItem {
   icon?: React.ReactNode;
   show?: boolean;
   onClick?: () => void;
+  id?: string;
 }
 
 interface HeaderProps {
   title: string;
   description: string;
   rightContent?: React.ReactNode;
+  leftContent?: React.ReactNode;
   menuItems?: MenuItem[];
   showNavigation?: boolean;
+  dropdownTour?: boolean; // Para tour
 }
 
 export const Header: React.FC<HeaderProps> = ({
   title,
   description,
   rightContent,
+  leftContent,
   menuItems,
   showNavigation = true,
+  dropdownTour, // Para tour
 }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-
+  const [dropdownOpen, setDropdownOpen] = useState(dropdownTour);
+  useEffect(() => {
+    setDropdownOpen(dropdownTour);
+  }, [dropdownTour]);
+  
   // Default menu items if none provided
   const defaultMenuItems: MenuItem[] = [
     {
@@ -45,41 +53,48 @@ export const Header: React.FC<HeaderProps> = ({
       href: "/profile",
       icon: <UsersIcon className="w-4 h-4" />,
       show: true,
+      id: "profile-button"
     },
     {
       label: "Search LEIAs",
       href: "/",
       icon: <MagnifyingGlassIcon className="w-4 h-4" />,
       show: true,
+      id: "searchLeias-button"
     },
     {
       label: "Design a new LEIA",
       href: "/create",
       icon: <PlusIcon className="w-4 h-4" />,
       show: true,
+      id: "designLeia-button"
     },
     {
       label: "My API Keys",
       href: "/api-keys",
       icon: <KeyIcon className="w-4 h-4" />,
       show: true,
+      id: "myApiKeys-button",
     },
     {
       label: "My Activities",
       href: "/users/me/activities",
       icon: <PuzzlePieceIcon className="w-4 h-4" />,
-      show: user?.role === "admin",
+      show: user?.role === "admin" || user?.role === "advanced",
+      id: "myActivities-button"
     },
     {
       label: "Manage users",
       href: "/administration/users",
       icon: <UsersIcon className="w-4 h-4" />,
       show: user?.role === "admin",
+      id: "manageUsers-button"
     },
     {
       label: "Logout",
       icon: <ArrowRightStartOnRectangleIcon className="w-4 h-4" />,
       show: true,
+      id: "logout-button",
       onClick: logout,
     },
   ];
@@ -127,6 +142,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-4 flex-shrink-0 ml-6">
+          {leftContent && <div>{leftContent}</div>}
           {user?.email && (
             <span className="text-sm text-gray-500 font-medium">
               {user.email}
@@ -139,6 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center justify-center w-10 h-10 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title="Navigation menu"
+                id="navigation-menu"
               >
                 <Bars3Icon className="w-5 h-5" />
               </button>
@@ -149,6 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {visibleItems.map((item, index) => (
                       <button
                         key={index}
+                        id={item.id}
                         onClick={() => {
                           if (item.onClick) {
                             item.onClick();
@@ -169,6 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
           )}
+          
           {rightContent && <div>{rightContent}</div>}
         </div>
       </div>
