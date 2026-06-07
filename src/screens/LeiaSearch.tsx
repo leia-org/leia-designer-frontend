@@ -21,6 +21,7 @@ import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
 import { Avatar } from "../components/shared/Avatar";
+import { buildOriginalAvatarPath } from "../lib/avatar";
 
 type VersionFilter = "" | "latest";
 
@@ -513,6 +514,10 @@ export const LeiaSearch: React.FC = () => {
                     leia.spec?.persona?.spec?.description ||
                     "";
                   const leiaAvatar = leia.spec?.avatar || "";
+                  const leiaAvatarFallback = buildOriginalAvatarPath(
+                    "leias",
+                    leia.id,
+                  );
             
                   const labelData = leia.metadata?.labels;
                   const tryConfig = tryConfigByLeia[leia.id];
@@ -542,6 +547,7 @@ export const LeiaSearch: React.FC = () => {
                     >
                       <Avatar
                         src={leiaAvatar}
+                        fallbackSrc={leiaAvatarFallback}
                         alt={`${leia.metadata.name} avatar`}
                         label={leia.metadata.name}
                         size="md"

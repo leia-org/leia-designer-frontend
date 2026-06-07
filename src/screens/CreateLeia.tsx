@@ -29,6 +29,7 @@ import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
+import { buildOriginalAvatarPath } from "../lib/avatar";
 
 interface Label {
   id?: string;
@@ -1610,6 +1611,10 @@ const openGenerateProblemModal = () => {
                 <div className="flex items-center gap-2 mb-2">
                   <Avatar
                     src={leiaConfig.problem.spec.avatar}
+                    fallbackSrc={buildOriginalAvatarPath(
+                      "problems",
+                      leiaConfig.problem.id,
+                    )}
                     alt={`${leiaConfig.problem.metadata.name} avatar`}
                     label={leiaConfig.problem.metadata.name}
                     size="sm"
@@ -1713,6 +1718,10 @@ const openGenerateProblemModal = () => {
                 <div className="flex items-center gap-2 mb-2">
                   <Avatar
                     src={leiaConfig.persona.spec.avatar}
+                    fallbackSrc={buildOriginalAvatarPath(
+                      "personas",
+                      leiaConfig.persona.id,
+                    )}
                     alt={`${leiaConfig.persona.metadata.name} avatar`}
                     label={leiaConfig.persona.metadata.name}
                     size="sm"

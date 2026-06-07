@@ -4,6 +4,7 @@ import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "./shared/Avatar";
+import { buildOriginalAvatarPath } from "../lib/avatar";
 
 // Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
@@ -137,6 +138,10 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                 <div className="flex items-center gap-3">
                   <Avatar
                     src={leia.spec?.problem?.spec?.avatar}
+                    fallbackSrc={buildOriginalAvatarPath(
+                      "problems",
+                      leia.spec?.problem?.id,
+                    )}
                     alt={`${leia.spec?.problem?.metadata?.name || "Problem"} avatar`}
                     label={leia.spec?.problem?.metadata?.name || "Problem"}
                     size="lg"
@@ -257,6 +262,10 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                 <div className="flex items-center gap-3">
                   <Avatar
                     src={leia.spec?.persona?.spec?.avatar}
+                    fallbackSrc={buildOriginalAvatarPath(
+                      "personas",
+                      leia.spec?.persona?.id,
+                    )}
                     alt={`${leia.spec?.persona?.spec?.fullName || "Persona"} avatar`}
                     label={leia.spec?.persona?.spec?.fullName || "Persona"}
                     size="lg"

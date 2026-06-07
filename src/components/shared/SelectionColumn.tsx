@@ -4,6 +4,7 @@ import { useAuth } from "../../context";
 import LeiaCard from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
 import type { Persona, Problem, Behaviour } from "../../models/Leia";
+import { buildOriginalAvatarPath } from "../../lib/avatar";
 
 interface SelectionColumnProps {
   title: string;
@@ -118,6 +119,14 @@ spec:
                 }
                 resourceId={item.id}
                 avatar={"avatar" in item.spec ? item.spec.avatar : undefined}
+                fallbackAvatar={
+                  showItemAvatar
+                    ? buildOriginalAvatarPath(
+                        getResourceType() === "persona" ? "personas" : "problems",
+                        item.id,
+                      )
+                    : undefined
+                }
                 showAvatar={showItemAvatar}
               />
             ))

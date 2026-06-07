@@ -8,6 +8,7 @@ import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
 import type { ProblemWidget } from "../models/Leia";
+import { buildOriginalAvatarPath } from "../lib/avatar";
 import {
   VoiceModeWithWidgets,
   resolveWidgetDefinitions,
@@ -135,6 +136,45 @@ function extractPersonaAvatarFromState(
   );
 }
 
+function extractPersonaAvatarFallbackFromState(
+  navState: NavigationState | null,
+): string {
+  const getResourceId = (resource: unknown): string => {
+    const id = (resource as { id?: unknown } | null | undefined)?.id;
+    return typeof id === "string" ? id : "";
+  };
+  const getLeiaResourceIds = (leia: unknown): {
+    leiaId: string;
+    personaId: string;
+  } => {
+    const typedLeia = leia as
+      | {
+          id?: unknown;
+          spec?: { persona?: unknown };
+        }
+      | null
+      | undefined;
+    return {
+      leiaId: typeof typedLeia?.id === "string" ? typedLeia.id : "",
+      personaId: getResourceId(typedLeia?.spec?.persona),
+    };
+  };
+
+  const savedPersonaId = getResourceId(navState?.save?.leiaConfig?.persona);
+  const presetPersonaId = getResourceId(navState?.preset?.persona);
+  const transcriptionIds = getLeiaResourceIds(
+    navState?.experimentTranscription?.leiaConfig?.leia,
+  );
+
+  return (
+    buildOriginalAvatarPath("personas", savedPersonaId) ||
+    buildOriginalAvatarPath("personas", presetPersonaId) ||
+    buildOriginalAvatarPath("personas", transcriptionIds.personaId) ||
+    buildOriginalAvatarPath("leias", transcriptionIds.leiaId) ||
+    ""
+  );
+}
+
 export const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -155,6 +195,7 @@ export const Chat = () => {
     undefined,
   );
   const [personaAvatar, setPersonaAvatar] = useState("");
+  const [personaAvatarFallback, setPersonaAvatarFallback] = useState("");
 
   // Mount the activity's widgets in a side panel (text mode). Any non-left
   // slot is shown on the right so a "main"-slotted widget still appears.
@@ -274,6 +315,9 @@ export const Chat = () => {
     const resolvedNavigationState = navigationState || parseSavedNavigationState();
 
     setPersonaAvatar(extractPersonaAvatarFromState(resolvedNavigationState));
+    setPersonaAvatarFallback(
+      extractPersonaAvatarFallbackFromState(resolvedNavigationState),
+    );
     setProblemWidgets(extractWidgetsFromState(resolvedNavigationState));
 
     configureEditState(resolvedNavigationState);
@@ -582,6 +626,7 @@ export const Chat = () => {
                 {msg.isLeia ? (
                   <Avatar
                     src={personaAvatar}
+                    fallbackSrc={personaAvatarFallback}
                     alt="Persona avatar"
                     label="Persona"
                     size="sm"
@@ -615,6 +660,7 @@ export const Chat = () => {
             <div className="flex items-end gap-2">
               <Avatar
                 src={personaAvatar}
+                fallbackSrc={personaAvatarFallback}
                 alt="Persona avatar"
                 label="Persona"
                 size="sm"

@@ -1,7 +1,10 @@
 import type React from "react";
+import { useEffect, useMemo, useState } from "react";
+import { buildAvatarCandidateSources } from "../../lib/avatar";
 
 interface AvatarProps {
   src?: string | null;
+  fallbackSrc?: string | null;
   alt: string;
   label?: string;
   size?: "sm" | "md" | "lg";
@@ -40,13 +43,23 @@ const getInitials = (value: string): string => {
 
 export const Avatar: React.FC<AvatarProps> = ({
   src,
+  fallbackSrc,
   alt,
   label,
   size = "md",
   className = "",
 }) => {
-  const trimmedSrc = typeof src === "string" ? src.trim() : "";
+  const candidateSources = useMemo(
+    () => buildAvatarCandidateSources(src, fallbackSrc),
+    [src, fallbackSrc],
+  );
+  const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
+  const resolvedSrc = candidateSources[currentSourceIndex] || "";
   const initials = getInitials(label || alt);
+
+  useEffect(() => {
+    setCurrentSourceIndex(0);
+  }, [candidateSources]);
 
   return (
     <div
@@ -54,12 +67,20 @@ export const Avatar: React.FC<AvatarProps> = ({
       title={label || alt}
       aria-label={alt}
     >
-      {trimmedSrc ? (
+      {resolvedSrc ? (
         <img
-          src={trimmedSrc}
+          src={resolvedSrc}
           alt={alt}
           className="h-full w-full object-cover"
           loading="lazy"
+          onError={() => {
+            setCurrentSourceIndex((previousIndex) => {
+              const nextIndex = previousIndex + 1;
+              return nextIndex < candidateSources.length
+                ? nextIndex
+                : candidateSources.length;
+            });
+          }}
         />
       ) : (
         <span

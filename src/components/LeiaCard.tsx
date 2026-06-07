@@ -30,6 +30,7 @@ interface LeiaCardProps {
   onDelete?: () => void;
   resourceId?: string;
   avatar?: string | null;
+  fallbackAvatar?: string | null;
   showAvatar?: boolean;
 }
 
@@ -46,6 +47,7 @@ export default function LeiaCard({
   onDelete,
   resourceId,
   avatar,
+  fallbackAvatar,
   showAvatar = false,
 }: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
@@ -89,6 +91,7 @@ export default function LeiaCard({
           {showAvatar && (
             <Avatar
               src={avatar}
+              fallbackSrc={fallbackAvatar}
               alt={`${title} avatar`}
               label={title}
               size="md"
