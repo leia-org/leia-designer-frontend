@@ -12,6 +12,7 @@ interface LeiaTryDropdownProps {
   apiKeyValue: string | null;
   models: string[];
   apiKeys: ApiKey[];
+  toolsRestricted?: boolean;
   onModelChange: (value: string) => void;
   onApiKeyChange: (value: string | null) => void;
   canStart: boolean;
@@ -31,6 +32,7 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
   apiKeyValue,
   models,
   apiKeys,
+  toolsRestricted,
   onModelChange,
   onApiKeyChange,
   canStart,
@@ -48,6 +50,12 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
           Try settings
         </div>
+        {toolsRestricted && (
+          <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-700">
+            This activity uses widgets, so its tool-functions only run on a
+            tool-capable provider. Only OpenAI models are available here.
+          </div>
+        )}
         <div className="mt-2">
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Model

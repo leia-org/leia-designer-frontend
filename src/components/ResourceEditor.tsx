@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Editor } from "@monaco-editor/react";
 import * as Tabs from "@radix-ui/react-tabs";
-import type { Persona, Problem, Behaviour } from "../models/Leia";
+import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia";
+import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
@@ -654,6 +655,13 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         </label>
         {renderProcessCheckboxes()}
       </div>
+
+      <ProblemWidgetsEditor
+        widgets={(visualData.widgets as ProblemWidget[]) ?? []}
+        onChange={(next) =>
+          handleVisualChange("widgets", next.length > 0 ? next : undefined)
+        }
+      />
     </div>
   );
 

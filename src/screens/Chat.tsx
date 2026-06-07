@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
@@ -7,6 +7,14 @@ import { Header } from "../components/shared/Header";
 import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
+import type { ProblemWidget } from "../models/Leia";
+import {
+  VoiceModeWithWidgets,
+  resolveWidgetDefinitions,
+  useWidgetsContext,
+  type WidgetDefinition,
+  type FrontendTool,
+} from "../widgets";
 
 const CHAT_SAVE_STATE_KEY = "designerChatSaveState";
 const EDIT_STATE_KEY = "designerEditState";
@@ -74,6 +82,35 @@ interface Message {
   isLeia: boolean;
 }
 
+// Mirrors the live widget tool registry into a ref the submit handler reads
+// on each turn without re-binding.
+const ToolsBridge: React.FC<{
+  onTools: (tools: Record<string, FrontendTool>) => void;
+}> = ({ onTools }) => {
+  const { tools } = useWidgetsContext();
+  useEffect(() => {
+    onTools(tools as Record<string, FrontendTool>);
+  }, [tools, onTools]);
+  return null;
+};
+
+// Pulls the activity's widget config out of the navigation state passed to the
+// "try" chat (CreateLeia / preset flows). Returns undefined when the problem
+// declares no widgets — the chat then behaves as a plain text chat.
+function extractWidgetsFromState(
+  navState: NavigationState | null,
+): ProblemWidget[] | undefined {
+  const fromProblem = (p: unknown): ProblemWidget[] | undefined => {
+    const widgets = (p as { spec?: { widgets?: ProblemWidget[] } } | null | undefined)
+      ?.spec?.widgets;
+    return Array.isArray(widgets) && widgets.length > 0 ? widgets : undefined;
+  };
+  return (
+    fromProblem(navState?.save?.leiaConfig?.problem) ??
+    fromProblem(navState?.preset?.problem)
+  );
+}
+
 export const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -90,6 +127,27 @@ export const Chat = () => {
   const [experimentId, setExperimentId] = useState<string | null>(null);
   const [leiaConfigId, setLeiaConfigId] = useState<string | null>(null);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig | null>(null);
+  const [problemWidgets, setProblemWidgets] = useState<ProblemWidget[] | undefined>(
+    undefined,
+  );
+
+  // Mount the activity's widgets in a side panel (text mode). Any non-left
+  // slot is shown on the right so a "main"-slotted widget still appears.
+  const widgetDefs = useMemo<WidgetDefinition[]>(
+    () =>
+      resolveWidgetDefinitions(problemWidgets).map((w) => ({
+        ...w,
+        slot: w.slot === "left" ? "left" : "right",
+      })),
+    [problemWidgets],
+  );
+  const hasWidgets = widgetDefs.length > 0;
+
+  // Live mirror of the widget-registered tools; the submit loop reads it.
+  const toolsRef = useRef<Record<string, FrontendTool>>({});
+  const handleToolsSync = useCallback((t: Record<string, FrontendTool>) => {
+    toolsRef.current = t;
+  }, []);
 
   const parseSavedNavigationState = (): NavigationState | null => {
     const raw = localStorage.getItem(CHAT_SAVE_STATE_KEY);
@@ -188,6 +246,10 @@ export const Chat = () => {
       setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
     }
 
+    setProblemWidgets(
+      extractWidgetsFromState(navigationState || parseSavedNavigationState()),
+    );
+
     configureEditState(navigationState || parseSavedNavigationState());
   }, [location.state]);
 
@@ -218,6 +280,64 @@ export const Chat = () => {
     });
   };
 
+  // Runs one user turn against the runner, looping while the model returns
+  // tool calls. Each call is executed via the local widget tools registry and
+  // its output shipped back as a function_call_output. Resolves with the
+  // model's final text. When the activity has no widgets, toolsPayload is empty
+  // and this is a single plain request — identical to the old behaviour.
+  const runMessageTurn = useCallback(
+    async (initialMessage: string): Promise<string> => {
+      const toolsPayload = Object.entries(toolsRef.current).map(([name, tool]) => ({
+        name,
+        description: tool.description,
+        parameters: tool.parameters,
+      }));
+      const url = `/api/v1/runner/${sessionId}/messages`;
+
+      const initialBody: Record<string, unknown> = { message: initialMessage };
+      if (toolsPayload.length > 0) initialBody.tools = toolsPayload;
+
+      let response = await api.post(url, initialBody);
+      // Cap the round-trip depth so a misbehaving tool loop cannot brick the UI.
+      for (let i = 0; i < 8; i++) {
+        const calls = response.data?.toolCalls;
+        if (!Array.isArray(calls) || calls.length === 0) break;
+
+        const results = await Promise.all(
+          calls.map(
+            async (call: { callId: string; name: string; arguments: string }) => {
+              const tool = toolsRef.current[call.name];
+              let output: unknown;
+              if (!tool) {
+                output = { error: `tool '${call.name}' is not registered on this client` };
+              } else {
+                let args: Record<string, unknown> = {};
+                try {
+                  args = call.arguments ? JSON.parse(call.arguments) : {};
+                } catch {
+                  args = {};
+                }
+                try {
+                  output = await tool.execute(args);
+                } catch (err) {
+                  output = { error: (err as Error).message ?? "tool execution failed" };
+                }
+              }
+              return { callId: call.callId, output };
+            },
+          ),
+        );
+
+        const continuationBody: Record<string, unknown> = { toolResults: results };
+        if (toolsPayload.length > 0) continuationBody.tools = toolsPayload;
+        response = await api.post(url, continuationBody);
+      }
+
+      return typeof response.data?.message === "string" ? response.data.message : "";
+    },
+    [sessionId],
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -238,25 +358,20 @@ export const Chat = () => {
     setSendingMessage(true);
 
     try {
-      const response = await api.post(`/api/v1/runner/${sessionId}/messages`, {
-        message: messageText,
-      });
-
-      if (response.status === 200) {
-        const leiaMessage: Message = {
-          text: response.data.message,
+      const leiaText = await runMessageTurn(messageText);
+      if (leiaText) {
+        addMessage({
+          text: leiaText,
           timestamp: new Date(),
           isLeia: true,
-        };
-        addMessage(leiaMessage);
+        });
       }
     } catch {
-      const leiaMessage: Message = {
+      addMessage({
         text: "Your message is taking a bit longer to send. Retry?",
         timestamp: new Date(),
         isLeia: true,
-      };
-      addMessage(leiaMessage);
+      });
     } finally {
       localStorage.setItem(
         "sessionMessages",
@@ -420,6 +535,7 @@ export const Chat = () => {
         </div>
       )}
 
+      <div className="flex-1 flex overflow-hidden">
       <div
         ref={chatMessagesRef}
         className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth"
@@ -475,10 +591,29 @@ export const Chat = () => {
           )}
         </div>
       </div>
+      {hasWidgets && (
+        <div className="w-1/2 bg-neutral-900 text-white flex flex-col overflow-hidden border-l border-neutral-800">
+          <VoiceModeWithWidgets widgets={widgetDefs}>
+            {({ rightSlot, leftSlot }) => (
+              <>
+                <ToolsBridge onTools={handleToolsSync} />
+                <div className="flex-1 min-h-0 flex flex-col">
+                  {leftSlot && <div className="flex-1 min-h-0">{leftSlot}</div>}
+                  {rightSlot && <div className="flex-1 min-h-0">{rightSlot}</div>}
+                </div>
+              </>
+            )}
+          </VoiceModeWithWidgets>
+        </div>
+      )}
+      </div>
 
       <div className="absolute bottom-[72px] left-0 right-0 h-24 pointer-events-none"></div>
 
-      <div className="absolute bottom-0 left-0 right-0 px-4 pb-6 bg-white">
+      <div
+        className="absolute bottom-0 left-0 right-0 px-4 pb-6 bg-white"
+        style={{ right: hasWidgets ? "50%" : 0 }}
+      >
         <div className="max-w-3xl mx-auto">
           <form
             onSubmit={handleSubmit}
