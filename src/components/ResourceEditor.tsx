@@ -3,6 +3,7 @@ import { Editor } from "@monaco-editor/react";
 import * as Tabs from "@radix-ui/react-tabs";
 import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia";
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
+import { downloadProblemPdf } from "../lib/problemPdf";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
@@ -774,6 +775,24 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             Edit {resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}
           </h4>
           <div className="flex items-center space-x-2">
+            {resourceType === "problem" && (
+              <button
+                type="button"
+                onClick={() =>
+                  downloadProblemPdf(
+                    visualData,
+                    (initialData as Partial<Problem>)?.metadata?.name || "Problem",
+                  )
+                }
+                className="inline-flex items-center gap-1 px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
+                title="Download the problem statement (boletín) as a PDF"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                PDF
+              </button>
+            )}
             <label className="text-sm font-medium text-gray-700">
               API Version:
             </label>

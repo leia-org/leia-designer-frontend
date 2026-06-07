@@ -268,6 +268,7 @@ export const LeiaSearch: React.FC = () => {
           state: {
             problemDescription: leia.spec?.problem?.spec?.description || "",
             personaAvatar: leia.spec?.persona?.spec?.avatar || "",
+            problem: leia.spec?.problem,
           },
         });
       } else {
