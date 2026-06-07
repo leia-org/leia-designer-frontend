@@ -93,6 +93,12 @@ interface NavigationState {
 }
 
 type WizardStep = 1 | 2 | 3;
+type AvatarEntityPathSegment = "leias" | "personas" | "problems";
+
+interface AvatarGenerationTarget {
+  entity: AvatarEntityPathSegment;
+  id: string;
+}
 
 const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
 const DEFAULT_PROBLEM_GENERATION_DETAILS =
@@ -393,6 +399,49 @@ export const CreateLeia: React.FC = () => {
   };
 
   const getLabelIdentifier = (label: Label) => label.id || label._id || null;
+
+  const getResourceIdentifier = (resource: unknown): string | null => {
+    if (!resource || typeof resource !== "object") return null;
+
+    const candidate = resource as { id?: unknown; _id?: unknown };
+    const id = candidate.id || candidate._id;
+    return typeof id === "string" && id.trim() ? id : null;
+  };
+
+  const generateCreatedAvatars = async (
+    targets: AvatarGenerationTarget[],
+  ): Promise<LeiaResource | null> => {
+    const uniqueTargets = Array.from(
+      new Map(
+        targets.map((target) => [`${target.entity}:${target.id}`, target]),
+      ).values(),
+    );
+
+    const avatarResults = await Promise.allSettled(
+      uniqueTargets.map(async (target) => {
+        const response = await api.post(
+          `/api/v1/avatars/${target.entity}/${target.id}/generate`,
+        );
+        return { target, entity: response.data?.entity };
+      }),
+    );
+
+    for (const result of avatarResults) {
+      if (result.status === "rejected") {
+        console.error("Error generating avatar after creation:", result.reason);
+      }
+    }
+
+    const leiaAvatarResult = avatarResults.find(
+      (result) =>
+        result.status === "fulfilled" &&
+        result.value.target.entity === "leias",
+    );
+
+    return leiaAvatarResult?.status === "fulfilled"
+      ? (leiaAvatarResult.value.entity as LeiaResource)
+      : null;
+  };
 
   const getPendingLabelId = (labelName: string) =>
     `${PENDING_LABEL_PREFIX}${labelName.trim().toLowerCase()}`;
@@ -1065,6 +1114,7 @@ const openGenerateProblemModal = () => {
         },
         spec: {} as Record<string, any>,
       };
+      const avatarGenerationTargets: AvatarGenerationTarget[] = [];
 
       for (const [key, value] of Object.entries(leiaConfig)) {
         if (value && value.edited) {
@@ -1076,6 +1126,9 @@ const openGenerateProblemModal = () => {
           delete newResource.user;
           delete newResource.metadata.version;
           delete newResource.isPublished;
+          if (key === "persona" || key === "problem") {
+            delete newResource.spec?.avatar;
+          }
           newResource.metadata.name =
             customizations[key as keyof LeiaConfig]?.name;
           try {
@@ -1098,6 +1151,16 @@ const openGenerateProblemModal = () => {
               newResource,
             );
             leia.spec[key] = response.data.id;
+            const createdResourceId = getResourceIdentifier(response.data);
+            if (
+              createdResourceId &&
+              (key === "persona" || key === "problem")
+            ) {
+              avatarGenerationTargets.push({
+                entity: `${key}s` as "personas" | "problems",
+                id: createdResourceId,
+              });
+            }
             leiaConfig[key as keyof LeiaConfig] = response.data;
             if (leiaConfigSnapShot) {
               leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
@@ -1118,10 +1181,22 @@ const openGenerateProblemModal = () => {
           currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
         const response = await api.post(`/api/v1/leias${publishParam}`, leia);
         console.log("LEIA created successfully:", response.data);
+        const createdLeiaId = getResourceIdentifier(response.data);
+        if (createdLeiaId) {
+          avatarGenerationTargets.push({
+            entity: "leias",
+            id: createdLeiaId,
+          });
+        }
+        const leiaWithGeneratedAvatar = await generateCreatedAvatars(
+          avatarGenerationTargets,
+        );
         setCreatedLeiaName(
           response.data?.metadata?.name || customizations.leia.name || "LEIA",
         );
-        setCreatedLeiaResource(response.data as LeiaResource);
+        setCreatedLeiaResource(
+          leiaWithGeneratedAvatar || (response.data as LeiaResource),
+        );
         setShowFinishModal(true);
       } catch (error) {
         console.error("Error creating LEIA:", error);
