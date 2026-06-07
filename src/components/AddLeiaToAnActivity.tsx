@@ -128,6 +128,26 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       setDraftActivities((prev) => [...(prev || []), response.data]);
       setSelectedDraftActivityId(response.data.id);
       return response.data.id;
+    } catch (error) {
+      const axiosError = error as {
+        response?: { status?: number; data?: { message?: string } };
+        message?: string;
+      };
+
+      if (axiosError.response?.status === 409) {
+        setActionError(
+          axiosError.response.data?.message ||
+            "An activity with that name already exists"
+        );
+        return null;
+      }
+
+      setActionError(
+        axiosError.response?.data?.message ||
+          axiosError.message ||
+          "Could not create activity"
+      );
+      return null;
     } finally {
       setCreatingNewActivity(false);
     }
@@ -146,7 +166,6 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       }
 
       if (!targetActivityId) {
-        setActionError("Select or create an activity first");
         return;
       }
 
