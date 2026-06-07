@@ -258,6 +258,7 @@ export const CreateLeia: React.FC = () => {
   // Modal cuando se pulsa Finish
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [createdLeiaName, setCreatedLeiaName] = useState("");
+  const [isFinishingLeia, setIsFinishingLeia] = useState(false);
 
   // Estados para opcionalmente añadir la LEIA a una Activity
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
@@ -1034,173 +1035,184 @@ const openGenerateProblemModal = () => {
 
   const handleNextStep = async () => {
     if (currentStep === 3 && isStep3Complete) {
-      const errors = {} as Record<string, string>;
-
-      for (const [key, value] of Object.entries(customizations)) {
-        if (value) {
-          if (!value.name?.trim()) {
-            errors[key] = "Name is required";
-            continue;
-          }
-
-          try {
-            const response = await api.get(
-              `/api/v1/${key}s/exists/${value.name}`,
-            );
-            if (response.data.exists) {
-              errors[key] = "Name already exists";
-            }
-          } catch {
-            errors[key] = "Failed to check name existence";
-          }
-        }
-      }
-
-      if (Object.keys(errors).length > 0) {
-        setValidationErrors(errors);
+      if (isFinishingLeia) {
         return;
       }
 
-      let finalLabelIds = [...selectedLabelIds];
-      if (pendingLabelDrafts.length > 0) {
-        try {
-          setCreatingLabel(true);
-          const createdLabels = await Promise.all(
-            pendingLabelDrafts.map(async (draft) => {
-              const response = await api.post<Label>("/api/v1/labels", {
-                name: draft.name,
-                color: draft.color,
-                secundaryColor: draft.secundaryColor,
-                isGlobal:
-                  currentUser?.role === "admin" ? draft.isGlobal : false,
-                user: currentUser?.id,
-              });
+      setIsFinishingLeia(true);
 
-              return {
-                pendingId: draft.id,
-                createdId: getLabelIdentifier(response.data),
-              };
-            }),
-          );
-
-          const pendingToCreated = new Map(
-            createdLabels
-              .filter((entry) => Boolean(entry.createdId))
-              .map((entry) => [entry.pendingId, entry.createdId as string]),
-          );
-
-          finalLabelIds = finalLabelIds
-            .map((labelId) => pendingToCreated.get(labelId) || labelId)
-            .filter(Boolean);
-
-          setSelectedLabelIds(finalLabelIds);
-          setPendingLabelDrafts([]);
-          await loadLabels();
-        } catch (error) {
-          console.error("Error creating label on finish:", error);
-          setError("Failed to create label");
-          return;
-        } finally {
-          setCreatingLabel(false);
-        }
-      }
-
-      const leia = {
-        apiVersion: "v1",
-        metadata: {
-          name: customizations.leia.name,
-          version: "1.0.0",
-          labels: finalLabelIds.length > 0 ? finalLabelIds : undefined,
-        },
-        spec: {} as Record<string, any>,
-      };
-      const avatarGenerationTargets: AvatarGenerationTarget[] = [];
-
-      for (const [key, value] of Object.entries(leiaConfig)) {
-        if (value && value.edited) {
-          const newResource = structuredClone(value) as any;
-          delete newResource.edited;
-          delete newResource.id;
-          delete newResource.createdAt;
-          delete newResource.updatedAt;
-          delete newResource.user;
-          delete newResource.metadata.version;
-          delete newResource.isPublished;
-          if (key === "persona" || key === "problem") {
-            delete newResource.spec?.avatar;
-          }
-          newResource.metadata.name =
-            customizations[key as keyof LeiaConfig]?.name;
-          try {
-            // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
-            let publishParam = "";
-            if (currentUser?.role === "admin") {
-              const resourcePublishState = leiaPublish
-                ? leiaPublish
-                : key === "behaviour"
-                  ? behaviourPublish
-                  : key === "problem"
-                    ? problemPublish
-                    : key === "persona"
-                      ? personaPublish
-                      : false;
-              publishParam = `?publish=${resourcePublishState}`;
-            }
-            const response = await api.post(
-              `/api/v1/${key}s${publishParam}`,
-              newResource,
-            );
-            leia.spec[key] = response.data.id;
-            const createdResourceId = getResourceIdentifier(response.data);
-            if (
-              createdResourceId &&
-              (key === "persona" || key === "problem")
-            ) {
-              avatarGenerationTargets.push({
-                entity: `${key}s` as "personas" | "problems",
-                id: createdResourceId,
-              });
-            }
-            leiaConfig[key as keyof LeiaConfig] = response.data;
-            if (leiaConfigSnapShot) {
-              leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
-            }
-            delete customizations[key as keyof LeiaConfig];
-          } catch (error) {
-            console.error("Error creating resource:", error);
-            setError(`Failed to create ${key} resource`);
-            return;
-          }
-        } else {
-          leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
-        }
-      }
       try {
-        // Construir la URL con el query parameter publish
-        const publishParam =
-          currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
-        const response = await api.post(`/api/v1/leias${publishParam}`, leia);
-        console.log("LEIA created successfully:", response.data);
-        const createdLeiaId = getResourceIdentifier(response.data);
-        if (createdLeiaId) {
-          avatarGenerationTargets.push({
-            entity: "leias",
-            id: createdLeiaId,
-          });
+        const errors = {} as Record<string, string>;
+
+        for (const [key, value] of Object.entries(customizations)) {
+          if (value) {
+            if (!value.name?.trim()) {
+              errors[key] = "Name is required";
+              continue;
+            }
+
+            try {
+              const response = await api.get(
+                `/api/v1/${key}s/exists/${value.name}`,
+              );
+              if (response.data.exists) {
+                errors[key] = "Name already exists";
+              }
+            } catch {
+              errors[key] = "Failed to check name existence";
+            }
+          }
         }
-        const leiaWithGeneratedAvatar = await generateCreatedAvatars(
-          avatarGenerationTargets,
-        );
-        setCreatedLeiaName(
-          response.data?.metadata?.name || customizations.leia.name || "LEIA",
-        );
-        setCreatedLeiaResource(
-          leiaWithGeneratedAvatar || (response.data as LeiaResource),
-        );
-        setShowFinishModal(true);
-      } catch (error) {
-        console.error("Error creating LEIA:", error);
-        setError("Failed to create LEIA");
+
+        if (Object.keys(errors).length > 0) {
+          setValidationErrors(errors);
+          return;
+        }
+
+        let finalLabelIds = [...selectedLabelIds];
+        if (pendingLabelDrafts.length > 0) {
+          try {
+            setCreatingLabel(true);
+            const createdLabels = await Promise.all(
+              pendingLabelDrafts.map(async (draft) => {
+                const response = await api.post<Label>("/api/v1/labels", {
+                  name: draft.name,
+                  color: draft.color,
+                  secundaryColor: draft.secundaryColor,
+                  isGlobal:
+                    currentUser?.role === "admin" ? draft.isGlobal : false,
+                  user: currentUser?.id,
+                });
+
+                return {
+                  pendingId: draft.id,
+                  createdId: getLabelIdentifier(response.data),
+                };
+              }),
+            );
+
+            const pendingToCreated = new Map(
+              createdLabels
+                .filter((entry) => Boolean(entry.createdId))
+                .map((entry) => [entry.pendingId, entry.createdId as string]),
+            );
+
+            finalLabelIds = finalLabelIds
+              .map((labelId) => pendingToCreated.get(labelId) || labelId)
+              .filter(Boolean);
+
+            setSelectedLabelIds(finalLabelIds);
+            setPendingLabelDrafts([]);
+            await loadLabels();
+          } catch (error) {
+            console.error("Error creating label on finish:", error);
+            setError("Failed to create label");
+            return;
+          } finally {
+            setCreatingLabel(false);
+          }
+        }
+
+        const leia = {
+          apiVersion: "v1",
+          metadata: {
+            name: customizations.leia.name,
+            version: "1.0.0",
+            labels: finalLabelIds.length > 0 ? finalLabelIds : undefined,
+          },
+          spec: {} as Record<string, any>,
+        };
+        const avatarGenerationTargets: AvatarGenerationTarget[] = [];
+
+        for (const [key, value] of Object.entries(leiaConfig)) {
+          if (value && value.edited) {
+            const newResource = structuredClone(value) as any;
+            delete newResource.edited;
+            delete newResource.id;
+            delete newResource.createdAt;
+            delete newResource.updatedAt;
+            delete newResource.user;
+            delete newResource.metadata.version;
+            delete newResource.isPublished;
+            if (key === "persona" || key === "problem") {
+              delete newResource.spec?.avatar;
+            }
+            newResource.metadata.name =
+              customizations[key as keyof LeiaConfig]?.name;
+            try {
+              // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
+              let publishParam = "";
+              if (currentUser?.role === "admin") {
+                const resourcePublishState = leiaPublish
+                  ? leiaPublish
+                  : key === "behaviour"
+                    ? behaviourPublish
+                    : key === "problem"
+                      ? problemPublish
+                      : key === "persona"
+                        ? personaPublish
+                        : false;
+                publishParam = `?publish=${resourcePublishState}`;
+              }
+              const response = await api.post(
+                `/api/v1/${key}s${publishParam}`,
+                newResource,
+              );
+              leia.spec[key] = response.data.id;
+              const createdResourceId = getResourceIdentifier(response.data);
+              if (
+                createdResourceId &&
+                (key === "persona" || key === "problem")
+              ) {
+                avatarGenerationTargets.push({
+                  entity: `${key}s` as "personas" | "problems",
+                  id: createdResourceId,
+                });
+              }
+              leiaConfig[key as keyof LeiaConfig] = response.data;
+              if (leiaConfigSnapShot) {
+                leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
+              }
+              delete customizations[key as keyof LeiaConfig];
+            } catch (error) {
+              console.error("Error creating resource:", error);
+              setError(`Failed to create ${key} resource`);
+              return;
+            }
+          } else {
+            leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
+          }
+        }
+
+        try {
+          // Construir la URL con el query parameter publish
+          const publishParam =
+            currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
+          const response = await api.post(`/api/v1/leias${publishParam}`, leia);
+          console.log("LEIA created successfully:", response.data);
+          const createdLeiaId = getResourceIdentifier(response.data);
+          if (createdLeiaId) {
+            avatarGenerationTargets.push({
+              entity: "leias",
+              id: createdLeiaId,
+            });
+          }
+          const leiaWithGeneratedAvatar = await generateCreatedAvatars(
+            avatarGenerationTargets,
+          );
+          setCreatedLeiaName(
+            response.data?.metadata?.name || customizations.leia.name || "LEIA",
+          );
+          setCreatedLeiaResource(
+            leiaWithGeneratedAvatar || (response.data as LeiaResource),
+          );
+          setShowFinishModal(true);
+        } catch (error) {
+          console.error("Error creating LEIA:", error);
+          setError("Failed to create LEIA");
+        }
+      } finally {
+        setIsFinishingLeia(false);
       }
     }
     if (currentStep < 3) {
@@ -2946,20 +2958,50 @@ const openGenerateProblemModal = () => {
 
           <button
             onClick={handleNextStep}
+            aria-busy={currentStep === 3 && isFinishingLeia}
             disabled={
               (currentStep === 1 && !isStep1Complete) ||
               (currentStep === 2 && !isStep2Complete) ||
-              (currentStep === 3 && !isStep3Complete)
+              (currentStep === 3 && (!isStep3Complete || isFinishingLeia))
             }
-            className={`px-6 py-2 rounded-lg transition-colors ${
+            className={`px-6 py-2 rounded-lg transition-colors inline-flex items-center justify-center gap-2 min-w-[96px] ${
               (currentStep === 1 && !isStep1Complete) ||
               (currentStep === 2 && !isStep2Complete) ||
-              (currentStep === 3 && !isStep3Complete)
+              (currentStep === 3 && (!isStep3Complete || isFinishingLeia))
                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
-            {currentStep === 3 ? "Finish" : "Next"}
+            {currentStep === 3 && isFinishingLeia ? (
+              <>
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  />
+                </svg>
+                Finish
+              </>
+            ) : currentStep === 3 ? (
+              "Finish"
+            ) : (
+              "Next"
+            )}
           </button>
         </div>
       </div>
