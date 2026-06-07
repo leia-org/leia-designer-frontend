@@ -20,6 +20,8 @@ const CHAT_SAVE_STATE_KEY = "designerChatSaveState";
 const EDIT_STATE_KEY = "designerEditState";
 
 interface NavigationState {
+  problem?: unknown;
+  leia?: unknown;
   preset?: {
     persona?: unknown;
     problem?: unknown;
@@ -101,13 +103,24 @@ function extractWidgetsFromState(
   navState: NavigationState | null,
 ): ProblemWidget[] | undefined {
   const fromProblem = (p: unknown): ProblemWidget[] | undefined => {
-    const widgets = (p as { spec?: { widgets?: ProblemWidget[] } } | null | undefined)
-      ?.spec?.widgets;
+    const problem = p as
+      | { spec?: { widgets?: ProblemWidget[] }; widgets?: ProblemWidget[] }
+      | null
+      | undefined;
+    const widgets = problem?.spec?.widgets ?? problem?.widgets;
     return Array.isArray(widgets) && widgets.length > 0 ? widgets : undefined;
   };
+  const fromLeia = (leia: unknown): ProblemWidget[] | undefined =>
+    fromProblem(
+      (leia as { spec?: { problem?: unknown } } | null | undefined)?.spec
+        ?.problem,
+    );
   return (
+    fromProblem(navState?.problem) ??
+    fromLeia(navState?.leia) ??
     fromProblem(navState?.save?.leiaConfig?.problem) ??
-    fromProblem(navState?.preset?.problem)
+    fromProblem(navState?.preset?.problem) ??
+    fromLeia(navState?.experimentTranscription?.leiaConfig?.leia)
   );
 }
 

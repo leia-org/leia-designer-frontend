@@ -3,6 +3,7 @@ import type { FC, ComponentType } from "react";
 import { Editor } from "@monaco-editor/react";
 import { CodeEditorWidget } from "./CodeEditorWidget";
 import type { SlotId, WidgetDefinition } from "./types";
+import type { EditorLanguage } from "./codeEditor/types";
 import type { ProblemWidget } from "../models/Leia";
 
 // Designer-side widget catalog. Mirrors the workbench widget catalog
@@ -55,18 +56,21 @@ export interface DesignerWidgetEntry {
 interface CodeEditorParams {
   fnName: string;
   description: string;
-  starter: { javascript: string; python: string };
+  language: EditorLanguage;
+  starter: { javascript: string; python: string; text?: string };
   tests: Array<{ name: string; args: unknown[]; expected: unknown }>;
 }
 
 const CODE_EDITOR_DEFAULT: CodeEditorParams = {
   fnName: "twoSum",
+  language: "javascript",
   description:
     "Given an array of integers `nums` and an integer `target`, return the indices of the two numbers that add up to `target`.",
   starter: {
     javascript:
       "function twoSum(nums, target) {\n    // your code here\n    return [];\n}\n",
     python: "def twoSum(nums, target):\n    # your code here\n    return []\n",
+    text: "",
   },
   tests: [
     { name: "[2,7,11,15], target=9", args: [[2, 7, 11, 15], 9], expected: [0, 1] },
@@ -79,12 +83,16 @@ function asCodeEditorParams(value: Record<string, unknown> | undefined): CodeEdi
   const def = CODE_EDITOR_DEFAULT;
   if (!value) return def;
   const v = value as Partial<CodeEditorParams>;
+  const language: EditorLanguage =
+    v.language === "python" || v.language === "text" ? v.language : "javascript";
   return {
     fnName: typeof v.fnName === "string" ? v.fnName : def.fnName,
     description: typeof v.description === "string" ? v.description : def.description,
+    language,
     starter: {
       javascript: v.starter?.javascript ?? def.starter.javascript,
       python: v.starter?.python ?? def.starter.python,
+      text: v.starter?.text ?? def.starter.text ?? "",
     },
     tests: Array.isArray(v.tests) ? v.tests : def.tests,
   };
@@ -117,21 +125,44 @@ const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) =>
     });
   };
 
+  const isText = params.language === "text";
+  const monacoLang = isText ? "plaintext" : params.language;
+
   return (
     <div className="mt-2 space-y-3">
       <div>
-        <label className="block text-xs font-medium text-gray-700">Function name</label>
-        <input
-          type="text"
-          value={params.fnName}
-          onChange={(e) => update({ fnName: e.target.value })}
-          className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-sm font-mono"
-          placeholder="twoSum"
-        />
+        <label className="block text-xs font-medium text-gray-700">Language</label>
+        <select
+          value={params.language}
+          onChange={(e) => update({ language: e.target.value as EditorLanguage })}
+          className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-sm"
+        >
+          <option value="javascript">JavaScript</option>
+          <option value="python">Python</option>
+          <option value="text">Plain text</option>
+        </select>
+        <p className="mt-1 text-[11px] text-gray-500">
+          The student works in this language and cannot change it. Plain text has no tests/execution.
+        </p>
       </div>
 
+      {!isText && (
+        <div>
+          <label className="block text-xs font-medium text-gray-700">Function name</label>
+          <input
+            type="text"
+            value={params.fnName}
+            onChange={(e) => update({ fnName: e.target.value })}
+            className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-sm font-mono"
+            placeholder="twoSum"
+          />
+        </div>
+      )}
+
       <div>
-        <label className="block text-xs font-medium text-gray-700">Problem description</label>
+        <label className="block text-xs font-medium text-gray-700">
+          {isText ? "Statement / instructions" : "Problem description"}
+        </label>
         <textarea
           value={params.description}
           onChange={(e) => update({ description: e.target.value })}
@@ -141,59 +172,50 @@ const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) =>
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-700">JavaScript starter</label>
-          <div className="mt-1 border border-gray-300 rounded overflow-hidden">
-            <Editor
-              height="120px"
-              defaultLanguage="javascript"
-              value={params.starter.javascript}
-              onChange={(v) => updateStarter("javascript", v ?? "")}
-              options={{ minimap: { enabled: false }, fontSize: 12, automaticLayout: true, scrollBeyondLastLine: false }}
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700">Python starter</label>
-          <div className="mt-1 border border-gray-300 rounded overflow-hidden">
-            <Editor
-              height="120px"
-              defaultLanguage="python"
-              value={params.starter.python}
-              onChange={(v) => updateStarter("python", v ?? "")}
-              options={{ minimap: { enabled: false }, fontSize: 12, automaticLayout: true, scrollBeyondLastLine: false }}
-            />
-          </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700">
+          {isText ? "Starter text" : "Starter code"}
+        </label>
+        <div className="mt-1 border border-gray-300 rounded overflow-hidden">
+          <Editor
+            height="120px"
+            language={monacoLang}
+            path={`starter.${params.language}`}
+            value={params.starter[params.language] ?? ""}
+            onChange={(v) => updateStarter(params.language, v ?? "")}
+            options={{ minimap: { enabled: false }, fontSize: 12, automaticLayout: true, scrollBeyondLastLine: false }}
+          />
         </div>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between">
-          <label className="block text-xs font-medium text-gray-700">Tests</label>
-          <button
-            type="button"
-            onClick={addTest}
-            className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-          >
-            + Add test
-          </button>
+      {!isText && (
+        <div>
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-medium text-gray-700">Tests</label>
+            <button
+              type="button"
+              onClick={addTest}
+              className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              + Add test
+            </button>
+          </div>
+          {params.tests.length === 0 ? (
+            <div className="text-xs text-gray-400 italic mt-2">No tests defined.</div>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {params.tests.map((t, i) => (
+                <TestRow
+                  key={i}
+                  test={t}
+                  onChange={(patch) => updateTest(i, patch)}
+                  onRemove={() => removeTest(i)}
+                />
+              ))}
+            </ul>
+          )}
         </div>
-        {params.tests.length === 0 ? (
-          <div className="text-xs text-gray-400 italic mt-2">No tests defined.</div>
-        ) : (
-          <ul className="mt-2 space-y-2">
-            {params.tests.map((t, i) => (
-              <TestRow
-                key={i}
-                test={t}
-                onChange={(patch) => updateTest(i, patch)}
-                onRemove={() => removeTest(i)}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+      )}
     </div>
   );
 };
@@ -321,9 +343,9 @@ const JsonParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) => {
 export const WIDGET_CATALOG: DesignerWidgetEntry[] = [
   {
     widgetType: "codeEditor",
-    label: "Code editor",
+    label: "Editor",
     description:
-      "Monaco code editor. LEIA can read, comment and rewrite code while the student works, and run the configured test suite.",
+      "Monaco editor (JavaScript, Python or plain text). LEIA can read, comment and rewrite the content while the student works, and run the configured test suite.",
     defaultParams: CODE_EDITOR_DEFAULT as unknown as Record<string, unknown>,
     tools: [
       { name: "codeEditor_read", label: "Read code", description: "Reads the current content of the editor." },

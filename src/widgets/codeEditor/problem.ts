@@ -5,6 +5,7 @@ import type { ProblemDef } from "./types";
 // this is only a safety net.
 export const DEFAULT_PROBLEM: ProblemDef = {
     fnName: "twoSum",
+    language: "javascript",
     description:
         "Given an array of integers `nums` and an integer `target`, return the indices of the two numbers that add up to `target`. Each input has exactly one solution, and you may not use the same element twice.",
     starter: {

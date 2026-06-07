@@ -483,6 +483,7 @@ export const LeiaSearch: React.FC = () => {
         navigate(`/chat/${sessionId}`, {
           state: {
             problemDescription: leia.spec?.problem?.spec?.description || "",
+            problem: leia.spec?.problem,
           },
         });
       } else {
