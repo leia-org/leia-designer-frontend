@@ -2,9 +2,15 @@ import type React from "react";
 import { useState, useEffect, lazy, Suspense, memo } from "react";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowPathIcon,
+  ChevronDownIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { Avatar } from "./shared/Avatar";
 import { buildOriginalAvatarPath } from "../lib/avatar";
+import api from "../lib/axios";
+import { toast } from "react-toastify";
 
 // Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
@@ -57,20 +63,126 @@ interface LeiaViewModalProps {
   onClose: () => void;
 }
 
+type AvatarRegenerationTarget = "leias" | "problems" | "personas";
+
 export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
   ({ leia, isOpen, onClose }) => {
     const [viewMode, setViewMode] = useState<
       "problem" | "persona" | "behaviour"
     >("problem");
+    const [displayLeia, setDisplayLeia] = useState<Leia | null>(leia);
+    const [isRegenerateMenuOpen, setIsRegenerateMenuOpen] = useState(false);
+    const [regeneratingTarget, setRegeneratingTarget] =
+      useState<AvatarRegenerationTarget | null>(null);
     const { user } = useAuth();
 
     useEffect(() => {
       if (leia?.id) {
         setViewMode("problem");
+        setDisplayLeia(leia);
+        setIsRegenerateMenuOpen(false);
       }
     }, [leia?.id]);
 
-    if (!isOpen || !leia) return null;
+    const getTargetId = (target: AvatarRegenerationTarget) => {
+      if (!displayLeia) return null;
+      if (target === "leias") return displayLeia.id;
+      if (target === "problems") return displayLeia.spec?.problem?.id;
+      return displayLeia.spec?.persona?.id;
+    };
+
+    const refreshAvatar = (avatar?: string) => {
+      if (!avatar) return "";
+      const separator = avatar.includes("?") ? "&" : "?";
+      return `${avatar}${separator}t=${Date.now()}`;
+    };
+
+    const handleRegenerateAvatar = async (
+      target: AvatarRegenerationTarget,
+    ) => {
+      const targetId = getTargetId(target);
+      if (!targetId) {
+        toast.error("Could not find the selected resource", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+        return;
+      }
+
+      setRegeneratingTarget(target);
+      setIsRegenerateMenuOpen(false);
+
+      try {
+        const response = await api.post(
+          `/api/v1/avatars/${target}/${targetId}/generate`,
+        );
+        const avatar = refreshAvatar(response.data?.avatar);
+
+        setDisplayLeia((currentLeia) => {
+          if (!currentLeia || !avatar) return currentLeia;
+
+          if (target === "leias") {
+            return {
+              ...currentLeia,
+              spec: { ...currentLeia.spec, avatar },
+            };
+          }
+
+          if (target === "problems") {
+            return {
+              ...currentLeia,
+              spec: {
+                ...currentLeia.spec,
+                problem: {
+                  ...currentLeia.spec.problem,
+                  spec: {
+                    ...currentLeia.spec.problem.spec,
+                    avatar,
+                  },
+                },
+              },
+            };
+          }
+
+          return {
+            ...currentLeia,
+            spec: {
+              ...currentLeia.spec,
+              persona: {
+                ...currentLeia.spec.persona,
+                spec: {
+                  ...currentLeia.spec.persona.spec,
+                  avatar,
+                },
+              },
+            },
+          };
+        });
+
+        toast.success("Image regenerated successfully", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+      } catch (error) {
+        let errorMessage = "Could not regenerate the image";
+
+        if (error && typeof error === "object" && "response" in error) {
+          const axiosError = error as {
+            response?: { data?: { message?: string } };
+          };
+          errorMessage = axiosError.response?.data?.message || errorMessage;
+        }
+
+        toast.error(errorMessage, {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+      } finally {
+        setRegeneratingTarget(null);
+      }
+    };
+
+    if (!isOpen || !displayLeia) return null;
 
     return (
       <div
@@ -85,16 +197,55 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
           <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                {leia.metadata?.name || `LEIA ${leia.id}`}
+                {displayLeia.metadata?.name || `LEIA ${displayLeia.id}`}
               </h2>
               <p className="text-sm text-gray-500 mt-1">View LEIA content</p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <XMarkIcon className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-2">
+              {user?.role === "admin" && (
+                <div className="relative">
+                  <button
+                    onClick={() =>
+                      setIsRegenerateMenuOpen((isOpen) => !isOpen)
+                    }
+                    disabled={regeneratingTarget !== null}
+                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ArrowPathIcon
+                      className={`h-4 w-4 ${
+                        regeneratingTarget ? "animate-spin" : ""
+                      }`}
+                    />
+                    Regenerate image
+                    <ChevronDownIcon className="h-4 w-4" />
+                  </button>
+
+                  {isRegenerateMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white shadow-lg z-10 overflow-hidden">
+                      {[
+                        { label: "LEIA", target: "leias" as const },
+                        { label: "Problem", target: "problems" as const },
+                        { label: "Persona", target: "personas" as const },
+                      ].map((option) => (
+                        <button
+                          key={option.target}
+                          onClick={() => handleRegenerateAvatar(option.target)}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
           <div className="flex border-b border-gray-200 flex-shrink-0">
@@ -137,21 +288,23 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Avatar
-                    src={leia.spec?.problem?.spec?.avatar}
+                    src={displayLeia.spec?.problem?.spec?.avatar}
                     fallbackSrc={buildOriginalAvatarPath(
                       "problems",
-                      leia.spec?.problem?.id,
+                      displayLeia.spec?.problem?.id,
                     )}
-                    alt={`${leia.spec?.problem?.metadata?.name || "Problem"} avatar`}
-                    label={leia.spec?.problem?.metadata?.name || "Problem"}
+                    alt={`${displayLeia.spec?.problem?.metadata?.name || "Problem"} avatar`}
+                    label={
+                      displayLeia.spec?.problem?.metadata?.name || "Problem"
+                    }
                     size="lg"
                   />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">
-                      {leia.spec?.problem?.metadata?.name || "Problem"}
+                      {displayLeia.spec?.problem?.metadata?.name || "Problem"}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      v{leia.spec?.problem?.metadata?.version || "N/A"}
+                      v{displayLeia.spec?.problem?.metadata?.version || "N/A"}
                     </p>
                   </div>
                 </div>
@@ -161,24 +314,24 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                   </h3>
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <p className="text-gray-700 leading-relaxed">
-                      {leia.spec?.problem?.spec?.description ||
+                      {displayLeia.spec?.problem?.spec?.description ||
                         "No description available"}
                     </p>
                   </div>
                 </div>
-                {leia.spec?.problem?.spec?.details && (
+                {displayLeia.spec?.problem?.spec?.details && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Details
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {leia.spec.problem.spec.details}
+                        {displayLeia.spec.problem.spec.details}
                       </p>
                     </div>
                   </div>
                 )}
-                {leia.spec?.problem?.spec?.solution && (
+                {displayLeia.spec?.problem?.spec?.solution && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Solution
@@ -195,14 +348,14 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         }
                       >
                         <LazyCodeBlock
-                          code={leia.spec.problem.spec.solution}
-                          language={leia.spec.problem.spec.solutionFormat}
+                          code={displayLeia.spec.problem.spec.solution}
+                          language={displayLeia.spec.problem.spec.solutionFormat}
                         />
                       </Suspense>
                     </div>
                   </div>
                 )}{" "}
-                {leia.spec?.problem?.spec?.initialSolution && (
+                {displayLeia.spec?.problem?.spec?.initialSolution && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Initial Solution
@@ -219,37 +372,39 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         }
                       >
                         <LazyCodeBlock
-                          code={leia.spec.problem.spec.initialSolution}
-                          language={leia.spec.problem.spec.solutionFormat}
+                          code={displayLeia.spec.problem.spec.initialSolution}
+                          language={displayLeia.spec.problem.spec.solutionFormat}
                         />
                       </Suspense>
                     </div>
                   </div>
                 )}{" "}
-                {leia.spec?.problem?.spec?.evaluationPrompt && (
+                {displayLeia.spec?.problem?.spec?.evaluationPrompt && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Evaluation Prompt
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {leia.spec.problem.spec.evaluationPrompt}
+                        {displayLeia.spec.problem.spec.evaluationPrompt}
                       </p>
                     </div>
                   </div>
                 )}
-                {leia.spec?.problem?.spec?.process && (
+                {displayLeia.spec?.problem?.spec?.process && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Process
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <ol className="list-decimal list-inside space-y-1">
-                        {leia.spec.problem.spec.process.map((step, index) => (
-                          <li key={index} className="text-gray-700">
-                            {step}
-                          </li>
-                        ))}
+                        {displayLeia.spec.problem.spec.process.map(
+                          (step, index) => (
+                            <li key={index} className="text-gray-700">
+                              {step}
+                            </li>
+                          ),
+                        )}
                       </ol>
                     </div>
                   </div>
@@ -261,23 +416,25 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Avatar
-                    src={leia.spec?.persona?.spec?.avatar}
+                    src={displayLeia.spec?.persona?.spec?.avatar}
                     fallbackSrc={buildOriginalAvatarPath(
                       "personas",
-                      leia.spec?.persona?.id,
+                      displayLeia.spec?.persona?.id,
                     )}
-                    alt={`${leia.spec?.persona?.spec?.fullName || "Persona"} avatar`}
-                    label={leia.spec?.persona?.spec?.fullName || "Persona"}
+                    alt={`${displayLeia.spec?.persona?.spec?.fullName || "Persona"} avatar`}
+                    label={
+                      displayLeia.spec?.persona?.spec?.fullName || "Persona"
+                    }
                     size="lg"
                   />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">
-                      {leia.spec?.persona?.spec?.fullName ||
-                        leia.spec?.persona?.metadata?.name ||
+                      {displayLeia.spec?.persona?.spec?.fullName ||
+                        displayLeia.spec?.persona?.metadata?.name ||
                         "Persona"}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      v{leia.spec?.persona?.metadata?.version || "N/A"}
+                      v{displayLeia.spec?.persona?.metadata?.version || "N/A"}
                     </p>
                   </div>
                 </div>
@@ -291,7 +448,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         Full Name:
                       </span>
                       <p className="text-gray-900">
-                        {leia.spec?.persona?.spec?.fullName || "N/A"}
+                        {displayLeia.spec?.persona?.spec?.fullName || "N/A"}
                       </p>
                     </div>
                     <div>
@@ -299,33 +456,33 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         First Name:
                       </span>
                       <p className="text-gray-900">
-                        {leia.spec?.persona?.spec?.firstName || "N/A"}
+                        {displayLeia.spec?.persona?.spec?.firstName || "N/A"}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {leia.spec?.persona?.spec?.description && (
+                {displayLeia.spec?.persona?.spec?.description && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Description
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-gray-700 leading-relaxed">
-                        {leia.spec.persona.spec.description}
+                        {displayLeia.spec.persona.spec.description}
                       </p>
                     </div>
                   </div>
                 )}
 
-                {leia.spec?.persona?.spec?.personality && (
+                {displayLeia.spec?.persona?.spec?.personality && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Personality
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {leia.spec.persona.spec.personality}
+                        {displayLeia.spec.persona.spec.personality}
                       </p>
                     </div>
                   </div>
@@ -341,13 +498,15 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         Subject:
                       </span>
                       <span className="ml-2 text-gray-900">
-                        {leia.spec?.persona?.spec?.subjectPronoum || "N/A"}
+                        {displayLeia.spec?.persona?.spec?.subjectPronoum ||
+                          "N/A"}
                       </span>
                     </div>
                     <div>
                       <span className="font-medium text-gray-600">Object:</span>
                       <span className="ml-2 text-gray-900">
-                        {leia.spec?.persona?.spec?.objectPronoum || "N/A"}
+                        {displayLeia.spec?.persona?.spec?.objectPronoum ||
+                          "N/A"}
                       </span>
                     </div>
                     <div>
@@ -355,7 +514,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         Possessive:
                       </span>
                       <span className="ml-2 text-gray-900">
-                        {leia.spec?.persona?.spec?.possesivePronoum || "N/A"}
+                        {displayLeia.spec?.persona?.spec?.possesivePronoum ||
+                          "N/A"}
                       </span>
                     </div>
                     <div>
@@ -363,7 +523,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         Possessive Adj:
                       </span>
                       <span className="ml-2 text-gray-900">
-                        {leia.spec?.persona?.spec?.possesiveAdjective || "N/A"}
+                        {displayLeia.spec?.persona?.spec?.possesiveAdjective ||
+                          "N/A"}
                       </span>
                     </div>
                   </div>
@@ -379,48 +540,50 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                   </h3>
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <p className="text-gray-700 leading-relaxed">
-                      {leia.spec?.behaviour?.spec?.description ||
+                      {displayLeia.spec?.behaviour?.spec?.description ||
                         "No description available"}
                     </p>
                   </div>
                 </div>
 
-                {leia.spec?.behaviour?.spec?.role && (
+                {displayLeia.spec?.behaviour?.spec?.role && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Role
                     </h4>
                     <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">
-                      {leia.spec.behaviour.spec.role}
+                      {displayLeia.spec.behaviour.spec.role}
                     </p>
                   </div>
                 )}
 
-                {leia.spec?.behaviour?.spec?.process && (
+                {displayLeia.spec?.behaviour?.spec?.process && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Process
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <ol className="list-decimal list-inside space-y-2">
-                        {leia.spec.behaviour.spec.process.map((step, index) => (
-                          <li key={index} className="text-gray-700">
-                            {step}
-                          </li>
-                        ))}
+                        {displayLeia.spec.behaviour.spec.process.map(
+                          (step, index) => (
+                            <li key={index} className="text-gray-700">
+                              {step}
+                            </li>
+                          ),
+                        )}
                       </ol>
                     </div>
                   </div>
                 )}
 
-                {leia.spec?.behaviour?.spec?.tooltip && (
+                {displayLeia.spec?.behaviour?.spec?.tooltip && (
                   <div>
                     <h4 className="text-md font-medium text-gray-900 mb-2">
                       Initial Tooltip
                     </h4>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {leia.spec.behaviour.spec.tooltip}
+                        {displayLeia.spec.behaviour.spec.tooltip}
                       </p>
                     </div>
                   </div>
