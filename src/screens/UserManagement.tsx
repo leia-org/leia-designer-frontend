@@ -40,7 +40,7 @@ export const UserManagement = () => {
     role: "instructor" as "admin" | "instructor" | "advanced",
     password: "",
     confirmPassword: "",
-    useSystemApiKey: false,
+    useSystemApiKey: true,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -276,7 +276,7 @@ export const UserManagement = () => {
         role: "instructor",
         password: "",
         confirmPassword: "",
-        useSystemApiKey: false,
+        useSystemApiKey: true,
       });
     }
     setFormErrors({});
