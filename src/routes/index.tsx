@@ -5,11 +5,13 @@ import { CreateLeia } from "../screens/CreateLeia";
 import { Chat } from "../screens/Chat";
 import { Edit } from "../screens/Edit";
 import { Login } from "../screens/Login";
+import { Register } from "../screens/Register";
 import { Profile } from "../screens/Profile";
 import { ForbiddenPage } from "../screens/ForbiddenPage";
 import { LeiaSearch } from "../screens/LeiaSearch";
 import { UserManagement } from "../screens/UserManagement";
 import { MyActivities } from "../screens/MyActivities";
+import { ApiKeysPage } from "../screens/ApiKeys";
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -46,7 +48,15 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 
   return <>{children}</>;
 };
+const AdvancedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoading, isAuthenticated } = useAuth();
 
+  if (isLoading) return <div>Loading...</div>;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!["admin", "advanced"].includes(user?.role ?? "")) return <ForbiddenPage />;
+
+  return <>{children}</>;
+};
 export const AppRoutes = () => {
   return (
     <Routes>
@@ -75,6 +85,7 @@ export const AppRoutes = () => {
         }
       />
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route
         path="/profile"
         element={
@@ -88,6 +99,14 @@ export const AppRoutes = () => {
         element={
           <AuthenticatedRoute>
             <CreateLeia />
+          </AuthenticatedRoute>
+        }
+      />
+      <Route
+        path="/api-keys"
+        element={
+          <AuthenticatedRoute>
+            <ApiKeysPage />
           </AuthenticatedRoute>
         }
       />
@@ -113,9 +132,9 @@ export const AppRoutes = () => {
       <Route
         path="/users/me/activities"
         element={
-          <AdminRoute>
+          <AdvancedRoute>
             <MyActivities />
-          </AdminRoute>
+          </AdvancedRoute>
         }
       />
       <Route path="/forbidden" element={<ForbiddenPage />} />
