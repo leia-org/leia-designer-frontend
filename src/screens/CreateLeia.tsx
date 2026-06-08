@@ -95,9 +95,9 @@ interface NavigationState {
 
 type WizardStep = 1 | 2 | 3;
 
-const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Library management system";
 const DEFAULT_PROBLEM_GENERATION_DETAILS =
-  "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+  "Include catalog, loans, reservations, member accounts, and overdue notifications.";
 
 const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
 const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
@@ -3838,7 +3838,7 @@ const openGenerateProblemModal = () => {
                     type="text"
                     value={generateSubject}
                     onChange={(e) => setGenerateSubject(e.target.value)}
-                    placeholder="p. ej., Sistema de biblioteca"
+                    placeholder="e.g., Library management system"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
@@ -3850,7 +3850,7 @@ const openGenerateProblemModal = () => {
                   <textarea
                     value={generateDetails}
                     onChange={(e) => setGenerateDetails(e.target.value)}
-                    placeholder="p. ej., catálogo, préstamos, reservas, cuentas de socios y notificaciones de vencimiento."
+                    placeholder="e.g., catalog, loans, reservations, member accounts, and overdue notifications."
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
                   />
