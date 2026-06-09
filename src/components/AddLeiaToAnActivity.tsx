@@ -20,6 +20,7 @@ interface AddLeiaToAnActivityProps {
   selectedLeia: Leia | null;
   onClose: () => void;
   onSuccess?: () => void;
+  idModal?: string; // Para tour
 }
 
 export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
@@ -27,6 +28,7 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
   selectedLeia,
   onClose,
   onSuccess,
+  idModal,
 }) => {
   const [draftActivities, setDraftActivities] = useState<Activity[] | null>(
     null,
@@ -126,6 +128,26 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       setDraftActivities((prev) => [...(prev || []), response.data]);
       setSelectedDraftActivityId(response.data.id);
       return response.data.id;
+    } catch (error) {
+      const axiosError = error as {
+        response?: { status?: number; data?: { message?: string } };
+        message?: string;
+      };
+
+      if (axiosError.response?.status === 409) {
+        setActionError(
+          axiosError.response.data?.message ||
+            "An activity with that name already exists"
+        );
+        return null;
+      }
+
+      setActionError(
+        axiosError.response?.data?.message ||
+          axiosError.message ||
+          "Could not create activity"
+      );
+      return null;
     } finally {
       setCreatingNewActivity(false);
     }
@@ -144,7 +166,6 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       }
 
       if (!targetActivityId) {
-        setActionError("Select or create an activity first");
         return;
       }
 
@@ -177,7 +198,7 @@ export const AddLeiaToAnActivity: React.FC<AddLeiaToAnActivityProps> = ({
       }}
     >
       <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4">
-        <div className="p-6" onClick={(e) => e.stopPropagation()}>
+        <div id={idModal} className="p-6" onClick={(e) => e.stopPropagation()}>
           <h2 className="text-xl font-semibold mb-4">
             Add {selectedLeia?.metadata.name || ""} LEIA to an Activity
           </h2>

@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   SwatchIcon,
   LightBulbIcon,
   PuzzlePieceIcon,
   EyeIcon,
   TrashIcon,
+  BookOpenIcon,
+  PlayIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { useApiKeys } from "../hooks/useApiKeys";
@@ -22,11 +24,15 @@ import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
 import { Avatar } from "../components/shared/Avatar";
 import { buildOriginalAvatarPath } from "../lib/avatar";
+import type { Experiment } from "../models/Experiment";
 
+import { driver } from "driver.js";
+import "driver.js/dist/driver.css";
 type VersionFilter = "" | "latest";
 
 export const LeiaSearch: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuth().user;
   const {
     apiKeys,
@@ -64,6 +70,8 @@ export const LeiaSearch: React.FC = () => {
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
+  const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
+  const [nameActivityReplication, setNameActivityReplication] = useState("");
   const [openLabelModalLeia, setOpenLabelModalLeia] = useState<Leia | null>(null);
   const [tryMenuOpenId, setTryMenuOpenId] = useState<string | null>(null);
   const [tryConfigByLeia, setTryConfigByLeia] = useState<
@@ -86,6 +94,10 @@ export const LeiaSearch: React.FC = () => {
     message: string;
     data?: Array<{ id: string; name: string }>;
   } | null>(null);
+
+  const tourRef = useRef<ReturnType<typeof driver> | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+
 
   useEffect(() => {
     let active = true;
@@ -127,16 +139,16 @@ export const LeiaSearch: React.FC = () => {
     };
     fetchLabels();
   }, []);
-  const handlePersonalize = async (leia: Leia) => {
+  const handlePersonalize = useCallback(async (leia: Leia, fromTour: boolean) => {
     try {
       const [personaResp, problemResp, behaviourResp] = await Promise.all([
         api.get<Persona>(`/api/v1/personas/${leia.spec.persona.id}`),
         api.get<Problem>(`/api/v1/problems/${leia.spec.problem.id}`),
         api.get<Behaviour>(`/api/v1/behaviours/${leia.spec.behaviour.id}`),
       ]);
-
       navigate("/create", {
         state: {
+          startTourFromSearch : fromTour,
           preset: {
             persona: personaResp.data,
             problem: problemResp.data,
@@ -147,8 +159,219 @@ export const LeiaSearch: React.FC = () => {
     } catch {
       setError("Could not load preset data");
     }
-  };
+  }, [navigate]);
+    const startGuidedTour = useCallback((startStep: number = 0) => {
+    let tour: ReturnType<typeof driver> | null = null;
+    tourRef.current?.destroy();
+    type StepWithRoles = Parameters<ReturnType<typeof driver>["setSteps"]>[0][number] & {
+    roles?: string[];
+    };
+    const allSteps: StepWithRoles[] = [
+            {
+          element: "#search-results",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "Here is the list of LEIAs you can use.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#first-leia",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "Let's get into this first LEIA.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#first-design-from-this-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "You can create your own LEIA based on this one with this button.",
+            side: "bottom",
+            onNextClick: () => {
+            tour?.destroy();
+            const firstLeia = leias[1];
+            if (firstLeia){
+            handlePersonalize(firstLeia, true);
+            }
+          },
+        },
+      },
+      {
+          element: "#first-leia",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Leias",
+            description:
+              "Let's continue",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#view-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "View",
+            description:
+              "Another look at the LEIA content can be done with this button.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#try-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Try",
+            description:
+              "You can also try your LEIA using this button.",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#activity-button",
+          roles: ["admin", "advanced"],
+          popover: {
+            title: "Activity",
+            description:
+              "In order to continue with the Design process, you'll have to add the LEIA to an Activity",
+            side: "bottom",
+            onNextClick: () => {
+            setShowExperimentsModal(true);
+            window.setTimeout(() => {
+            tourRef.current?.moveNext();
+          }, 100);
+          },
+        },
+      },
+        {
+          element: "#activity-modal",
+          roles: ["admin", "advanced"],
+          popover: {
+            title: "Activity",
+            description:
+              "You can add the LEIA to an already created activity or into a new one",
+            side: "bottom",
+            onNextClick: () => {
+            setShowExperimentsModal(false);
+            window.setTimeout(() => {
+            tourRef.current?.moveNext();
+          }, 200);
+          },
+          },
+        },
+        {
+          element: "#navigation-menu",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "Menu",
+            description:
+              "Let's go to the main menu",
+            side: "bottom",
+        },
+        },
+        {
+          element: "#myApiKeys-button",
+          roles: ["admin", "advanced", "instructor"],
+          popover: {
+            title: "API Keys",
+            description:
+              "In this section you can configure your API Keys with the models you like",
+            side: "bottom",
+          },
+        },
+        {
+          element: "#myActivities-button",
+          roles: ["admin", "advanced"],
+          popover: {
+            title: "Activity",
+            description:
+              "In this section you can find all your activities",
+            side: "bottom",
+            onNextClick: () => {
+            tour?.destroy();
+            navigate("/users/me/activities", {
+              state: {
+                isTour: true,
+              },
+            });
+            },
+          },
+        },
+        {
+          roles: ["instructor"],
+          popover: {
+            title: "End of tour",
+            description:
+              "This is the end of the tour. Now you know everything you need to know to start using LEIA.",
+            side: "bottom",
+          },
+        }
+          ];
+      const filteredSteps = allSteps.filter(
+      ({ roles }) => !roles || roles.includes(user?.role ?? "")
+      );
+    tour = driver({
+          animate: true,
+          smoothScroll: true,
+          allowClose: true,
+          showProgress: true,
+          progressText: "Paso {{current}} de {{total}}",
+          steps: filteredSteps,
+          onNextClick: (_element, _step, options) => {
+          const activeIndex = options.driver.getActiveIndex();
 
+          if (activeIndex === 8 && (user?.role === "advanced" || user?.role === "admin")) {
+            setShowDropdown(true);
+            window.setTimeout(() => {
+              options.driver.moveNext();
+            }, 300);
+            return;
+          }
+          if (activeIndex === 6 && user?.role === "instructor") {
+            setShowDropdown(true);
+            window.setTimeout(() => {
+              options.driver.moveNext();
+            }, 300);
+            return;
+          }
+          options.driver.moveNext();
+        },
+          
+        onDestroyed: () => {
+          setShowDropdown(false);
+        if (tourRef.current === tour) {
+          tourRef.current = null;
+        }
+      }
+      });
+        tourRef.current = tour;
+        tour.drive(startStep);
+        if (tour.getActiveIndex() === 7) {
+          setShowDropdown(true);
+        }
+        
+
+  }, [handlePersonalize, leias, navigate, user?.role]);
+
+    useEffect(() => {
+      const navigationState = location.state;
+      if (!navigationState) return;
+      if (navigationState.continueTour) {
+        startGuidedTour(navigationState.continueTour);
+        try {
+        navigate(location.pathname, { replace: true, state: undefined });
+      } catch (e) {
+        console.error("Error clearing navigation state after starting tour:", e);}
+    }
+    }, [location.pathname, location.state, navigate, startGuidedTour]);
+    
   const getValidModels = useCallback(
     (apiKeyId: string | null | undefined) => {
       const models = Object.values(apiKeyProvidersMapped || {}).flat();
@@ -317,6 +540,108 @@ export const LeiaSearch: React.FC = () => {
     setDeleteError(null);
   }, []);
 
+
+  const handleQuickReplication = useCallback(async (leia: Leia) => {
+    try {
+      const encodedLeiaName = encodeURIComponent(leia.metadata.name);
+      const activityExists = await api.get(`api/v1/experiments/exists/${encodedLeiaName}`);
+      const replicationExists = await api.get(`api/v1/workbench/replications/exists/${encodedLeiaName}`);
+      if (!activityExists.data.exists && !replicationExists.data.exists) {
+        const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
+        leiaId: leia.id,
+        leiaName: leia.metadata.name,
+      });
+
+      const replication = await api.post(
+        `/api/v1/workbench/replications`,
+        {
+          name: leia.metadata.name.trim(),
+          experiment: activity.id,
+        }
+      );
+      toast.success("LEIA replicated successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      const workbenchBaseUrl =
+      import.meta.env.VITE_WORKBENCH_URL;
+      const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/replications/${encodeURIComponent(replication.data.id)}`;
+      const newWindow = window.open(replicationUrl);
+      if (!newWindow) {
+        toast.error("Popup blocked or could not open replication", {
+          position: "bottom-right",
+          autoClose: 2000,
+          });
+    }      }
+      else {
+        setNameActivityReplication(leia.metadata.name+`-v2`);
+        setSelectedLeia(leia);
+        setShowActivityReplicationModal(true);
+        return null;
+      }
+      
+    } catch (error) {
+      console.error("Error quick replicating LEIA:", error);
+    }
+  }, []);
+
+  const closeActivityReplicationModal = useCallback(() => {
+    setShowActivityReplicationModal(false);
+    setSelectedLeia(null);
+    setNameActivityReplication("");
+  }, []);
+
+  const confirmActivityReplication = useCallback(async () => {
+    if (!selectedLeia) return;
+    try {
+      const encodedActivityName = encodeURIComponent(nameActivityReplication);
+      const activityExists = await api.get(`api/v1/experiments/exists/${encodedActivityName}`);
+      const replicationExists = await api.get(`api/v1/workbench/replications/exists/${encodedActivityName}`);
+      if (!activityExists.data.exists && !replicationExists.data.exists) {
+      const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
+        leiaId: selectedLeia.id,
+        leiaName: nameActivityReplication.trim(),
+      });
+
+      const replication = await api.post(
+        `/api/v1/workbench/replications`,
+        {
+          name: nameActivityReplication.trim(),
+          experiment: activity.id,
+        }
+      );
+      toast.success("LEIA replicated successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      closeActivityReplicationModal();
+      setNameActivityReplication("");
+      const workbenchBaseUrl =
+      import.meta.env.VITE_WORKBENCH_URL;
+      const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/replications/${encodeURIComponent(replication.data.id)}`;
+      const newWindow = window.open(replicationUrl);
+      if (!newWindow) {
+        toast.error("Popup blocked or could not open replication", {
+          position: "bottom-right",
+          autoClose: 2000,
+          });
+            }
+          } else {
+        toast.error("An activity or replication with that name already exists. Please choose a different name.", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+      }
+    } catch (error) {
+      console.error("Error replicating LEIA:", error);
+        toast.error("Error replicating LEIA. Please try again.", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+    }
+  }, [closeActivityReplicationModal, nameActivityReplication, selectedLeia]);
+
+
   const confirmDeleteLeia = async (leia: Leia) => {
     setIsDeleting(true);
     setDeleteError(null);
@@ -396,23 +721,39 @@ export const LeiaSearch: React.FC = () => {
   // Función para determinar si el usuario puede eliminar una LEIA
   const canDeleteLeia = useCallback(
     (leia: Leia) => {
-      return (
-        user &&
-        (user.role === "admin" || (leia.user && user.id === leia.user.id))
-      );
+      if (!user) return false;
+      if (user.role === "admin") return true;
+      
+      const leiaUserId = typeof leia.user === "object" ? leia.user?.id : leia.user;
+      return user.id === leiaUserId;
     },
     [user]
   );
 
+
   return (
     <div className="flex flex-col h-screen bg-white">
       <Header
+        dropdownTour={showDropdown}
         title="Search"
         description="Discover and test existing LEIA configurations"
+        leftContent={
+          <button
+            type="button"
+            onClick={() =>
+              startGuidedTour()
+            }
+            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+          >
+            <PlayIcon className="h-4 w-4" />
+            Design tour
+          </button>
+        }
       />
       <ToastContainer />
       <AddLeiaToAnActivity
         isOpen={showExperimentsModal}
+        idModal="activity-modal"
         selectedLeia={selectedLeia}
         onClose={handleCloseExperimentsModal}
         onSuccess={() => {
@@ -423,6 +764,52 @@ export const LeiaSearch: React.FC = () => {
           handleCloseExperimentsModal();
         }}
       />
+      {showActivityReplicationModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeActivityReplicationModal();
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+            <div className="p-6" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-xl font-semibold text-gray-900">
+                Replicate activity
+              </h2>
+
+              <label className="mt-5 block text-sm font-medium text-gray-700">
+                Activity and Replication name
+              </label>
+              <input
+                type="text"
+                value={nameActivityReplication}
+                onChange={(e) => setNameActivityReplication(e.target.value)}
+                placeholder="Activity replication name"
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                autoFocus
+              />
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeActivityReplicationModal}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmActivityReplication}
+                  disabled={!nameActivityReplication.trim()}
+                  className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  Replicate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
         <div className="flex items-end gap-4 mb-6">
           <div className="flex-1">
@@ -494,7 +881,7 @@ export const LeiaSearch: React.FC = () => {
 
       <div className="relative flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-6 mt-6 pb-6 w-full">
+          <div id="search-results" className="max-w-6xl mx-auto px-6 mt-6 pb-6 w-full">
             {error && (
               <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded">
                 {error}
@@ -508,8 +895,8 @@ export const LeiaSearch: React.FC = () => {
                 No LEIAs found
               </div>
             ) : (
-              <ul className="divide-y divide-gray-200 bg-white rounded-md border border-gray-200">
-                {leias.map((leia) => {
+              <ul  className="divide-y divide-gray-200 bg-white rounded-md border border-gray-200">
+                {leias.map((leia, index) => {
                   const description =
                     leia.spec?.problem?.spec?.description ||
                     leia.spec?.persona?.spec?.description ||
@@ -545,6 +932,7 @@ export const LeiaSearch: React.FC = () => {
                     <li
                       key={leia.id}
                       className="flex items-start justify-between gap-4 p-4"
+                      id = {index === 1 ? "first-leia" : undefined}
                     >
                       <Avatar
                         src={leiaAvatar}
@@ -587,7 +975,7 @@ export const LeiaSearch: React.FC = () => {
                               </span>
                               
                             ))}
-                            {user && (user.role === "admin" || (leia.user && user.id === leia.user.id)) && (
+                            {user && (user.role === "admin" || (user.id === (leia.user as unknown as string))) && (
                               <button className="px-1.5 py-0.5 text-xs rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600" onClick={(e) => {
                                     e.stopPropagation();
                                     setOpenLabelModalLeia(leia);
@@ -624,7 +1012,18 @@ export const LeiaSearch: React.FC = () => {
                       <div className="flex shrink-0 items-center gap-2">
                         <button
                           className="group relative px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-40"
-                          onClick={() => handlePersonalize(leia)}
+                          onClick={() => handlePersonalize(leia, false)}
+                          id = {index === 1 ? "first-design-from-this-button" : undefined}
+                          onMouseEnter={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
+                          onMouseLeave={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
                         >
                           <SwatchIcon className="w-4 h-4 flex-shrink-0" />
                           <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
@@ -632,9 +1031,20 @@ export const LeiaSearch: React.FC = () => {
                           </span>
                         </button>
                         <button
-                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-20"
+                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-20"
                           onClick={() => handleViewLeiaContent(leia)}
                           title="View LEIA content"
+                          id= "view-button"
+                          onMouseEnter={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
+                          onMouseLeave={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
                         >
                           <EyeIcon className="w-4 h-4 flex-shrink-0" />
                           <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
@@ -646,12 +1056,23 @@ export const LeiaSearch: React.FC = () => {
                             className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
                               initializingId === leia.id
                                 ? "w-30"
-                                : "w-10 hover:w-20"
+                                : "w-9 hover:w-20"
                             }`}
                             onClick={() => handleTryMenuToggle(leia.id)}
                             disabled={initializingId === leia.id}
                             aria-expanded={isTryMenuOpen}
                             aria-haspopup="dialog"
+                            id= "try-button"
+                            onMouseEnter={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
+                          onMouseLeave={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
                           >
                             <LightBulbIcon className="w-4 h-4 flex-shrink-0" />
                             <span
@@ -687,17 +1108,28 @@ export const LeiaSearch: React.FC = () => {
                             showNoMatchingKeys={showNoMatchingKeys}
                           />
                         </div>
-                        {user?.role === "admin" && (
+                        {(user?.role === "admin" || user?.role === "advanced") && (
                           <button
                             className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
                               selectedLeia?.id === leia.id
                                 ? "w-42"
-                                : "w-10 hover:w-38"
+                                : "w-9 hover:w-38"
                             }`}
                             onClick={() => {
                               setSelectedLeia(leia);
                               handleOpenExperimentsModal();
                             }}
+                            id= "activity-button"
+                            onMouseEnter={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
+                          onMouseLeave={() => {
+                            setTimeout(() => {
+                              tourRef.current?.refresh();
+                            }, 300);
+                          }}
                           >
                             <PuzzlePieceIcon className="w-4 h-4 flex-shrink-0" />
                             <span
@@ -713,9 +1145,18 @@ export const LeiaSearch: React.FC = () => {
                             </span>
                           </button>
                         )}
+                        {user?.role==="admin" && (<button
+                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-40"
+                          onClick={() => handleQuickReplication(leia)}
+                        >
+                          <BookOpenIcon className="w-4 h-4 flex-shrink-0" />
+                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                            Quick Replication
+                          </span>
+                        </button>)}
                         {canDeleteLeia(leia) && (
                           <button
-                            className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-22"
+                            className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-22"
                             onClick={() => handleDeleteLeia(leia)}
                             title="Delete LEIA"
                           >
