@@ -64,6 +64,10 @@ interface LeiaViewModalProps {
 }
 
 type AvatarRegenerationTarget = "leias" | "problems" | "personas";
+type InfographicRegenerationTarget = "infographic" | "infographicSolution";
+type RegenerationTarget =
+  | AvatarRegenerationTarget
+  | InfographicRegenerationTarget;
 type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
 
 const InfographicImage: React.FC<{
@@ -96,7 +100,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
     const [displayLeia, setDisplayLeia] = useState<Leia | null>(leia);
     const [isRegenerateMenuOpen, setIsRegenerateMenuOpen] = useState(false);
     const [regeneratingTarget, setRegeneratingTarget] =
-      useState<AvatarRegenerationTarget | null>(null);
+      useState<RegenerationTarget | null>(null);
     const { user } = useAuth();
 
     useEffect(() => {
@@ -120,6 +124,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
       return `${avatar}${separator}t=${Date.now()}`;
     };
 
+    const refreshStoredImage = refreshAvatar;
+
     const handleRegenerateAvatar = async (
       target: AvatarRegenerationTarget,
     ) => {
@@ -137,7 +143,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
 
       try {
         const response = await api.post(
-          `/api/v1/avatars/${target}/${targetId}/generate`,
+          `/api/v1/images/${target}/${targetId}/generate`,
         );
         const avatar = refreshAvatar(response.data?.avatar);
 
@@ -205,6 +211,64 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
       }
     };
 
+    const handleRegenerateInfographic = async (
+      target: InfographicRegenerationTarget,
+    ) => {
+      if (!displayLeia?.id) {
+        toast.error("Could not find the selected LEIA", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+        return;
+      }
+
+      const path =
+        target === "infographic" ? "infographic" : "infographic-solution";
+
+      setRegeneratingTarget(target);
+      setIsRegenerateMenuOpen(false);
+
+      try {
+        const response = await api.post(
+          `/api/v1/images/leias/${displayLeia.id}/${path}/generate`,
+        );
+        const image = refreshStoredImage(response.data?.[target]);
+
+        setDisplayLeia((currentLeia) => {
+          if (!currentLeia || !image) return currentLeia;
+
+          return {
+            ...currentLeia,
+            spec: {
+              ...currentLeia.spec,
+              [target]: image,
+            },
+          };
+        });
+
+        toast.success("Image regenerated successfully", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+      } catch (error) {
+        let errorMessage = "Could not regenerate the image";
+
+        if (error && typeof error === "object" && "response" in error) {
+          const axiosError = error as {
+            response?: { data?: { message?: string } };
+          };
+          errorMessage = axiosError.response?.data?.message || errorMessage;
+        }
+
+        toast.error(errorMessage, {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+      } finally {
+        setRegeneratingTarget(null);
+      }
+    };
+
     if (!isOpen || !displayLeia) return null;
 
     return (
@@ -239,12 +303,12 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         regeneratingTarget ? "animate-spin" : ""
                       }`}
                     />
-                    Regenerate image
+                    Regenerate
                     <ChevronDownIcon className="h-4 w-4" />
                   </button>
 
                   {isRegenerateMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white shadow-lg z-10 overflow-hidden">
+                    <div className="absolute right-0 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg z-10 overflow-hidden">
                       {[
                         { label: "LEIA", target: "leias" as const },
                         { label: "Problem", target: "problems" as const },
@@ -253,6 +317,27 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         <button
                           key={option.target}
                           onClick={() => handleRegenerateAvatar(option.target)}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                      <div className="border-t border-gray-100" />
+                      {[
+                        {
+                          label: "Infographic",
+                          target: "infographic" as const,
+                        },
+                        {
+                          label: "Infographic with solution",
+                          target: "infographicSolution" as const,
+                        },
+                      ].map((option) => (
+                        <button
+                          key={option.target}
+                          onClick={() =>
+                            handleRegenerateInfographic(option.target)
+                          }
                           className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                         >
                           {option.label}
@@ -312,7 +397,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                   : "text-gray-600 hover:text-gray-900"
               }`}
             >
-              Infografias
+              Infographics
             </button>
           </div>
 
@@ -628,7 +713,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
               <div className="space-y-4">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Infografias
+                    Infographics
                   </h3>
                   {!displayLeia.spec?.infographic &&
                     !displayLeia.spec?.infographicSolution && (
