@@ -8,7 +8,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "./shared/Avatar";
-import { buildOriginalAvatarPath } from "../lib/avatar";
+import { buildOriginalAvatarPath, resolveStoredImageSrc } from "../lib/avatar";
 import api from "../lib/axios";
 import { toast } from "react-toastify";
 
@@ -64,12 +64,35 @@ interface LeiaViewModalProps {
 }
 
 type AvatarRegenerationTarget = "leias" | "problems" | "personas";
+type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
+
+const InfographicImage: React.FC<{
+  title: string;
+  src?: string | null;
+}> = ({ title, src }) => {
+  const resolvedSrc = resolveStoredImageSrc(src);
+
+  if (!resolvedSrc) {
+    return null;
+  }
+
+  return (
+    <div>
+      <h4 className="text-md font-medium text-gray-900 mb-2">{title}</h4>
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+        <img
+          src={resolvedSrc}
+          alt={title}
+          className="w-full max-h-[520px] object-contain rounded-md bg-white"
+        />
+      </div>
+    </div>
+  );
+};
 
 export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
   ({ leia, isOpen, onClose }) => {
-    const [viewMode, setViewMode] = useState<
-      "problem" | "persona" | "behaviour"
-    >("problem");
+    const [viewMode, setViewMode] = useState<ViewMode>("problem");
     const [displayLeia, setDisplayLeia] = useState<Leia | null>(leia);
     const [isRegenerateMenuOpen, setIsRegenerateMenuOpen] = useState(false);
     const [regeneratingTarget, setRegeneratingTarget] =
@@ -281,6 +304,16 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                 Behaviour
               </button>
             )}
+            <button
+              onClick={() => setViewMode("infographics")}
+              className={`px-6 py-3 text-sm font-medium transition-colors ${
+                viewMode === "infographics"
+                  ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Infografias
+            </button>
           </div>
 
           <div className="flex-1 p-6 overflow-y-auto">
@@ -588,6 +621,32 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {viewMode === "infographics" && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Infografias
+                  </h3>
+                  {!displayLeia.spec?.infographic &&
+                    !displayLeia.spec?.infographicSolution && (
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <p className="text-gray-600">
+                          No infographics available for this LEIA.
+                        </p>
+                      </div>
+                    )}
+                </div>
+                <InfographicImage
+                  title="Infographic"
+                  src={displayLeia.spec?.infographic}
+                />
+                <InfographicImage
+                  title="Infographic with solution"
+                  src={displayLeia.spec?.infographicSolution}
+                />
               </div>
             )}
           </div>

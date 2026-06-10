@@ -97,6 +97,7 @@ interface NavigationState {
 
 type WizardStep = 1 | 2 | 3;
 type AvatarEntityPathSegment = "leias" | "personas" | "problems";
+type InfographicVariant = "infographic" | "infographicSolution";
 
 interface AvatarGenerationTarget {
   entity: AvatarEntityPathSegment;
@@ -325,6 +326,9 @@ export const CreateLeia: React.FC = () => {
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [createdLeiaName, setCreatedLeiaName] = useState("");
   const [isFinishingLeia, setIsFinishingLeia] = useState(false);
+  const [generateInfographic, setGenerateInfographic] = useState(false);
+  const [generateInfographicSolution, setGenerateInfographicSolution] =
+    useState(false);
 
   // Estados para opcionalmente añadir la LEIA a una Activity
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
@@ -677,7 +681,7 @@ export const CreateLeia: React.FC = () => {
     const avatarResults = await Promise.allSettled(
       uniqueTargets.map(async (target) => {
         const response = await api.post(
-          `/api/v1/avatars/${target.entity}/${target.id}/generate`,
+          `/api/v1/images/${target.entity}/${target.id}/generate`,
         );
         return { target, entity: response.data?.entity };
       }),
@@ -698,6 +702,32 @@ export const CreateLeia: React.FC = () => {
     return leiaAvatarResult?.status === "fulfilled"
       ? (leiaAvatarResult.value.entity as LeiaResource)
       : null;
+  };
+
+  const generateCreatedInfographics = async (
+    leiaId: string,
+    variants: InfographicVariant[],
+  ): Promise<LeiaResource | null> => {
+    let updatedLeia: LeiaResource | null = null;
+
+    for (const variant of variants) {
+      try {
+        const path =
+          variant === "infographic"
+            ? "infographic"
+            : "infographic-solution";
+        const response = await api.post(
+          `/api/v1/images/leias/${leiaId}/${path}/generate`,
+        );
+        if (response.data?.entity) {
+          updatedLeia = response.data.entity as LeiaResource;
+        }
+      } catch (error) {
+        console.error(`Error generating ${variant} after creation:`, error);
+      }
+    }
+
+    return updatedLeia;
   };
 
   const getPendingLabelId = (labelName: string) =>
@@ -1484,11 +1514,27 @@ const openGenerateProblemModal = () => {
           const leiaWithGeneratedAvatar = await generateCreatedAvatars(
             avatarGenerationTargets,
           );
+          const infographicVariants: InfographicVariant[] = [];
+          if (generateInfographic) {
+            infographicVariants.push("infographic");
+          }
+          if (generateInfographicSolution) {
+            infographicVariants.push("infographicSolution");
+          }
+          const leiaWithGeneratedInfographics =
+            createdLeiaId && infographicVariants.length > 0
+              ? await generateCreatedInfographics(
+                  createdLeiaId,
+                  infographicVariants,
+                )
+              : null;
           setCreatedLeiaName(
             response.data?.metadata?.name || customizations.leia.name || "LEIA",
           );
           setCreatedLeiaResource(
-            leiaWithGeneratedAvatar || (response.data as LeiaResource),
+            leiaWithGeneratedInfographics ||
+              leiaWithGeneratedAvatar ||
+              (response.data as LeiaResource),
           );
           setShowFinishModal(true);
         } catch (error) {
@@ -2745,6 +2791,48 @@ const openGenerateProblemModal = () => {
               </p>
             </div>
           )}
+
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-900 mb-3">
+              Infographics
+            </h3>
+            <div className="space-y-3">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={generateInfographic}
+                  onChange={(e) => setGenerateInfographic(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">
+                    Generate infographic
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Creates the student-facing infographic for this LEIA.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={generateInfographicSolution}
+                  onChange={(e) =>
+                    setGenerateInfographicSolution(e.target.checked)
+                  }
+                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">
+                    Generate infographic with solution
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Creates the instructor version including solution guidance.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
 
           {/* Alerta de recursos que se van a publicar */}
           {currentUser?.role === "admin" && leiaPublish && (

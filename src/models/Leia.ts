@@ -118,6 +118,8 @@ export interface Leia {
   },
   spec: {
     avatar?: string,
+    infographic?: string,
+    infographicSolution?: string,
     persona: {
       id: string,
       apiVersion: string,

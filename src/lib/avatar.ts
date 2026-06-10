@@ -17,7 +17,7 @@ export const buildOriginalAvatarPath = (
   return `/images/${entity}/${trimmedId}/avatar/original.webp`;
 };
 
-export const resolveAvatarSrc = (value?: string | null): string => {
+export const resolveStoredImageSrc = (value?: string | null): string => {
   const trimmedValue = typeof value === "string" ? value.trim() : "";
   if (!trimmedValue) return "";
 
@@ -26,7 +26,10 @@ export const resolveAvatarSrc = (value?: string | null): string => {
   }
 
   const normalizedValue = trimmedValue.replace(/^\/+/g, "");
-  if (!normalizedValue.startsWith("images/")) {
+  if (
+    !normalizedValue.startsWith("images/") &&
+    !normalizedValue.startsWith("leias/")
+  ) {
     return "";
   }
 
@@ -36,6 +39,9 @@ export const resolveAvatarSrc = (value?: string | null): string => {
 
   return `${avatarPublicBaseUrl}/${normalizedValue}`;
 };
+
+export const resolveAvatarSrc = (value?: string | null): string =>
+  resolveStoredImageSrc(value);
 
 export const buildAvatarCandidateSources = (
   primarySrc?: string | null,
