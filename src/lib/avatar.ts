@@ -26,10 +26,7 @@ export const resolveStoredImageSrc = (value?: string | null): string => {
   }
 
   const normalizedValue = trimmedValue.replace(/^\/+/g, "");
-  if (
-    !normalizedValue.startsWith("images/") &&
-    !normalizedValue.startsWith("leias/")
-  ) {
+  if (!normalizedValue.startsWith("images/")) {
     return "";
   }
 
