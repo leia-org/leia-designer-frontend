@@ -104,6 +104,15 @@ interface AvatarGenerationTarget {
   id: string;
 }
 
+interface IllustrationsConfig {
+  apiKeyId: string | null;
+  generateLeiaAvatar: boolean;
+  generatePersonaAvatar: boolean;
+  generateProblemAvatar: boolean;
+  generateInfographic: boolean;
+  generateInfographicSolution: boolean;
+}
+
 const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
 const DEFAULT_PROBLEM_GENERATION_DETAILS =
   "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
@@ -330,31 +339,98 @@ export const CreateLeia: React.FC = () => {
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [createdLeiaName, setCreatedLeiaName] = useState("");
   const [isFinishingLeia, setIsFinishingLeia] = useState(false);
-  const [generateInfographic, setGenerateInfographic] = useState(false);
-  const [generateInfographicSolution, setGenerateInfographicSolution] =
+  const [illustrationsConfig, setIllustrationsConfig] =
+    useState<IllustrationsConfig>({
+      apiKeyId: null,
+      generateLeiaAvatar: false,
+      generatePersonaAvatar: false,
+      generateProblemAvatar: false,
+      generateInfographic: false,
+      generateInfographicSolution: false,
+    });
+  const [hasChosenIllustrationApiKey, setHasChosenIllustrationApiKey] =
     useState(false);
-  const [imageApiKeyId, setImageApiKeyId] = useState<string | null>(null);
+  const previousIllustrationDefaultsRef = useRef<{
+    apiKeyId: string | null;
+    personaAvailable: boolean;
+    problemAvailable: boolean;
+  } | null>(null);
 
   useEffect(() => {
-    setImageApiKeyId((current) => {
-      if (current && geminiApiKeys.some((key) => key.id === current)) {
+    setIllustrationsConfig((current) => {
+      if (
+        current.apiKeyId &&
+        geminiApiKeys.some((key) => key.id === current.apiKeyId)
+      ) {
         return current;
+      }
+      if (hasChosenIllustrationApiKey) {
+        return { ...current, apiKeyId: null };
       }
 
       const defaultKey = getDefaultKey?.();
       if (defaultKey?.provider === "gemini") {
-        return defaultKey.id;
+        return { ...current, apiKeyId: defaultKey.id };
       }
 
-      return geminiApiKeys[0]?.id ?? null;
+      return { ...current, apiKeyId: geminiApiKeys[0]?.id ?? null };
     });
-  }, [geminiApiKeys, getDefaultKey]);
+  }, [geminiApiKeys, getDefaultKey, hasChosenIllustrationApiKey]);
 
   useEffect(() => {
-    if (imageApiKeyId) return;
-    setGenerateInfographic(false);
-    setGenerateInfographicSolution(false);
-  }, [imageApiKeyId]);
+    const apiKeyId = illustrationsConfig.apiKeyId;
+    const personaAvailable = Boolean(leiaConfig.persona?.edited);
+    const problemAvailable = Boolean(leiaConfig.problem?.edited);
+    const previous = previousIllustrationDefaultsRef.current;
+
+    setIllustrationsConfig((current) => {
+      let next = current;
+
+      if (!apiKeyId) {
+        next = {
+          ...current,
+          generateLeiaAvatar: false,
+          generatePersonaAvatar: false,
+          generateProblemAvatar: false,
+          generateInfographic: false,
+          generateInfographicSolution: false,
+        };
+      } else if (previous?.apiKeyId !== apiKeyId) {
+        next = {
+          ...current,
+          generateLeiaAvatar: true,
+          generatePersonaAvatar: personaAvailable,
+          generateProblemAvatar: problemAvailable,
+        };
+      } else {
+        next = {
+          ...current,
+          generatePersonaAvatar: personaAvailable
+            ? previous?.personaAvailable
+              ? current.generatePersonaAvatar
+              : true
+            : false,
+          generateProblemAvatar: problemAvailable
+            ? previous?.problemAvailable
+              ? current.generateProblemAvatar
+              : true
+            : false,
+        };
+      }
+
+      return next;
+    });
+
+    previousIllustrationDefaultsRef.current = {
+      apiKeyId,
+      personaAvailable,
+      problemAvailable,
+    };
+  }, [
+    illustrationsConfig.apiKeyId,
+    leiaConfig.persona?.edited,
+    leiaConfig.problem?.edited,
+  ]);
 
   // Estados para opcionalmente añadir la LEIA a una Activity
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
@@ -1486,10 +1562,21 @@ const openGenerateProblemModal = () => {
               const createdResourceId = getResourceIdentifier(response.data);
               if (
                 createdResourceId &&
-                (key === "persona" || key === "problem")
+                key === "persona" &&
+                illustrationsConfig.generatePersonaAvatar
               ) {
                 avatarGenerationTargets.push({
-                  entity: `${key}s` as "personas" | "problems",
+                  entity: "personas",
+                  id: createdResourceId,
+                });
+              }
+              if (
+                createdResourceId &&
+                key === "problem" &&
+                illustrationsConfig.generateProblemAvatar
+              ) {
+                avatarGenerationTargets.push({
+                  entity: "problems",
                   id: createdResourceId,
                 });
               }
@@ -1535,21 +1622,21 @@ const openGenerateProblemModal = () => {
           const response = await api.post(`/api/v1/leias${publishParam}`, leia);
           console.log("LEIA created successfully:", response.data);
           const createdLeiaId = getResourceIdentifier(response.data);
-          if (createdLeiaId) {
+          if (createdLeiaId && illustrationsConfig.generateLeiaAvatar) {
             avatarGenerationTargets.push({
               entity: "leias",
               id: createdLeiaId,
             });
           }
-          const imageKeyId = imageApiKeyId;
+          const imageKeyId = illustrationsConfig.apiKeyId;
           const leiaWithGeneratedAvatar = imageKeyId
             ? await generateCreatedAvatars(avatarGenerationTargets, imageKeyId)
             : null;
           const infographicVariants: InfographicVariant[] = [];
-          if (generateInfographic) {
+          if (illustrationsConfig.generateInfographic) {
             infographicVariants.push("infographic");
           }
-          if (generateInfographicSolution) {
+          if (illustrationsConfig.generateInfographicSolution) {
             infographicVariants.push("infographicSolution");
           }
           const leiaWithGeneratedInfographics =
@@ -2616,6 +2703,14 @@ const openGenerateProblemModal = () => {
     const selectedLabelOptions: LabelOption[] = labelOptions.filter((option) =>
       selectedLabelIds.includes(option.value),
     );
+    const personaIllustrationAvailable = Boolean(leiaConfig.persona?.edited);
+    const problemIllustrationAvailable = Boolean(leiaConfig.problem?.edited);
+    const illustrationsDisabled = !illustrationsConfig.apiKeyId;
+    const updateIllustrationsConfig = (
+      patch: Partial<IllustrationsConfig>,
+    ) => {
+      setIllustrationsConfig((current) => ({ ...current, ...patch }));
+    };
 
     return (
       <div className="space-y-6">
@@ -2824,84 +2919,6 @@ const openGenerateProblemModal = () => {
             </div>
           )}
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-900 mb-3">
-              Infographics
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Gemini API key
-                </label>
-                <select
-                  value={imageApiKeyId ?? ""}
-                  onChange={(e) => setImageApiKeyId(e.target.value || null)}
-                  disabled={isApiKeysLoading || geminiApiKeys.length === 0}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] disabled:bg-gray-100 disabled:text-gray-500"
-                >
-                  <option value="">
-                    {isApiKeysLoading
-                      ? "Loading API keys..."
-                      : "Select Gemini API key"}
-                  </option>
-                  {geminiApiKeys.map((key) => (
-                    <option key={key.id} value={key.id}>
-                      {key.description}
-                      {key.isDefault ? " (default)" : ""}
-                    </option>
-                  ))}
-                </select>
-                {apiKeysError ? (
-                  <p className="mt-1 text-xs text-red-600">{apiKeysError}</p>
-                ) : geminiApiKeys.length === 0 && !isApiKeysLoading ? (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Add a Gemini API key to generate images.
-                  </p>
-                ) : (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Used for generated avatars and infographics.
-                  </p>
-                )}
-              </div>
-              <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={generateInfographic}
-                  onChange={(e) => setGenerateInfographic(e.target.checked)}
-                  disabled={!imageApiKeyId}
-                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-gray-700">
-                    Generate infographic
-                  </span>
-                  <span className="block text-xs text-gray-500">
-                    Creates the student-facing infographic for this LEIA.
-                  </span>
-                </span>
-              </label>
-              <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={generateInfographicSolution}
-                  onChange={(e) =>
-                    setGenerateInfographicSolution(e.target.checked)
-                  }
-                  disabled={!imageApiKeyId}
-                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-gray-700">
-                    Generate infographic with solution
-                  </span>
-                  <span className="block text-xs text-gray-500">
-                    Creates the instructor version including solution guidance.
-                  </span>
-                </span>
-              </label>
-            </div>
-          </div>
-
           {/* Alerta de recursos que se van a publicar */}
           {currentUser?.role === "admin" && leiaPublish && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -2944,6 +2961,175 @@ const openGenerateProblemModal = () => {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Illustrations</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Choose which avatars and infographics to generate when this LEIA
+              is created.
+            </p>
+          </div>
+          <SparklesIcon className="mt-1 h-5 w-5 flex-shrink-0 text-blue-500" />
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Gemini API key
+            </label>
+            <select
+              value={illustrationsConfig.apiKeyId ?? ""}
+              onChange={(e) => {
+                setHasChosenIllustrationApiKey(true);
+                updateIllustrationsConfig({ apiKeyId: e.target.value || null });
+              }}
+              disabled={isApiKeysLoading || geminiApiKeys.length === 0}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] disabled:bg-gray-100 disabled:text-gray-500"
+            >
+              <option value="">
+                {isApiKeysLoading
+                  ? "Loading API keys..."
+                  : "Select Gemini API key"}
+              </option>
+              {geminiApiKeys.map((key) => (
+                <option key={key.id} value={key.id}>
+                  {key.description}
+                  {key.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+            {apiKeysError ? (
+              <p className="mt-1 text-xs text-red-600">{apiKeysError}</p>
+            ) : geminiApiKeys.length === 0 && !isApiKeysLoading ? (
+              <p className="mt-1 text-xs text-gray-500">
+                Add a Gemini API key to generate illustrations.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">
+                This key is used only for the illustrations selected below.
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+              <input
+                type="checkbox"
+                checked={illustrationsConfig.generateLeiaAvatar}
+                onChange={(e) =>
+                  updateIllustrationsConfig({
+                    generateLeiaAvatar: e.target.checked,
+                  })
+                }
+                disabled={illustrationsDisabled}
+                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-700">
+                  Generate LEIA avatar
+                </span>
+                <span className="block text-xs text-gray-500">
+                  Creates the avatar for the new LEIA.
+                </span>
+              </span>
+            </label>
+
+            {personaIllustrationAvailable && (
+              <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                <input
+                  type="checkbox"
+                  checked={illustrationsConfig.generatePersonaAvatar}
+                  onChange={(e) =>
+                    updateIllustrationsConfig({
+                      generatePersonaAvatar: e.target.checked,
+                    })
+                  }
+                  disabled={illustrationsDisabled}
+                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">
+                    Generate persona avatar
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Available because this flow creates a new persona.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {problemIllustrationAvailable && (
+              <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                <input
+                  type="checkbox"
+                  checked={illustrationsConfig.generateProblemAvatar}
+                  onChange={(e) =>
+                    updateIllustrationsConfig({
+                      generateProblemAvatar: e.target.checked,
+                    })
+                  }
+                  disabled={illustrationsDisabled}
+                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">
+                    Generate problem avatar
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Available because this flow creates a new problem.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+              <input
+                type="checkbox"
+                checked={illustrationsConfig.generateInfographic}
+                onChange={(e) =>
+                  updateIllustrationsConfig({
+                    generateInfographic: e.target.checked,
+                  })
+                }
+                disabled={illustrationsDisabled}
+                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-700">
+                  Generate infographic
+                </span>
+                <span className="block text-xs text-gray-500">
+                  Creates the student-facing infographic for this LEIA.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+              <input
+                type="checkbox"
+                checked={illustrationsConfig.generateInfographicSolution}
+                onChange={(e) =>
+                  updateIllustrationsConfig({
+                    generateInfographicSolution: e.target.checked,
+                  })
+                }
+                disabled={illustrationsDisabled}
+                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-700">
+                  Generate infographic with solution
+                </span>
+                <span className="block text-xs text-gray-500">
+                  Creates the instructor version including solution guidance.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
