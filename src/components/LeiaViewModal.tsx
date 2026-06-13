@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useEffect, lazy, Suspense, memo, useRef } from "react";
+import { useState, useEffect, lazy, Suspense, memo, useRef, useMemo } from "react";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import {
@@ -18,6 +18,7 @@ import InfographicViewer, {
 } from "./InfographicViewer";
 import api from "../lib/axios";
 import { toast } from "react-toastify";
+import { useApiKeys } from "../hooks/useApiKeys";
 
 // Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
@@ -76,6 +77,16 @@ type RegenerationTarget =
   | AvatarRegenerationTarget
   | InfographicRegenerationTarget;
 type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
+
+function getUserId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const user = value as { id?: unknown; _id?: unknown };
+    if (typeof user.id === "string") return user.id;
+    if (typeof user._id === "string") return user._id;
+  }
+  return null;
+}
 
 const InfographicImage: React.FC<{
   title: string;
@@ -143,6 +154,17 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
     const [regeneratingTarget, setRegeneratingTarget] =
       useState<RegenerationTarget | null>(null);
     const { user } = useAuth();
+    const {
+      apiKeys,
+      isLoading: isApiKeysLoading,
+      error: apiKeysError,
+      getDefaultKey,
+    } = useApiKeys();
+    const geminiApiKeys = useMemo(
+      () => apiKeys.filter((key) => key.provider === "gemini"),
+      [apiKeys],
+    );
+    const [imageApiKeyId, setImageApiKeyId] = useState<string | null>(null);
 
     useEffect(() => {
       if (leia?.id) {
@@ -151,6 +173,21 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
         setIsRegenerateMenuOpen(false);
       }
     }, [leia?.id]);
+
+    useEffect(() => {
+      setImageApiKeyId((current) => {
+        if (current && geminiApiKeys.some((key) => key.id === current)) {
+          return current;
+        }
+
+        const defaultKey = getDefaultKey?.();
+        if (defaultKey?.provider === "gemini") {
+          return defaultKey.id;
+        }
+
+        return geminiApiKeys[0]?.id ?? null;
+      });
+    }, [geminiApiKeys, getDefaultKey]);
 
     const getTargetId = (target: AvatarRegenerationTarget) => {
       if (!displayLeia) return null;
@@ -174,6 +211,20 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
       displayLeia?.id,
       "infographicSolution",
     );
+    const hasInfographic = !!displayLeia?.spec?.infographic?.trim();
+    const hasInfographicSolution =
+      !!displayLeia?.spec?.infographicSolution?.trim();
+    const canOpenRegenerate =
+      user?.role === "admin" || getUserId(displayLeia?.user) === user?.id;
+
+    const getSelectedImageApiKeyId = () => {
+      if (imageApiKeyId) return imageApiKeyId;
+      toast.error("Select a Gemini API key before generating images", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return null;
+    };
 
     const handleRegenerateAvatar = async (
       target: AvatarRegenerationTarget,
@@ -186,6 +237,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
         });
         return;
       }
+      const selectedImageApiKeyId = getSelectedImageApiKeyId();
+      if (!selectedImageApiKeyId) return;
 
       setRegeneratingTarget(target);
       setIsRegenerateMenuOpen(false);
@@ -193,6 +246,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
       try {
         const response = await api.post(
           `/api/v1/images/${target}/${targetId}/generate`,
+          { apiKeyId: selectedImageApiKeyId },
         );
         const avatar = refreshAvatar(response.data?.avatar);
 
@@ -270,6 +324,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
         });
         return;
       }
+      const selectedImageApiKeyId = getSelectedImageApiKeyId();
+      if (!selectedImageApiKeyId) return;
 
       const path =
         target === "infographic" ? "infographic" : "infographic-solution";
@@ -280,6 +336,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
       try {
         const response = await api.post(
           `/api/v1/images/leias/${displayLeia.id}/${path}/generate`,
+          { apiKeyId: selectedImageApiKeyId },
         );
         const image = refreshStoredImage(response.data?.[target]);
 
@@ -338,7 +395,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
               <p className="text-sm text-gray-500 mt-1">View LEIA content</p>
             </div>
             <div className="flex items-center gap-2">
-              {user?.role === "admin" && (
+              {canOpenRegenerate && (
                 <div className="relative">
                   <button
                     onClick={() =>
@@ -357,7 +414,41 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                   </button>
 
                   {isRegenerateMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg z-10 overflow-hidden">
+                    <div className="absolute right-0 mt-2 w-72 rounded-lg border border-gray-200 bg-white shadow-lg z-10 overflow-hidden">
+                      <div className="border-b border-gray-100 p-3">
+                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                          Gemini API key
+                        </label>
+                        <select
+                          value={imageApiKeyId ?? ""}
+                          onChange={(e) =>
+                            setImageApiKeyId(e.target.value || null)
+                          }
+                          disabled={isApiKeysLoading || geminiApiKeys.length === 0}
+                          className="h-9 w-full rounded-md border border-gray-300 px-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                        >
+                          <option value="">
+                            {isApiKeysLoading
+                              ? "Loading API keys..."
+                              : "Select Gemini API key"}
+                          </option>
+                          {geminiApiKeys.map((key) => (
+                            <option key={key.id} value={key.id}>
+                              {key.description}
+                              {key.isDefault ? " (default)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {apiKeysError ? (
+                          <p className="mt-1 text-xs text-red-600">
+                            {apiKeysError}
+                          </p>
+                        ) : geminiApiKeys.length === 0 && !isApiKeysLoading ? (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Add a Gemini API key to regenerate images.
+                          </p>
+                        ) : null}
+                      </div>
                       {[
                         { label: "LEIA", target: "leias" as const },
                         { label: "Problem", target: "problems" as const },
@@ -366,7 +457,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                         <button
                           key={option.target}
                           onClick={() => handleRegenerateAvatar(option.target)}
-                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                          disabled={!imageApiKeyId}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
                         >
                           {option.label}
                         </button>
@@ -387,7 +479,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                           onClick={() =>
                             handleRegenerateInfographic(option.target)
                           }
-                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                          disabled={!imageApiKeyId}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
                         >
                           {option.label}
                         </button>
@@ -764,8 +857,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     Infographics
                   </h3>
-                  {!displayLeia.spec?.infographic &&
-                    !displayLeia.spec?.infographicSolution && (
+                  {!hasInfographic && !hasInfographicSolution && (
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                         <p className="text-gray-600">
                           No infographics available for this LEIA.
@@ -773,18 +865,22 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                       </div>
                     )}
                 </div>
-                <InfographicImage
-                  title="Infographic"
-                  description="Student-facing version without the solution."
-                  src={displayLeia.spec?.infographic}
-                  candidateSources={infographicCandidates}
-                />
-                <InfographicImage
-                  title="Infographic with solution"
-                  description="Instructor version including the expected solution."
-                  src={displayLeia.spec?.infographicSolution}
-                  candidateSources={infographicSolutionCandidates}
-                />
+                {hasInfographic && (
+                  <InfographicImage
+                    title="Infographic"
+                    description="Student-facing version without the solution."
+                    src={displayLeia.spec?.infographic}
+                    candidateSources={infographicCandidates}
+                  />
+                )}
+                {hasInfographicSolution && (
+                  <InfographicImage
+                    title="Infographic with solution"
+                    description="Instructor version including the expected solution."
+                    src={displayLeia.spec?.infographicSolution}
+                    candidateSources={infographicSolutionCandidates}
+                  />
+                )}
               </div>
             )}
           </div>

@@ -205,6 +205,10 @@ export const CreateLeia: React.FC = () => {
     () => apiKeyProvidersMapped?.openai || [],
     [apiKeyProvidersMapped],
   );
+  const geminiApiKeys = useMemo(
+    () => apiKeys.filter((key) => key.provider === "gemini"),
+    [apiKeys],
+  );
   // Seed a sensible default OpenAI key + model once the supervisor is enabled.
   useEffect(() => {
     if (!supervisorConfig.enabled) return;
@@ -329,6 +333,28 @@ export const CreateLeia: React.FC = () => {
   const [generateInfographic, setGenerateInfographic] = useState(false);
   const [generateInfographicSolution, setGenerateInfographicSolution] =
     useState(false);
+  const [imageApiKeyId, setImageApiKeyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setImageApiKeyId((current) => {
+      if (current && geminiApiKeys.some((key) => key.id === current)) {
+        return current;
+      }
+
+      const defaultKey = getDefaultKey?.();
+      if (defaultKey?.provider === "gemini") {
+        return defaultKey.id;
+      }
+
+      return geminiApiKeys[0]?.id ?? null;
+    });
+  }, [geminiApiKeys, getDefaultKey]);
+
+  useEffect(() => {
+    if (imageApiKeyId) return;
+    setGenerateInfographic(false);
+    setGenerateInfographicSolution(false);
+  }, [imageApiKeyId]);
 
   // Estados para opcionalmente añadir la LEIA a una Activity
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
@@ -671,6 +697,7 @@ export const CreateLeia: React.FC = () => {
 
   const generateCreatedAvatars = async (
     targets: AvatarGenerationTarget[],
+    apiKeyId: string,
   ): Promise<LeiaResource | null> => {
     const uniqueTargets = Array.from(
       new Map(
@@ -682,6 +709,7 @@ export const CreateLeia: React.FC = () => {
       uniqueTargets.map(async (target) => {
         const response = await api.post(
           `/api/v1/images/${target.entity}/${target.id}/generate`,
+          { apiKeyId },
         );
         return { target, entity: response.data?.entity };
       }),
@@ -707,6 +735,7 @@ export const CreateLeia: React.FC = () => {
   const generateCreatedInfographics = async (
     leiaId: string,
     variants: InfographicVariant[],
+    apiKeyId: string,
   ): Promise<LeiaResource | null> => {
     let updatedLeia: LeiaResource | null = null;
 
@@ -718,6 +747,7 @@ export const CreateLeia: React.FC = () => {
             : "infographic-solution";
         const response = await api.post(
           `/api/v1/images/leias/${leiaId}/${path}/generate`,
+          { apiKeyId },
         );
         if (response.data?.entity) {
           updatedLeia = response.data.entity as LeiaResource;
@@ -1511,9 +1541,10 @@ const openGenerateProblemModal = () => {
               id: createdLeiaId,
             });
           }
-          const leiaWithGeneratedAvatar = await generateCreatedAvatars(
-            avatarGenerationTargets,
-          );
+          const imageKeyId = imageApiKeyId;
+          const leiaWithGeneratedAvatar = imageKeyId
+            ? await generateCreatedAvatars(avatarGenerationTargets, imageKeyId)
+            : null;
           const infographicVariants: InfographicVariant[] = [];
           if (generateInfographic) {
             infographicVariants.push("infographic");
@@ -1522,10 +1553,11 @@ const openGenerateProblemModal = () => {
             infographicVariants.push("infographicSolution");
           }
           const leiaWithGeneratedInfographics =
-            createdLeiaId && infographicVariants.length > 0
+            createdLeiaId && imageKeyId && infographicVariants.length > 0
               ? await generateCreatedInfographics(
                   createdLeiaId,
                   infographicVariants,
+                  imageKeyId,
                 )
               : null;
           setCreatedLeiaName(
@@ -2797,11 +2829,46 @@ const openGenerateProblemModal = () => {
               Infographics
             </h3>
             <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Gemini API key
+                </label>
+                <select
+                  value={imageApiKeyId ?? ""}
+                  onChange={(e) => setImageApiKeyId(e.target.value || null)}
+                  disabled={isApiKeysLoading || geminiApiKeys.length === 0}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="">
+                    {isApiKeysLoading
+                      ? "Loading API keys..."
+                      : "Select Gemini API key"}
+                  </option>
+                  {geminiApiKeys.map((key) => (
+                    <option key={key.id} value={key.id}>
+                      {key.description}
+                      {key.isDefault ? " (default)" : ""}
+                    </option>
+                  ))}
+                </select>
+                {apiKeysError ? (
+                  <p className="mt-1 text-xs text-red-600">{apiKeysError}</p>
+                ) : geminiApiKeys.length === 0 && !isApiKeysLoading ? (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Add a Gemini API key to generate images.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Used for generated avatars and infographics.
+                  </p>
+                )}
+              </div>
               <label className="flex items-start gap-3">
                 <input
                   type="checkbox"
                   checked={generateInfographic}
                   onChange={(e) => setGenerateInfographic(e.target.checked)}
+                  disabled={!imageApiKeyId}
                   className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <span>
@@ -2820,6 +2887,7 @@ const openGenerateProblemModal = () => {
                   onChange={(e) =>
                     setGenerateInfographicSolution(e.target.checked)
                   }
+                  disabled={!imageApiKeyId}
                   className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <span>
