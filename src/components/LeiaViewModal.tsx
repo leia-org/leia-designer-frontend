@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useEffect, lazy, Suspense, memo } from "react";
+import { useState, useEffect, lazy, Suspense, memo, useRef } from "react";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import {
@@ -8,7 +8,14 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "./shared/Avatar";
-import { buildOriginalAvatarPath, resolveStoredImageSrc } from "../lib/avatar";
+import {
+  buildLeiaInfographicPaths,
+  buildOriginalAvatarPath,
+  buildStoredImageCandidateSources,
+} from "../lib/avatar";
+import InfographicViewer, {
+  type InfographicViewerHandle,
+} from "./InfographicViewer";
 import api from "../lib/axios";
 import { toast } from "react-toastify";
 
@@ -72,24 +79,58 @@ type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
 
 const InfographicImage: React.FC<{
   title: string;
+  description: string;
   src?: string | null;
-}> = ({ title, src }) => {
-  const resolvedSrc = resolveStoredImageSrc(src);
+  candidateSources: string[];
+}> = ({ title, description, src, candidateSources }) => {
+  const viewerRef = useRef<InfographicViewerHandle | null>(null);
+  const sources = buildStoredImageCandidateSources(src, ...candidateSources);
+  const hasSource = sources.length > 0;
+  const [thumbnailIndex, setThumbnailIndex] = useState(0);
 
-  if (!resolvedSrc) {
+  if (!hasSource) {
     return null;
   }
 
+  const thumbnailSrc = sources[thumbnailIndex] || sources[0];
+
   return (
-    <div>
-      <h4 className="text-md font-medium text-gray-900 mb-2">{title}</h4>
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+    <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4">
+      <button
+        type="button"
+        onClick={() => viewerRef.current?.open()}
+        className="flex h-24 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-50"
+        title={`Open ${title}`}
+      >
         <img
-          src={resolvedSrc}
+          src={thumbnailSrc}
           alt={title}
-          className="w-full max-h-[520px] object-contain rounded-md bg-white"
+          className="h-full w-full object-contain"
+          onError={() => {
+            setThumbnailIndex((previousIndex) => {
+              const nextIndex = previousIndex + 1;
+              return nextIndex < sources.length ? nextIndex : previousIndex;
+            });
+          }}
         />
+      </button>
+      <div className="min-w-0 flex-1">
+        <h4 className="text-md font-medium text-gray-900">{title}</h4>
+        <p className="mt-1 text-sm text-gray-500">{description}</p>
       </div>
+      <button
+        type="button"
+        onClick={() => viewerRef.current?.open()}
+        className="inline-flex flex-shrink-0 items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+      >
+        Open viewer
+      </button>
+      <InfographicViewer
+        ref={viewerRef}
+        candidateSources={sources}
+        title={title}
+        hidden
+      />
     </div>
   );
 };
@@ -125,6 +166,14 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
     };
 
     const refreshStoredImage = refreshAvatar;
+    const infographicCandidates = buildLeiaInfographicPaths(
+      displayLeia?.id,
+      "infographic",
+    );
+    const infographicSolutionCandidates = buildLeiaInfographicPaths(
+      displayLeia?.id,
+      "infographicSolution",
+    );
 
     const handleRegenerateAvatar = async (
       target: AvatarRegenerationTarget,
@@ -726,11 +775,15 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                 </div>
                 <InfographicImage
                   title="Infographic"
+                  description="Student-facing version without the solution."
                   src={displayLeia.spec?.infographic}
+                  candidateSources={infographicCandidates}
                 />
                 <InfographicImage
                   title="Infographic with solution"
+                  description="Instructor version including the expected solution."
                   src={displayLeia.spec?.infographicSolution}
+                  candidateSources={infographicSolutionCandidates}
                 />
               </div>
             )}
