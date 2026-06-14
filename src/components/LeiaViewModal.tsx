@@ -214,8 +214,36 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
     const hasInfographic = !!displayLeia?.spec?.infographic?.trim();
     const hasInfographicSolution =
       !!displayLeia?.spec?.infographicSolution?.trim();
+    const isAdmin = user?.role === "admin";
+    const canRegenerateLeia =
+      isAdmin || getUserId(displayLeia?.user) === user?.id;
+    const canRegenerateProblem =
+      isAdmin || getUserId(displayLeia?.spec?.problem?.user) === user?.id;
+    const canRegeneratePersona =
+      isAdmin || getUserId(displayLeia?.spec?.persona?.user) === user?.id;
+    const avatarRegenerationOptions = [
+      ...(canRegenerateLeia
+        ? [{ label: "LEIA", target: "leias" as const }]
+        : []),
+      ...(canRegenerateProblem
+        ? [{ label: "Problem", target: "problems" as const }]
+        : []),
+      ...(canRegeneratePersona
+        ? [{ label: "Persona", target: "personas" as const }]
+        : []),
+    ];
+    const infographicRegenerationOptions = canRegenerateLeia
+      ? [
+          { label: "Infographic", target: "infographic" as const },
+          {
+            label: "Infographic with solution",
+            target: "infographicSolution" as const,
+          },
+        ]
+      : [];
     const canOpenRegenerate =
-      user?.role === "admin" || getUserId(displayLeia?.user) === user?.id;
+      avatarRegenerationOptions.length > 0 ||
+      infographicRegenerationOptions.length > 0;
 
     const getSelectedImageApiKeyId = () => {
       if (imageApiKeyId) return imageApiKeyId;
@@ -449,11 +477,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                           </p>
                         ) : null}
                       </div>
-                      {[
-                        { label: "LEIA", target: "leias" as const },
-                        { label: "Problem", target: "problems" as const },
-                        { label: "Persona", target: "personas" as const },
-                      ].map((option) => (
+                      {avatarRegenerationOptions.map((option) => (
                         <button
                           key={option.target}
                           onClick={() => handleRegenerateAvatar(option.target)}
@@ -463,17 +487,11 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
                           {option.label}
                         </button>
                       ))}
-                      <div className="border-t border-gray-100" />
-                      {[
-                        {
-                          label: "Infographic",
-                          target: "infographic" as const,
-                        },
-                        {
-                          label: "Infographic with solution",
-                          target: "infographicSolution" as const,
-                        },
-                      ].map((option) => (
+                      {avatarRegenerationOptions.length > 0 &&
+                        infographicRegenerationOptions.length > 0 && (
+                          <div className="border-t border-gray-100" />
+                        )}
+                      {infographicRegenerationOptions.map((option) => (
                         <button
                           key={option.target}
                           onClick={() =>
