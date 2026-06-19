@@ -30,7 +30,8 @@ import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
-
+import { ActivityReplicationModal } from "../components/ActivityReplicationModal";
+import { toast, ToastContainer } from "react-toastify";
 interface Label {
   id?: string;
   _id?: string;
@@ -321,7 +322,8 @@ export const CreateLeia: React.FC = () => {
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
-
+  const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
+  const [nameActivityReplication, setNameActivityReplication] = useState("");
   const startGuidedTour = useCallback((startStep: WizardStep = 2) => {
     tourRef.current?.destroy();
     setIsTryMenuOpen(false);
@@ -691,6 +693,75 @@ export const CreateLeia: React.FC = () => {
       setCreateLabelError("Failed to prepare label");
     }
   };
+  const closeActivityReplicationModal = useCallback(() => {
+      setShowActivityReplicationModal(false);
+      setNameActivityReplication("");
+      navigate("/leias");
+    }, [navigate]);
+    const handleQuickReplication = useCallback(async (leia?: LeiaResource|null) => {
+  
+    if (!leia) {
+      toast.error("No LEIA selected", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+  
+    try {
+      const leiaName = nameActivityReplication || leia.metadata.name || "";
+      const activityReplication = await api.post(`/api/v1/experiments/leia/`, {
+        leiaName,
+        leiaId: leia.id,
+      });
+      toast.success("LEIA replicated successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+  
+      const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL;
+      const replicationUrl = `${workbenchBaseUrl.replace(
+        /\/$/, "" )}/replications/${encodeURIComponent(
+        activityReplication.data.replication.id)}`;
+      closeActivityReplicationModal();
+      const newWindow = window.open(replicationUrl);
+  
+      if (!newWindow) {
+        toast.error("Popup blocked or could not open replication", {
+          position: "bottom-right",
+          autoClose: 2000,
+        });
+      }
+    } catch (error) {
+      const axiosError = error as {
+        response?: {
+          status?: number;
+          data?: {
+            error?: string;
+            data?: Array<{ id: string; name: string }>;
+          };
+        };
+      };
+  
+      if (axiosError.response?.status === 409) {
+        toast.info(axiosError.response?.data?.error, {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+  
+        if (!nameActivityReplication) {
+          setNameActivityReplication(leia.metadata.name + "-v2");
+        }
+        setShowActivityReplicationModal(true);
+        return;
+      }
+  
+      toast.error("Error replicating LEIA. Please try again.", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  }, [closeActivityReplicationModal, nameActivityReplication]);
 
   const loadData = async () => {
     try {
@@ -3352,6 +3423,7 @@ const openGenerateProblemModal = () => {
       />
 
       {/* Main Content */}
+      <ToastContainer />
       <div className="flex-1 container mx-auto px-6 py-8">
         <div id="create-step-indicator">{renderStepIndicator()}</div>
 
@@ -3655,7 +3727,7 @@ const openGenerateProblemModal = () => {
           </div>
         </div>
       )}
-
+        
       {(currentUser?.role === "admin" || currentUser?.role === "advanced") && (
         <AddLeiaToAnActivity
           isOpen={showAddToActivityModal}
@@ -3663,15 +3735,23 @@ const openGenerateProblemModal = () => {
           onClose={() => {setShowAddToActivityModal(false); navigate("/leias")}}
           onSuccess={() => {
             setShowAddToActivityModal(false);
-            navigate("/leias");
+            navigate("/users/me/activities");
           }}
         />
       )}
-
+      {(currentUser?.role === "admin" || currentUser?.role === "advanced") && (
+        <ActivityReplicationModal
+          isOpen={showActivityReplicationModal}
+          name={nameActivityReplication}
+          onNameChange={setNameActivityReplication}
+          onConfirm={() => handleQuickReplication(createdLeiaResource)}
+          onClose={closeActivityReplicationModal}
+            />
+      )}
       {/* Modal mostrado despues de crear la LEIA*/}
       {showFinishModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl mx-4">
             <div className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 LEIA created successfully
@@ -3680,7 +3760,9 @@ const openGenerateProblemModal = () => {
                 "{createdLeiaName}" was created successfully.
               </p>
               <p className="text-sm text-gray-600 mt-2">
-                Do you want to add it directly to an activity?
+                You have created a LEIA. Now you can create the activity and its
+            replication directly, add it to an existing activity, or return to
+            the home page.
               </p>
             </div>
 
@@ -3692,7 +3774,7 @@ const openGenerateProblemModal = () => {
                 }}
                 className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                No, go to LEIAs
+                Go to Home Page
               </button>
               <button
                 onClick={() => {
@@ -3701,7 +3783,16 @@ const openGenerateProblemModal = () => {
                 }}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Yes, add now
+                Add to Activity
+              </button>
+              <button
+                onClick={() => {
+                  setShowFinishModal(false);
+                  handleQuickReplication(createdLeiaResource);
+                }}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Quick Replication
               </button>
             </div>
           </div>

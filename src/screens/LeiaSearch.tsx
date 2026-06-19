@@ -25,6 +25,7 @@ import { LabelAddModal } from "../components/LabelAddModal";
 
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
+import { ActivityReplicationModal } from "../components/ActivityReplicationModal";
 type VersionFilter = "" | "latest";
 
 export const LeiaSearch: React.FC = () => {
@@ -730,52 +731,13 @@ export const LeiaSearch: React.FC = () => {
           handleCloseExperimentsModal();
         }}
       />
-      {showActivityReplicationModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeActivityReplicationModal();
-          }}
-        >
-          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
-            <div className="p-6" onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Replicate activity
-              </h2>
-
-              <label className="mt-5 block text-sm font-medium text-gray-700">
-                Choose a new name for both the activity and the replication.
-              </label>
-              <input
-                type="text"
-                value={nameActivityReplication}
-                onChange={(e) => setNameActivityReplication(e.target.value)}
-                placeholder="Activity replication name"
-                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                autoFocus
-              />
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeActivityReplicationModal}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickReplication()}
-                  disabled={!nameActivityReplication.trim()}
-                  className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  Replicate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ActivityReplicationModal
+        isOpen={showActivityReplicationModal}
+        name={nameActivityReplication}
+        onNameChange={setNameActivityReplication}
+        onConfirm={() => handleQuickReplication()}
+        onClose={closeActivityReplicationModal}
+      />
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
         <div className="flex items-end gap-4 mb-6">
           <div className="flex-1">
