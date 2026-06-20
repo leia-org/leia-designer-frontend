@@ -8,6 +8,7 @@ import {
   ArrowRightStartOnRectangleIcon,
   PuzzlePieceIcon,
   KeyIcon,
+  TagIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/useAuth";
 
@@ -89,6 +90,13 @@ export const Header: React.FC<HeaderProps> = ({
       icon: <UsersIcon className="w-4 h-4" />,
       show: user?.role === "admin",
       id: "manageUsers-button"
+    },
+    {
+      label: "Manage labels",
+      href: "/administration/labels",
+      icon: <TagIcon className="w-4 h-4" />,
+      show: user?.role === "admin",
+      id: "manageLabels-button"
     },
     {
       label: "Logout",

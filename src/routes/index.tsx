@@ -12,6 +12,7 @@ import { LeiaSearch } from "../screens/LeiaSearch";
 import { UserManagement } from "../screens/UserManagement";
 import { MyActivities } from "../screens/MyActivities";
 import { ApiKeysPage } from "../screens/ApiKeys";
+import { LabelManagement } from "../screens/LabelManagement.tsx";
 
 const AuthenticatedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -135,6 +136,14 @@ export const AppRoutes = () => {
           <AdvancedRoute>
             <MyActivities />
           </AdvancedRoute>
+        }
+      />
+      <Route
+        path="/administration/labels"
+        element={
+          <AdminRoute>
+            <LabelManagement />
+          </AdminRoute>
         }
       />
       <Route path="/forbidden" element={<ForbiddenPage />} />
