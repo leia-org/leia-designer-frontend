@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
 import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
+import ReactMarkdown from "react-markdown";
 import type { LeiaConfig } from "../models/Experiment";
 import type { ProblemWidget } from "../models/Leia";
 import {
@@ -56,6 +57,43 @@ interface ExerciseSpec {
   initialSolution?: string;
 }
 
+interface EvaluationResponse {
+  evaluation: string;
+  score: number;
+}
+
+type SpeechRecognitionResult = {
+  readonly isFinal: boolean;
+  readonly [index: number]: { transcript: string };
+};
+
+type SpeechRecognitionEventLike = {
+  readonly resultIndex: number;
+  readonly results: {
+    readonly length: number;
+    readonly [index: number]: SpeechRecognitionResult;
+  };
+};
+
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+type SpeechWindow = Window &
+  typeof globalThis & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+
 interface EditLocalState {
   sessionId: string;
   exercise?: ExerciseSpec;
@@ -75,6 +113,59 @@ const TypingAnimation = () => (
       className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
       style={{ animationDuration: "0.6s", animationDelay: "0.4s" }}
     ></div>
+  </div>
+);
+
+const EvaluationModal: React.FC<{
+  evaluation: string;
+  score: number;
+  onClose: () => void;
+}> = ({ evaluation, score, onClose }) => (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl">
+      <div className="flex items-center justify-between px-6 py-4 border-b">
+        <h2 className="text-xl font-semibold text-gray-900">
+          Evaluation Result
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="Close evaluation"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
+      <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+        <div className="mb-4">
+          <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-sm font-medium">
+            Score: {score}
+          </span>
+        </div>
+        <div className="prose prose-sm max-w-none text-gray-700">
+          <ReactMarkdown>{evaluation}</ReactMarkdown>
+        </div>
+      </div>
+      <div className="px-6 py-4 border-t flex justify-end">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+        >
+          Back to try out
+        </button>
+      </div>
+    </div>
   </div>
 );
 
@@ -124,6 +215,39 @@ function extractWidgetsFromState(
   );
 }
 
+function extractExerciseFromState(
+  navState: NavigationState | null,
+): ExerciseSpec | undefined {
+  const fromProblem = (p: unknown): ExerciseSpec | undefined => {
+    const problem = p as
+      | { spec?: ExerciseSpec; description?: string; solutionFormat?: string; initialSolution?: string }
+      | null
+      | undefined;
+    const spec = problem?.spec ?? problem;
+    if (!spec || typeof spec !== "object") return undefined;
+    return {
+      description:
+        typeof spec.description === "string" ? spec.description : undefined,
+      solutionFormat:
+        typeof spec.solutionFormat === "string" ? spec.solutionFormat : undefined,
+      initialSolution:
+        typeof spec.initialSolution === "string" ? spec.initialSolution : undefined,
+    };
+  };
+  const fromLeia = (leia: unknown): ExerciseSpec | undefined =>
+    fromProblem(
+      (leia as { spec?: { problem?: unknown } } | null | undefined)?.spec
+        ?.problem,
+    );
+  return (
+    fromProblem(navState?.problem) ??
+    fromLeia(navState?.leia) ??
+    fromProblem(navState?.save?.leiaConfig?.problem) ??
+    fromProblem(navState?.preset?.problem) ??
+    fromLeia(navState?.experimentTranscription?.leiaConfig?.leia)
+  );
+}
+
 export const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -143,6 +267,15 @@ export const Chat = () => {
   const [problemWidgets, setProblemWidgets] = useState<ProblemWidget[] | undefined>(
     undefined,
   );
+  const [exercise, setExercise] = useState<ExerciseSpec | undefined>(undefined);
+  const [solutionText, setSolutionText] = useState("");
+  const [evaluatingSolution, setEvaluatingSolution] = useState(false);
+  const [evaluation, setEvaluation] = useState<string | null>(null);
+  const [score, setScore] = useState<number | null>(null);
+  const [listening, setListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceInputBaseRef = useRef("");
 
   // Mount the activity's widgets in a side panel (text mode). Any non-left
   // slot is shown on the right so a "main"-slotted widget still appears.
@@ -259,12 +392,40 @@ export const Chat = () => {
       setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
     }
 
-    setProblemWidgets(
-      extractWidgetsFromState(navigationState || parseSavedNavigationState()),
-    );
+    const resolvedNavigationState = navigationState || parseSavedNavigationState();
+    const resolvedExercise = extractExerciseFromState(resolvedNavigationState);
 
-    configureEditState(navigationState || parseSavedNavigationState());
+    setProblemWidgets(extractWidgetsFromState(resolvedNavigationState));
+    setExercise(resolvedExercise);
+    setSolutionText((current) => {
+      if (current.trim()) return current;
+      return resolvedExercise?.initialSolution || "";
+    });
+
+    configureEditState(resolvedNavigationState);
   }, [location.state]);
+
+  useEffect(() => {
+    if (!voiceEnabled || typeof window === "undefined") return;
+    const synth = window.speechSynthesis;
+    const lastMessage = messages[messages.length - 1];
+    if (!synth || !lastMessage?.isLeia || !lastMessage.text.trim()) return;
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(lastMessage.text);
+    utterance.lang = navigator.language || "en-US";
+    synth.speak(utterance);
+    return () => {
+      synth.cancel();
+    };
+  }, [messages, voiceEnabled]);
+
+  useEffect(
+    () => () => {
+      recognitionRef.current?.stop();
+      window.speechSynthesis?.cancel();
+    },
+    [],
+  );
 
   useEffect(() => {
     // Usar requestAnimationFrame para asegurar que el DOM se haya actualizado
@@ -394,6 +555,78 @@ export const Chat = () => {
     }
   };
 
+  const handleVoiceInput = () => {
+    if (typeof window === "undefined") return;
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+
+    const speechWindow = window as SpeechWindow;
+    const Recognition =
+      speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      toast.error("Voice input is not supported in this browser");
+      return;
+    }
+
+    const recognition = new Recognition();
+    voiceInputBaseRef.current = newMessageText.trim();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        transcript += event.results[i][0].transcript;
+      }
+      const prefix = voiceInputBaseRef.current
+        ? `${voiceInputBaseRef.current} `
+        : "";
+      setNewMessageText(`${prefix}${transcript}`.trimStart());
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => {
+      setListening(false);
+      toast.error("Voice input failed. Check microphone permissions.");
+    };
+    recognitionRef.current = recognition;
+    setListening(true);
+    recognition.start();
+  };
+
+  const handleEvaluateSolution = async () => {
+    if (!sessionId || evaluatingSolution) return;
+    const result = solutionText.trim();
+    if (!result) {
+      toast.error("Add a solution before evaluating");
+      return;
+    }
+    setEvaluatingSolution(true);
+    try {
+      const response = await api.post<EvaluationResponse>(
+        `/api/v1/runner/${sessionId}/evaluate`,
+        { result },
+      );
+      setEvaluation(response.data.evaluation || "No evaluation provided.");
+      setScore(response.data.score ?? 0);
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof (error as { response?: { data?: { message?: string } } }).response
+          ?.data?.message === "string"
+          ? (error as { response?: { data?: { message?: string } } }).response!
+              .data!.message!
+          : "Failed to evaluate the solution.";
+      toast.error(message);
+    } finally {
+      setEvaluatingSolution(false);
+    }
+  };
+
   const handleSaveTranscription = async () => {
     console.log("Saving transcription...", messages);
     // Validar que existan mensajes
@@ -494,6 +727,16 @@ export const Chat = () => {
         rightContent={
           <div className="flex gap-2">
             <button
+              onClick={() => setVoiceEnabled((enabled) => !enabled)}
+              className={`px-4 py-1.5 text-sm border rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
+                voiceEnabled
+                  ? "text-white bg-slate-800 border-slate-900 hover:bg-slate-900"
+                  : "text-slate-700 bg-white border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {voiceEnabled ? "Voice On" : "Voice"}
+            </button>
+            <button
               onClick={handleOpenSolutionEditor}
               className="px-4 py-1.5 text-sm text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
@@ -554,6 +797,31 @@ export const Chat = () => {
         className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth"
       >
         <div className="max-w-3xl mx-auto space-y-4 py-4">
+          <div className="border border-slate-200 rounded-lg bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Solution Evaluation
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Format: {exercise?.solutionFormat || "text"}
+                </p>
+              </div>
+              <button
+                onClick={handleEvaluateSolution}
+                disabled={evaluatingSolution || !sessionId || !solutionText.trim()}
+                className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {evaluatingSolution ? "Evaluating..." : "Evaluate"}
+              </button>
+            </div>
+            <textarea
+              value={solutionText}
+              onChange={(event) => setSolutionText(event.target.value)}
+              placeholder="Write a candidate solution to evaluate..."
+              className="w-full min-h-[120px] max-h-[260px] px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+            />
+          </div>
           {messages.map((msg, index) => (
             <div
               key={index}
@@ -643,6 +911,18 @@ export const Chat = () => {
               rows={1}
             />
             <button
+              type="button"
+              onClick={handleVoiceInput}
+              className={`px-4 py-2 text-sm border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                listening
+                  ? "text-white bg-red-600 border-red-700 hover:bg-red-700"
+                  : "text-slate-700 bg-white border-slate-300 hover:bg-slate-50"
+              }`}
+              title={listening ? "Stop voice input" : "Start voice input"}
+            >
+              {listening ? "Stop" : "Mic"}
+            </button>
+            <button
               type="submit"
               disabled={!newMessageText.trim()}
               className="px-5 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -652,6 +932,16 @@ export const Chat = () => {
           </form>
         </div>
       </div>
+      {evaluation !== null && score !== null && (
+        <EvaluationModal
+          evaluation={evaluation}
+          score={score}
+          onClose={() => {
+            setEvaluation(null);
+            setScore(null);
+          }}
+        />
+      )}
     </div>
   );
 };
