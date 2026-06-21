@@ -3,7 +3,7 @@ import { Header } from "../components/shared/Header";
 import { useEffect, useState } from "react";
 import type { Label } from "../models/Leia";
 import api from "../lib/axios";
-import {TrashIcon, PencilIcon} from "@heroicons/react/24/outline";
+import {TrashIcon, PencilIcon, ArrowRightIcon} from "@heroicons/react/24/outline";
 export const LabelManagement = () => {
 //const { user } = useAuth();
 const [labels, setLabels] = useState<Label[]>([]);
@@ -12,37 +12,65 @@ const [error, setError] = useState<Error | null>(null);
 const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<Label | null>(null);
 const [showUpdateConfirmation, setShowUpdateConfirmation] = useState(false);
 const [labelToUpdate, setLabelToUpdate] = useState<Label | null>(null);
-
+const [showMergeMessage, setShowMergeMessage] = useState(false);
 const globalLabels = labels.filter((l) => l.isGlobal);
 const privateLabels = labels.filter((l) => !l.isGlobal);
-
+const [selectedLabels, setSelectedLabels] = useState<Set<Label>>(new Set());
+const selectedLabelsArray = Array.from(selectedLabels);
+const fromLabel = selectedLabelsArray[0];
+const toLabel = selectedLabelsArray[1];
 const LabelCard = ({
   label,
   onDelete,
   onEdit,
+  showMergeMessage,
+  isSelected,
+  onSelect,
 }: {
   label: Label;
   onDelete: () => void;
   onEdit: () => void;
+  showMergeMessage: boolean;
+  isSelected: boolean;
+  onSelect: () => void;
 }) => (
-  <div className="bg-white rounded-lg border border-gray-200 p-4 flex flex-col items-center gap-2 hover:shadow-md transition-shadow">
+  <div
+    onClick={showMergeMessage ? onSelect : undefined}
+    className={`bg-white rounded-lg border p-4 flex flex-col items-center gap-2 transition-shadow
+      ${showMergeMessage ? "cursor-pointer" : "hover:shadow-md"}
+      ${
+        isSelected
+          ? "border-blue-500 ring-2 ring-blue-500"
+          : "border-gray-200"
+      }
+    `}
+  >
     <div className="w-full flex justify-between items-center gap-2">
       <button
         className="text-blue-600 hover:underline shrink-0"
-        onClick={onEdit}
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+        disabled={showMergeMessage}
       >
         <PencilIcon className="w-4 h-4" />
       </button>
-        <span
+
+      <span
         className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full border border-gray-200 whitespace-nowrap"
         style={{ backgroundColor: label.color, color: label.secundaryColor }}
-        >
+      >
         {label.name}
-        </span>
+      </span>
 
       <button
         className="text-red-600 hover:underline shrink-0"
-        onClick={onDelete}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        disabled={showMergeMessage}
       >
         <TrashIcon className="w-4 h-4" />
       </button>
@@ -87,6 +115,37 @@ const handleUpdateLabel = async (labelId: string) => {
   }
 };
 
+const toggleSelect = (lab: Label) => {
+  setSelectedLabels((prev) => {
+    const next = new Set(prev);
+    if (next.has(lab)) {
+      next.delete(lab);
+    } else {
+      if (next.size >= 2) {
+        return prev;
+      }
+      next.add(lab);
+    }
+    return next;
+  });
+};
+
+const handleMergeLabels = async (sourceLabel: Label, targetLabel: Label) => {
+  try {
+    await api.post(`/api/v1/labels/${sourceLabel._id}/merge-into/${targetLabel._id}`, {
+    });
+    setSelectedLabels(new Set());
+    setShowMergeMessage(false);
+    fetchLabels(); // Refresh the labels after merge
+  } catch (err) {
+    console.error("Error merging labels", err);
+    setError(err as Error);
+  }
+};
+const handleMergeCancel = () => {
+  setSelectedLabels(new Set());
+  setShowMergeMessage(false);
+};
 if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -122,7 +181,28 @@ return (
 
     <div className="container mx-auto px-6 py-8">
       <h2 className="text-2xl font-bold mb-6 text-center">Labels</h2>
+      <button
+        onClick={() => {
+          setShowMergeMessage(true);
 
+        }}
+        className="mb-6 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+      >
+        Merge Labels
+      </button>
+      {showMergeMessage && (
+        <div className="mb-4 p-4 bg-blue-100 border-l-4 border-blue-500 text-blue-700">
+          <p className="text-sm">
+            To merge labels, select the source label and then the target label. The source label will be merged into the target label.
+          </p>
+          <button
+            onClick={() => setShowMergeMessage(false)}
+            className="mt-2 text-sm text-red-600 underline"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-40">
   {/* Columna de labels globales */}
   <div>
@@ -134,6 +214,9 @@ return (
             label={l}
             onDelete={() => setShowDeleteConfirmation(l)}
             onEdit={() => { setLabelToUpdate(l); setShowUpdateConfirmation(true); }}
+            showMergeMessage={showMergeMessage}
+            isSelected={selectedLabels.has(l)}
+            onSelect={() => toggleSelect(l)}
             />
         ))}
 </div>
@@ -152,6 +235,9 @@ return (
           label={l}
           onDelete={() => setShowDeleteConfirmation(l)}
           onEdit={() => { setLabelToUpdate(l); setShowUpdateConfirmation(true); }}
+          showMergeMessage={showMergeMessage}
+          isSelected={selectedLabels.has(l)}
+          onSelect={() => toggleSelect(l)}
         />
       ))}
     </div>
@@ -309,6 +395,57 @@ return (
     </div>
   </div>
 )}
+  {selectedLabels.size==2  && (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">
+          Merging Labels
+        </h2>
+        <p className="text-sm text-gray-600 mb-4">
+          The Label {fromLabel.name} will be merged into {toLabel.name}. The source label will be deleted and all its references will be updated to the target label. Are you sure you want to proceed?
+        </p>
+
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <span
+            className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full border border-gray-200 whitespace-nowrap"
+            style={{
+              backgroundColor: fromLabel.color,
+              color: fromLabel.secundaryColor,
+            }}
+          >
+            {fromLabel.name}
+          </span>
+
+          <ArrowRightIcon className="w-4 h-4 text-gray-400 shrink-0" />
+
+          <span
+            className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full border border-gray-200 whitespace-nowrap"
+            style={{
+              backgroundColor: toLabel.color,
+              color: toLabel.secundaryColor,
+            }}
+          >
+            {toLabel.name}
+          </span>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button
+            className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+            onClick={handleMergeCancel}
+          >
+            Cancel
+          </button>
+          <button
+            className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+            onClick={() => handleMergeLabels(fromLabel, toLabel)}
+          >
+            Yes, merge
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
   </div>
 );
 };
