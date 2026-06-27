@@ -38,7 +38,6 @@ interface Label {
   color: string;
   secundaryColor: string;
   isGlobal?: boolean;
-  user?: unknown;
 }
 
 interface LabelDraft {
@@ -1285,7 +1284,7 @@ const openGenerateProblemModal = () => {
                 secundaryColor: draft.secundaryColor,
                 isGlobal:
                   currentUser?.role === "admin" ? draft.isGlobal : false,
-                user: currentUser?.id,
+
               });
 
               return {
