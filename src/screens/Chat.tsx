@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
+import { Avatar } from "../components/shared/Avatar";
 import api from "../lib/axios";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
 import type { ProblemWidget } from "../models/Leia";
+import { buildOriginalAvatarPath } from "../lib/avatar";
 import {
   VoiceModeWithWidgets,
   resolveWidgetDefinitions,
@@ -43,6 +44,7 @@ interface NavigationState {
     };
   };
   problemDescription?: string;
+  personaAvatar?: string;
   experimentTranscription?: {
     experimentId: string;
     leiaConfigId: string;
@@ -124,6 +126,68 @@ function extractWidgetsFromState(
   );
 }
 
+function extractPersonaAvatarFromState(
+  navState: NavigationState | null,
+): string {
+  const avatarFromResource = (resource: unknown): string => {
+    const avatar = (resource as { spec?: { avatar?: unknown } } | null | undefined)
+      ?.spec?.avatar;
+    return typeof avatar === "string" ? avatar : "";
+  };
+  const avatarFromLeia = (leia: unknown): string => {
+    const avatar = (leia as { spec?: { persona?: unknown } } | null | undefined)
+      ?.spec?.persona;
+    return avatarFromResource(avatar);
+  };
+
+  return (
+    navState?.personaAvatar ||
+    avatarFromResource(navState?.save?.leiaConfig?.persona) ||
+    avatarFromResource(navState?.preset?.persona) ||
+    avatarFromLeia(navState?.experimentTranscription?.leiaConfig?.leia) ||
+    ""
+  );
+}
+
+function extractPersonaAvatarFallbackFromState(
+  navState: NavigationState | null,
+): string {
+  const getResourceId = (resource: unknown): string => {
+    const id = (resource as { id?: unknown } | null | undefined)?.id;
+    return typeof id === "string" ? id : "";
+  };
+  const getLeiaResourceIds = (leia: unknown): {
+    leiaId: string;
+    personaId: string;
+  } => {
+    const typedLeia = leia as
+      | {
+          id?: unknown;
+          spec?: { persona?: unknown };
+        }
+      | null
+      | undefined;
+    return {
+      leiaId: typeof typedLeia?.id === "string" ? typedLeia.id : "",
+      personaId: getResourceId(typedLeia?.spec?.persona),
+    };
+  };
+
+  const savedPersonaId = getResourceId(navState?.save?.leiaConfig?.persona);
+  const presetPersonaId = getResourceId(navState?.preset?.persona);
+  const transcriptionIds = getLeiaResourceIds(
+    navState?.experimentTranscription?.leiaConfig?.leia,
+  );
+
+  return (
+    buildOriginalAvatarPath("personas", savedPersonaId) ||
+    buildOriginalAvatarPath("personas", presetPersonaId) ||
+    buildOriginalAvatarPath("personas", transcriptionIds.personaId) ||
+    buildOriginalAvatarPath("leias", transcriptionIds.leiaId) ||
+    ""
+  );
+}
+
 export const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -143,6 +207,8 @@ export const Chat = () => {
   const [problemWidgets, setProblemWidgets] = useState<ProblemWidget[] | undefined>(
     undefined,
   );
+  const [personaAvatar, setPersonaAvatar] = useState("");
+  const [personaAvatarFallback, setPersonaAvatarFallback] = useState("");
 
   // Mount the activity's widgets in a side panel (text mode). Any non-left
   // slot is shown on the right so a "main"-slotted widget still appears.
@@ -259,11 +325,15 @@ export const Chat = () => {
       setLeiaConfig(navigationState.experimentTranscription.leiaConfig);
     }
 
-    setProblemWidgets(
-      extractWidgetsFromState(navigationState || parseSavedNavigationState()),
-    );
+    const resolvedNavigationState = navigationState || parseSavedNavigationState();
 
-    configureEditState(navigationState || parseSavedNavigationState());
+    setPersonaAvatar(extractPersonaAvatarFromState(resolvedNavigationState));
+    setPersonaAvatarFallback(
+      extractPersonaAvatarFallbackFromState(resolvedNavigationState),
+    );
+    setProblemWidgets(extractWidgetsFromState(resolvedNavigationState));
+
+    configureEditState(resolvedNavigationState);
   }, [location.state]);
 
   useEffect(() => {
@@ -562,18 +632,25 @@ export const Chat = () => {
               }`}
             >
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${
                   msg.isLeia ? "bg-blue-50" : "bg-blue-600"
                 }`}
               >
                 {msg.isLeia ? (
-                  <UserCircleIcon className="w-5 h-5 text-blue-700" />
+                  <Avatar
+                    src={personaAvatar}
+                    fallbackSrc={personaAvatarFallback}
+                    alt="Persona avatar"
+                    label="Persona"
+                    size="md"
+                    className="border-blue-100 bg-blue-50"
+                  />
                 ) : (
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 20 20"
                     fill="currentColor"
-                    className="w-5 h-5 text-white"
+                    className="w-6 h-6 text-white"
                   >
                     <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
                   </svg>
@@ -594,8 +671,15 @@ export const Chat = () => {
           ))}
           {sendingMessage && (
             <div className="flex items-end gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                <UserCircleIcon className="w-5 h-5 text-blue-700" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-blue-50">
+                <Avatar
+                  src={personaAvatar}
+                  fallbackSrc={personaAvatarFallback}
+                  alt="Persona avatar"
+                  label="Persona"
+                  size="md"
+                  className="border-blue-100 bg-blue-50"
+                />
               </div>
               <div className="min-w-[60px] bg-white border border-gray-200 rounded-t-2xl rounded-r-2xl rounded-bl-md px-4 py-3">
                 <TypingAnimation />

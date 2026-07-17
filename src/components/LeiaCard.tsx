@@ -3,6 +3,7 @@ import { Editor, loader } from "@monaco-editor/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "../context";
 import type { User } from "../models/User";
+import { Avatar } from "./shared/Avatar";
 
 // Ensure YAML language support is loaded
 loader.init().then((monaco) => {
@@ -28,6 +29,9 @@ interface LeiaCardProps {
   hideContentForInstructor?: boolean;
   onDelete?: () => void;
   resourceId?: string;
+  avatar?: string | null;
+  fallbackAvatar?: string | null;
+  showAvatar?: boolean;
 }
 
 export default function LeiaCard({
@@ -42,6 +46,9 @@ export default function LeiaCard({
   hideContentForInstructor = false,
   onDelete,
   resourceId,
+  avatar,
+  fallbackAvatar,
+  showAvatar = false,
 }: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -80,80 +87,95 @@ export default function LeiaCard({
         }`}
         onClick={onClick}
       >
-        <div className="flex justify-between items-start mb-1">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-              v{version}
-            </span>
-            {user && (
-              <span
-                className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  isPublished
-                    ? "bg-green-100 text-green-800"
-                    : "bg-yellow-100 text-yellow-800"
-                }`}
-              >
-                {isPublished ? "Published" : "Unpublished"}
-              </span>
+        <div className="flex gap-3">
+          {showAvatar && (
+            <Avatar
+              src={avatar}
+              fallbackSrc={fallbackAvatar}
+              alt={`${title} avatar`}
+              label={title}
+              size="md"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex justify-between items-start mb-1 gap-2">
+              <h3 className="text-lg font-semibold text-gray-900 break-words">
+                {title}
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                  v{version}
+                </span>
+                {user && (
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      isPublished
+                        ? "bg-green-100 text-green-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {isPublished ? "Published" : "Unpublished"}
+                  </span>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete?.();
+                    }}
+                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                    title="Delete resource"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* User information */}
+            {user && user.email && user.role ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                <span>{user.email}</span>
+                <span className="flex items-center gap-1">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                      user.role === "admin"
+                        ? "bg-purple-500"
+                        : user.role === "advanced"
+                          ? "bg-blue-500"
+                          : "bg-green-500"
+                    }`}
+                  ></span>
+                  {user.role === "admin"
+                    ? "Administrator"
+                    : user.role === "advanced"
+                      ? "Advanced"
+                      : "Instructor"}
+                </span>
+              </div>
+            ) : null}
+            {!hideContentForInstructor && (
+              <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
+                {description}
+              </p>
             )}
-            {canDelete && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete?.();
-                }}
-                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                title="Delete resource"
-              >
-                <TrashIcon className="h-4 w-4" />
-              </button>
+            {selected && (
+              <div className="mt-3 flex items-center text-blue-600 text-sm font-medium">
+                <svg
+                  className="w-4 h-4 mr-1"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Selected
+              </div>
             )}
           </div>
         </div>
-        {/* User information */}
-        {user && user.email && user.role ? (
-          <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-            <span>{user.email}</span>
-            <span className="flex items-center gap-1">
-              <span
-                className={`inline-block w-2 h-2 rounded-full ${
-                  user.role === "admin"
-                    ? "bg-purple-500"
-                    : user.role === "advanced"
-                    ? "bg-blue-500"
-                    : "bg-green-500"
-                }`}
-              ></span>
-              {user.role === "admin"
-                ? "Administrator"
-                : user.role === "advanced"
-                ? "Advanced"
-                : "Instructor"}
-            </span>
-          </div>
-        ) : null}
-        {!hideContentForInstructor && (
-          <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
-            {description}
-          </p>
-        )}
-        {selected && (
-          <div className="mt-3 flex items-center text-blue-600 text-sm font-medium">
-            <svg
-              className="w-4 h-4 mr-1"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Selected
-          </div>
-        )}
       </div>
 
       {/* Popup de YAML con Monaco Editor */}
