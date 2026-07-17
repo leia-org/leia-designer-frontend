@@ -17,6 +17,7 @@ export interface Persona {
     version: string
   },
   spec: {
+    avatar?: string,
     fullName: string,
     firstName: string,
     description: string,
@@ -74,6 +75,7 @@ export interface ProblemWidget {
 }
 
 export interface ProblemSpec {
+  avatar?: string,
   description: string,
   personaBackground: string,
   details: string,
@@ -115,6 +117,9 @@ export interface Leia {
     label?: Label | null
   },
   spec: {
+    avatar?: string,
+    infographic?: string,
+    infographicSolution?: string,
     persona: {
       id: string,
       apiVersion: string,
@@ -123,6 +128,7 @@ export interface Leia {
         version: string
       },
       spec: {
+        avatar?: string,
         fullName: string,
         firstName: string,
         description: string,
@@ -144,6 +150,7 @@ export interface Leia {
         version: string
       },
       spec: {
+        avatar?: string,
         description: string,
         personaBackground: string,
         details: string,

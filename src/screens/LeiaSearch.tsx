@@ -22,6 +22,8 @@ import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
+import { Avatar } from "../components/shared/Avatar";
+import { buildOriginalAvatarPath } from "../lib/avatar";
 import type { Experiment } from "../models/Experiment";
 
 import { driver } from "driver.js";
@@ -488,6 +490,7 @@ export const LeiaSearch: React.FC = () => {
         navigate(`/chat/${sessionId}`, {
           state: {
             problemDescription: leia.spec?.problem?.spec?.description || "",
+            personaAvatar: leia.spec?.persona?.spec?.avatar || "",
             problem: leia.spec?.problem,
           },
         });
@@ -898,6 +901,11 @@ export const LeiaSearch: React.FC = () => {
                     leia.spec?.problem?.spec?.description ||
                     leia.spec?.persona?.spec?.description ||
                     "";
+                  const leiaAvatar = leia.spec?.avatar || "";
+                  const leiaAvatarFallback = buildOriginalAvatarPath(
+                    "leias",
+                    leia.id,
+                  );
             
                   const labelData = leia.metadata?.labels;
                   const tryConfig = tryConfigByLeia[leia.id];
@@ -926,6 +934,14 @@ export const LeiaSearch: React.FC = () => {
                       className="flex items-start justify-between gap-4 p-4"
                       id = {index === 1 ? "first-leia" : undefined}
                     >
+                      <Avatar
+                        src={leiaAvatar}
+                        fallbackSrc={leiaAvatarFallback}
+                        alt={`${leia.metadata.name} avatar`}
+                        label={leia.metadata.name}
+                        size="md"
+                        className="mt-1"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">

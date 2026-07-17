@@ -18,6 +18,7 @@ import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
 import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
 import { ProblemChatPanel } from "../components/ProblemChatPanel";
+import { Avatar } from "../components/shared/Avatar";
 import { useAuth } from "../context";
 import type {
   Persona,
@@ -30,6 +31,7 @@ import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import api from "../lib/axios";
 import { generateLeia } from "../lib/leia";
+import { buildOriginalAvatarPath } from "../lib/avatar";
 
 interface Label {
   id?: string;
@@ -94,6 +96,22 @@ interface NavigationState {
 }
 
 type WizardStep = 1 | 2 | 3;
+type AvatarEntityPathSegment = "leias" | "personas" | "problems";
+type InfographicVariant = "infographic" | "infographicSolution";
+
+interface AvatarGenerationTarget {
+  entity: AvatarEntityPathSegment;
+  id: string;
+}
+
+interface IllustrationsConfig {
+  apiKeyId: string | null;
+  generateLeiaAvatar: boolean;
+  generatePersonaAvatar: boolean;
+  generateProblemAvatar: boolean;
+  generateInfographic: boolean;
+  generateInfographicSolution: boolean;
+}
 
 const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
 const DEFAULT_PROBLEM_GENERATION_DETAILS =
@@ -195,6 +213,10 @@ export const CreateLeia: React.FC = () => {
   const supervisorOpenaiModels = useMemo(
     () => apiKeyProvidersMapped?.openai || [],
     [apiKeyProvidersMapped],
+  );
+  const geminiApiKeys = useMemo(
+    () => apiKeys.filter((key) => key.provider === "gemini"),
+    [apiKeys],
   );
   // Seed a sensible default OpenAI key + model once the supervisor is enabled.
   useEffect(() => {
@@ -316,6 +338,99 @@ export const CreateLeia: React.FC = () => {
   // Modal cuando se pulsa Finish
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [createdLeiaName, setCreatedLeiaName] = useState("");
+  const [isFinishingLeia, setIsFinishingLeia] = useState(false);
+  const [illustrationsConfig, setIllustrationsConfig] =
+    useState<IllustrationsConfig>({
+      apiKeyId: null,
+      generateLeiaAvatar: false,
+      generatePersonaAvatar: false,
+      generateProblemAvatar: false,
+      generateInfographic: false,
+      generateInfographicSolution: false,
+    });
+  const [hasChosenIllustrationApiKey, setHasChosenIllustrationApiKey] =
+    useState(false);
+  const previousIllustrationDefaultsRef = useRef<{
+    apiKeyId: string | null;
+    personaAvailable: boolean;
+    problemAvailable: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    setIllustrationsConfig((current) => {
+      if (
+        current.apiKeyId &&
+        geminiApiKeys.some((key) => key.id === current.apiKeyId)
+      ) {
+        return current;
+      }
+      if (hasChosenIllustrationApiKey) {
+        return { ...current, apiKeyId: null };
+      }
+
+      const defaultKey = getDefaultKey?.();
+      if (defaultKey?.provider === "gemini") {
+        return { ...current, apiKeyId: defaultKey.id };
+      }
+
+      return { ...current, apiKeyId: geminiApiKeys[0]?.id ?? null };
+    });
+  }, [geminiApiKeys, getDefaultKey, hasChosenIllustrationApiKey]);
+
+  useEffect(() => {
+    const apiKeyId = illustrationsConfig.apiKeyId;
+    const personaAvailable = Boolean(leiaConfig.persona?.edited);
+    const problemAvailable = Boolean(leiaConfig.problem?.edited);
+    const previous = previousIllustrationDefaultsRef.current;
+
+    setIllustrationsConfig((current) => {
+      let next = current;
+
+      if (!apiKeyId) {
+        next = {
+          ...current,
+          generateLeiaAvatar: false,
+          generatePersonaAvatar: false,
+          generateProblemAvatar: false,
+          generateInfographic: false,
+          generateInfographicSolution: false,
+        };
+      } else if (previous?.apiKeyId !== apiKeyId) {
+        next = {
+          ...current,
+          generateLeiaAvatar: true,
+          generatePersonaAvatar: personaAvailable,
+          generateProblemAvatar: problemAvailable,
+        };
+      } else {
+        next = {
+          ...current,
+          generatePersonaAvatar: personaAvailable
+            ? previous?.personaAvailable
+              ? current.generatePersonaAvatar
+              : true
+            : false,
+          generateProblemAvatar: problemAvailable
+            ? previous?.problemAvailable
+              ? current.generateProblemAvatar
+              : true
+            : false,
+        };
+      }
+
+      return next;
+    });
+
+    previousIllustrationDefaultsRef.current = {
+      apiKeyId,
+      personaAvailable,
+      problemAvailable,
+    };
+  }, [
+    illustrationsConfig.apiKeyId,
+    leiaConfig.persona?.edited,
+    leiaConfig.problem?.edited,
+  ]);
 
   // Estados para opcionalmente añadir la LEIA a una Activity
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
@@ -647,6 +762,79 @@ export const CreateLeia: React.FC = () => {
   };
 
   const getLabelIdentifier = (label: Label) => label.id || label._id || null;
+
+  const getResourceIdentifier = (resource: unknown): string | null => {
+    if (!resource || typeof resource !== "object") return null;
+
+    const candidate = resource as { id?: unknown; _id?: unknown };
+    const id = candidate.id || candidate._id;
+    return typeof id === "string" && id.trim() ? id : null;
+  };
+
+  const generateCreatedAvatars = async (
+    targets: AvatarGenerationTarget[],
+    apiKeyId: string,
+  ): Promise<LeiaResource | null> => {
+    const uniqueTargets = Array.from(
+      new Map(
+        targets.map((target) => [`${target.entity}:${target.id}`, target]),
+      ).values(),
+    );
+
+    const avatarResults = await Promise.allSettled(
+      uniqueTargets.map(async (target) => {
+        const response = await api.post(
+          `/api/v1/images/${target.entity}/${target.id}/generate`,
+          { apiKeyId },
+        );
+        return { target, entity: response.data?.entity };
+      }),
+    );
+
+    for (const result of avatarResults) {
+      if (result.status === "rejected") {
+        console.error("Error generating avatar after creation:", result.reason);
+      }
+    }
+
+    const leiaAvatarResult = avatarResults.find(
+      (result) =>
+        result.status === "fulfilled" &&
+        result.value.target.entity === "leias",
+    );
+
+    return leiaAvatarResult?.status === "fulfilled"
+      ? (leiaAvatarResult.value.entity as LeiaResource)
+      : null;
+  };
+
+  const generateCreatedInfographics = async (
+    leiaId: string,
+    variants: InfographicVariant[],
+    apiKeyId: string,
+  ): Promise<LeiaResource | null> => {
+    let updatedLeia: LeiaResource | null = null;
+
+    for (const variant of variants) {
+      try {
+        const path =
+          variant === "infographic"
+            ? "infographic"
+            : "infographic-solution";
+        const response = await api.post(
+          `/api/v1/images/leias/${leiaId}/${path}/generate`,
+          { apiKeyId },
+        );
+        if (response.data?.entity) {
+          updatedLeia = response.data.entity as LeiaResource;
+        }
+      } catch (error) {
+        console.error(`Error generating ${variant} after creation:`, error);
+      }
+    }
+
+    return updatedLeia;
+  };
 
   const getPendingLabelId = (labelName: string) =>
     `${PENDING_LABEL_PREFIX}${labelName.trim().toLowerCase()}`;
@@ -1226,6 +1414,7 @@ const openGenerateProblemModal = () => {
             customizations,
           },
           problemDescription: generatedLeia.spec.problem.spec.description,
+          personaAvatar: generatedLeia.spec.persona.spec.avatar || "",
         },
       });
     } catch (error) {
@@ -1246,166 +1435,233 @@ const openGenerateProblemModal = () => {
 
   const handleNextStep = async () => {
     if (currentStep === 3 && isStep3Complete) {
-      const errors = {} as Record<string, string>;
-
-      for (const [key, value] of Object.entries(customizations)) {
-        if (value) {
-          if (!value.name?.trim()) {
-            errors[key] = "Name is required";
-            continue;
-          }
-
-          try {
-            const response = await api.get(
-              `/api/v1/${key}s/exists/${value.name}`,
-            );
-            if (response.data.exists) {
-              errors[key] = "Name already exists";
-            }
-          } catch {
-            errors[key] = "Failed to check name existence";
-          }
-        }
-      }
-
-      if (Object.keys(errors).length > 0) {
-        setValidationErrors(errors);
+      if (isFinishingLeia) {
         return;
       }
 
-      let finalLabelIds = [...selectedLabelIds];
-      if (pendingLabelDrafts.length > 0) {
-        try {
-          setCreatingLabel(true);
-          const createdLabels = await Promise.all(
-            pendingLabelDrafts.map(async (draft) => {
-              const response = await api.post<Label>("/api/v1/labels", {
-                name: draft.name,
-                color: draft.color,
-                secundaryColor: draft.secundaryColor,
-                isGlobal:
-                  currentUser?.role === "admin" ? draft.isGlobal : false,
-                user: currentUser?.id,
-              });
+      setIsFinishingLeia(true);
 
-              return {
-                pendingId: draft.id,
-                createdId: getLabelIdentifier(response.data),
-              };
-            }),
-          );
-
-          const pendingToCreated = new Map(
-            createdLabels
-              .filter((entry) => Boolean(entry.createdId))
-              .map((entry) => [entry.pendingId, entry.createdId as string]),
-          );
-
-          finalLabelIds = finalLabelIds
-            .map((labelId) => pendingToCreated.get(labelId) || labelId)
-            .filter(Boolean);
-
-          setSelectedLabelIds(finalLabelIds);
-          setPendingLabelDrafts([]);
-          await loadLabels();
-        } catch (error) {
-          console.error("Error creating label on finish:", error);
-          setError("Failed to create label");
-          return;
-        } finally {
-          setCreatingLabel(false);
-        }
-      }
-
-      const leia = {
-        apiVersion: "v1",
-        metadata: {
-          name: customizations.leia.name,
-          version: "1.0.0",
-          labels: finalLabelIds.length > 0 ? finalLabelIds : undefined,
-        },
-        spec: {} as Record<string, any>,
-      };
-
-      for (const [key, value] of Object.entries(leiaConfig)) {
-        if (value && value.edited) {
-          const newResource = structuredClone(value) as any;
-          delete newResource.edited;
-          delete newResource.id;
-          delete newResource.createdAt;
-          delete newResource.updatedAt;
-          delete newResource.user;
-          delete newResource.metadata.version;
-          delete newResource.isPublished;
-          newResource.metadata.name =
-            customizations[key as keyof LeiaConfig]?.name;
-          try {
-            // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
-            let publishParam = "";
-            if (currentUser?.role === "admin") {
-              const resourcePublishState = leiaPublish
-                ? leiaPublish
-                : key === "behaviour"
-                  ? behaviourPublish
-                  : key === "problem"
-                    ? problemPublish
-                    : key === "persona"
-                      ? personaPublish
-                      : false;
-              publishParam = `?publish=${resourcePublishState}`;
-            }
-            const response = await api.post(
-              `/api/v1/${key}s${publishParam}`,
-              newResource,
-            );
-            leia.spec[key] = response.data.id;
-            leiaConfig[key as keyof LeiaConfig] = response.data;
-            if (leiaConfigSnapShot) {
-              leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
-            }
-            delete customizations[key as keyof LeiaConfig];
-          } catch (error) {
-            console.error("Error creating resource:", error);
-            setError(`Failed to create ${key} resource`);
-            return;
-          }
-        } else {
-          leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
-        }
-      }
-      // Attach the per-LEIA supervisor config (only when enabled). The
-      // supervisor runs on OpenAI with its own key — stored together with the
-      // owning user id so the workbench can resolve it at runtime (BYOK).
-      if (supervisorConfig.enabled) {
-        leia.spec.supervisorConfig = {
-          enabled: true,
-          instructions: supervisorConfig.instructions.trim(),
-          sensitivity: supervisorConfig.sensitivity,
-          cadence: supervisorConfig.cadence,
-          everyN: supervisorConfig.everyN,
-          intervene: supervisorConfig.intervene,
-          interveneInstructions: supervisorConfig.intervene
-            ? supervisorConfig.interveneInstructions.trim()
-            : "",
-          apiKeyId: supervisorConfig.apiKeyId || undefined,
-          apiKeyRequesterId: supervisorConfig.apiKeyId ? currentUser?.id : undefined,
-          model: supervisorConfig.model || undefined,
-        };
-      }
       try {
-        // Construir la URL con el query parameter publish
-        const publishParam =
-          currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
-        const response = await api.post(`/api/v1/leias${publishParam}`, leia);
-        console.log("LEIA created successfully:", response.data);
-        setCreatedLeiaName(
-          response.data?.metadata?.name || customizations.leia.name || "LEIA",
-        );
-        setCreatedLeiaResource(response.data as LeiaResource);
-        setShowFinishModal(true);
-      } catch (error) {
-        console.error("Error creating LEIA:", error);
-        setError("Failed to create LEIA");
+        const errors = {} as Record<string, string>;
+
+        for (const [key, value] of Object.entries(customizations)) {
+          if (value) {
+            if (!value.name?.trim()) {
+              errors[key] = "Name is required";
+              continue;
+            }
+
+            try {
+              const response = await api.get(
+                `/api/v1/${key}s/exists/${value.name}`,
+              );
+              if (response.data.exists) {
+                errors[key] = "Name already exists";
+              }
+            } catch {
+              errors[key] = "Failed to check name existence";
+            }
+          }
+        }
+
+        if (Object.keys(errors).length > 0) {
+          setValidationErrors(errors);
+          return;
+        }
+
+        let finalLabelIds = [...selectedLabelIds];
+        if (pendingLabelDrafts.length > 0) {
+          try {
+            setCreatingLabel(true);
+            const createdLabels = await Promise.all(
+              pendingLabelDrafts.map(async (draft) => {
+                const response = await api.post<Label>("/api/v1/labels", {
+                  name: draft.name,
+                  color: draft.color,
+                  secundaryColor: draft.secundaryColor,
+                  isGlobal:
+                    currentUser?.role === "admin" ? draft.isGlobal : false,
+                  user: currentUser?.id,
+                });
+
+                return {
+                  pendingId: draft.id,
+                  createdId: getLabelIdentifier(response.data),
+                };
+              }),
+            );
+
+            const pendingToCreated = new Map(
+              createdLabels
+                .filter((entry) => Boolean(entry.createdId))
+                .map((entry) => [entry.pendingId, entry.createdId as string]),
+            );
+
+            finalLabelIds = finalLabelIds
+              .map((labelId) => pendingToCreated.get(labelId) || labelId)
+              .filter(Boolean);
+
+            setSelectedLabelIds(finalLabelIds);
+            setPendingLabelDrafts([]);
+            await loadLabels();
+          } catch (error) {
+            console.error("Error creating label on finish:", error);
+            setError("Failed to create label");
+            return;
+          } finally {
+            setCreatingLabel(false);
+          }
+        }
+
+        const leia = {
+          apiVersion: "v1",
+          metadata: {
+            name: customizations.leia.name,
+            version: "1.0.0",
+            labels: finalLabelIds.length > 0 ? finalLabelIds : undefined,
+          },
+          spec: {} as Record<string, any>,
+        };
+        const avatarGenerationTargets: AvatarGenerationTarget[] = [];
+
+        for (const [key, value] of Object.entries(leiaConfig)) {
+          if (value && value.edited) {
+            const newResource = structuredClone(value) as any;
+            delete newResource.edited;
+            delete newResource.id;
+            delete newResource.createdAt;
+            delete newResource.updatedAt;
+            delete newResource.user;
+            delete newResource.metadata.version;
+            delete newResource.isPublished;
+            if (key === "persona" || key === "problem") {
+              delete newResource.spec?.avatar;
+            }
+            newResource.metadata.name =
+              customizations[key as keyof LeiaConfig]?.name;
+            try {
+              // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
+              let publishParam = "";
+              if (currentUser?.role === "admin") {
+                const resourcePublishState = leiaPublish
+                  ? leiaPublish
+                  : key === "behaviour"
+                    ? behaviourPublish
+                    : key === "problem"
+                      ? problemPublish
+                      : key === "persona"
+                        ? personaPublish
+                        : false;
+                publishParam = `?publish=${resourcePublishState}`;
+              }
+              const response = await api.post(
+                `/api/v1/${key}s${publishParam}`,
+                newResource,
+              );
+              leia.spec[key] = response.data.id;
+              const createdResourceId = getResourceIdentifier(response.data);
+              if (
+                createdResourceId &&
+                key === "persona" &&
+                illustrationsConfig.generatePersonaAvatar
+              ) {
+                avatarGenerationTargets.push({
+                  entity: "personas",
+                  id: createdResourceId,
+                });
+              }
+              if (
+                createdResourceId &&
+                key === "problem" &&
+                illustrationsConfig.generateProblemAvatar
+              ) {
+                avatarGenerationTargets.push({
+                  entity: "problems",
+                  id: createdResourceId,
+                });
+              }
+              leiaConfig[key as keyof LeiaConfig] = response.data;
+              if (leiaConfigSnapShot) {
+                leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
+              }
+              delete customizations[key as keyof LeiaConfig];
+            } catch (error) {
+              console.error("Error creating resource:", error);
+              setError(`Failed to create ${key} resource`);
+              return;
+            }
+          } else {
+            leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
+          }
+        }
+
+        // Attach the per-LEIA supervisor config only when enabled.
+        if (supervisorConfig.enabled) {
+          leia.spec.supervisorConfig = {
+            enabled: true,
+            instructions: supervisorConfig.instructions.trim(),
+            sensitivity: supervisorConfig.sensitivity,
+            cadence: supervisorConfig.cadence,
+            everyN: supervisorConfig.everyN,
+            intervene: supervisorConfig.intervene,
+            interveneInstructions: supervisorConfig.intervene
+              ? supervisorConfig.interveneInstructions.trim()
+              : "",
+            apiKeyId: supervisorConfig.apiKeyId || undefined,
+            apiKeyRequesterId: supervisorConfig.apiKeyId
+              ? currentUser?.id
+              : undefined,
+            model: supervisorConfig.model || undefined,
+          };
+        }
+
+        try {
+          // Construir la URL con el query parameter publish
+          const publishParam =
+            currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
+          const response = await api.post(`/api/v1/leias${publishParam}`, leia);
+          console.log("LEIA created successfully:", response.data);
+          const createdLeiaId = getResourceIdentifier(response.data);
+          if (createdLeiaId && illustrationsConfig.generateLeiaAvatar) {
+            avatarGenerationTargets.push({
+              entity: "leias",
+              id: createdLeiaId,
+            });
+          }
+          const imageKeyId = illustrationsConfig.apiKeyId;
+          const leiaWithGeneratedAvatar = imageKeyId
+            ? await generateCreatedAvatars(avatarGenerationTargets, imageKeyId)
+            : null;
+          const infographicVariants: InfographicVariant[] = [];
+          if (illustrationsConfig.generateInfographic) {
+            infographicVariants.push("infographic");
+          }
+          if (illustrationsConfig.generateInfographicSolution) {
+            infographicVariants.push("infographicSolution");
+          }
+          const leiaWithGeneratedInfographics =
+            createdLeiaId && imageKeyId && infographicVariants.length > 0
+              ? await generateCreatedInfographics(
+                  createdLeiaId,
+                  infographicVariants,
+                  imageKeyId,
+                )
+              : null;
+          setCreatedLeiaName(
+            response.data?.metadata?.name || customizations.leia.name || "LEIA",
+          );
+          setCreatedLeiaResource(
+            leiaWithGeneratedInfographics ||
+              leiaWithGeneratedAvatar ||
+              (response.data as LeiaResource),
+          );
+          setShowFinishModal(true);
+        } catch (error) {
+          console.error("Error creating LEIA:", error);
+          setError("Failed to create LEIA");
+        }
+      } finally {
+        setIsFinishingLeia(false);
       }
     }
     if (currentStep < 3) {
@@ -1967,12 +2223,24 @@ const openGenerateProblemModal = () => {
               </div>
               {leiaConfig.problem && (
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-medium text-gray-900">
-                    {leiaConfig.problem.metadata.name}
-                  </span>
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                    v{leiaConfig.problem.metadata.version}
-                  </span>
+                  <Avatar
+                    src={leiaConfig.problem.spec.avatar}
+                    fallbackSrc={buildOriginalAvatarPath(
+                      "problems",
+                      leiaConfig.problem.id,
+                    )}
+                    alt={`${leiaConfig.problem.metadata.name} avatar`}
+                    label={leiaConfig.problem.metadata.name}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {leiaConfig.problem.metadata.name}
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                      v{leiaConfig.problem.metadata.version}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -2062,12 +2330,24 @@ const openGenerateProblemModal = () => {
               </div>
               {leiaConfig.persona && (
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-medium text-gray-900">
-                    {leiaConfig.persona.metadata.name}
-                  </span>
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                    v{leiaConfig.persona.metadata.version}
-                  </span>
+                  <Avatar
+                    src={leiaConfig.persona.spec.avatar}
+                    fallbackSrc={buildOriginalAvatarPath(
+                      "personas",
+                      leiaConfig.persona.id,
+                    )}
+                    alt={`${leiaConfig.persona.metadata.name} avatar`}
+                    label={leiaConfig.persona.metadata.name}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {leiaConfig.persona.metadata.name}
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
+                      v{leiaConfig.persona.metadata.version}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -2423,6 +2703,14 @@ const openGenerateProblemModal = () => {
     const selectedLabelOptions: LabelOption[] = labelOptions.filter((option) =>
       selectedLabelIds.includes(option.value),
     );
+    const personaIllustrationAvailable = Boolean(leiaConfig.persona?.edited);
+    const problemIllustrationAvailable = Boolean(leiaConfig.problem?.edited);
+    const illustrationsDisabled = !illustrationsConfig.apiKeyId;
+    const updateIllustrationsConfig = (
+      patch: Partial<IllustrationsConfig>,
+    ) => {
+      setIllustrationsConfig((current) => ({ ...current, ...patch }));
+    };
 
     return (
       <div className="space-y-6">
@@ -2673,6 +2961,175 @@ const openGenerateProblemModal = () => {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Illustrations</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Choose which avatars and infographics to generate when this LEIA
+              is created.
+            </p>
+          </div>
+          <SparklesIcon className="mt-1 h-5 w-5 flex-shrink-0 text-blue-500" />
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Gemini API key
+            </label>
+            <select
+              value={illustrationsConfig.apiKeyId ?? ""}
+              onChange={(e) => {
+                setHasChosenIllustrationApiKey(true);
+                updateIllustrationsConfig({ apiKeyId: e.target.value || null });
+              }}
+              disabled={isApiKeysLoading || geminiApiKeys.length === 0}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] disabled:bg-gray-100 disabled:text-gray-500"
+            >
+              <option value="">
+                {isApiKeysLoading
+                  ? "Loading API keys..."
+                  : "Select Gemini API key"}
+              </option>
+              {geminiApiKeys.map((key) => (
+                <option key={key.id} value={key.id}>
+                  {key.description}
+                  {key.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+            {apiKeysError ? (
+              <p className="mt-1 text-xs text-red-600">{apiKeysError}</p>
+            ) : geminiApiKeys.length === 0 && !isApiKeysLoading ? (
+              <p className="mt-1 text-xs text-gray-500">
+                Add a Gemini API key to generate illustrations.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">
+                This key is used only for the illustrations selected below.
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+              <input
+                type="checkbox"
+                checked={illustrationsConfig.generateLeiaAvatar}
+                onChange={(e) =>
+                  updateIllustrationsConfig({
+                    generateLeiaAvatar: e.target.checked,
+                  })
+                }
+                disabled={illustrationsDisabled}
+                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-700">
+                  Generate LEIA avatar
+                </span>
+                <span className="block text-xs text-gray-500">
+                  Creates the avatar for the new LEIA.
+                </span>
+              </span>
+            </label>
+
+            {personaIllustrationAvailable && (
+              <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                <input
+                  type="checkbox"
+                  checked={illustrationsConfig.generatePersonaAvatar}
+                  onChange={(e) =>
+                    updateIllustrationsConfig({
+                      generatePersonaAvatar: e.target.checked,
+                    })
+                  }
+                  disabled={illustrationsDisabled}
+                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">
+                    Generate persona avatar
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Available because this flow creates a new persona.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {problemIllustrationAvailable && (
+              <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                <input
+                  type="checkbox"
+                  checked={illustrationsConfig.generateProblemAvatar}
+                  onChange={(e) =>
+                    updateIllustrationsConfig({
+                      generateProblemAvatar: e.target.checked,
+                    })
+                  }
+                  disabled={illustrationsDisabled}
+                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">
+                    Generate problem avatar
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Available because this flow creates a new problem.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+              <input
+                type="checkbox"
+                checked={illustrationsConfig.generateInfographic}
+                onChange={(e) =>
+                  updateIllustrationsConfig({
+                    generateInfographic: e.target.checked,
+                  })
+                }
+                disabled={illustrationsDisabled}
+                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-700">
+                  Generate infographic
+                </span>
+                <span className="block text-xs text-gray-500">
+                  Creates the student-facing infographic for this LEIA.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+              <input
+                type="checkbox"
+                checked={illustrationsConfig.generateInfographicSolution}
+                onChange={(e) =>
+                  updateIllustrationsConfig({
+                    generateInfographicSolution: e.target.checked,
+                  })
+                }
+                disabled={illustrationsDisabled}
+                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-700">
+                  Generate infographic with solution
+                </span>
+                <span className="block text-xs text-gray-500">
+                  Creates the instructor version including solution guidance.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -3401,20 +3858,50 @@ const openGenerateProblemModal = () => {
           <button
             id="create-next-button"
             onClick={handleNextStep}
+            aria-busy={currentStep === 3 && isFinishingLeia}
             disabled={
               (currentStep === 1 && !isStep1Complete) ||
               (currentStep === 2 && !isStep2Complete) ||
-              (currentStep === 3 && !isStep3Complete)
+              (currentStep === 3 && (!isStep3Complete || isFinishingLeia))
             }
-            className={`px-6 py-2 rounded-lg transition-colors ${
+            className={`px-6 py-2 rounded-lg transition-colors inline-flex items-center justify-center gap-2 min-w-[96px] ${
               (currentStep === 1 && !isStep1Complete) ||
               (currentStep === 2 && !isStep2Complete) ||
-              (currentStep === 3 && !isStep3Complete)
+              (currentStep === 3 && (!isStep3Complete || isFinishingLeia))
                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
-            {currentStep === 3 ? "Finish" : "Next"}
+            {currentStep === 3 && isFinishingLeia ? (
+              <>
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  />
+                </svg>
+                Finish
+              </>
+            ) : currentStep === 3 ? (
+              "Finish"
+            ) : (
+              "Next"
+            )}
           </button>
         </div>
       </div>
