@@ -40,7 +40,6 @@ interface Label {
   color: string;
   secundaryColor: string;
   isGlobal?: boolean;
-  user?: unknown;
 }
 
 interface LabelDraft {
@@ -1469,20 +1468,20 @@ const openGenerateProblemModal = () => {
           return;
         }
 
-        let finalLabelIds = [...selectedLabelIds];
-        if (pendingLabelDrafts.length > 0) {
-          try {
-            setCreatingLabel(true);
-            const createdLabels = await Promise.all(
-              pendingLabelDrafts.map(async (draft) => {
-                const response = await api.post<Label>("/api/v1/labels", {
-                  name: draft.name,
-                  color: draft.color,
-                  secundaryColor: draft.secundaryColor,
-                  isGlobal:
-                    currentUser?.role === "admin" ? draft.isGlobal : false,
-                  user: currentUser?.id,
-                });
+      let finalLabelIds = [...selectedLabelIds];
+      if (pendingLabelDrafts.length > 0) {
+        try {
+          setCreatingLabel(true);
+          const createdLabels = await Promise.all(
+            pendingLabelDrafts.map(async (draft) => {
+              const response = await api.post<Label>("/api/v1/labels", {
+                name: draft.name,
+                color: draft.color,
+                secundaryColor: draft.secundaryColor,
+                isGlobal:
+                  currentUser?.role === "admin" ? draft.isGlobal : false,
+
+              });
 
                 return {
                   pendingId: draft.id,
