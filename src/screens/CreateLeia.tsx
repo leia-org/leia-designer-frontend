@@ -1351,7 +1351,7 @@ const openGenerateProblemModal = () => {
         const validApiKeys = getValidApiKeys(modelName);
         const apiKeyId = validApiKeys.some((key) => key.id === prev.apiKeyId)
           ? prev.apiKeyId
-          : null;
+          : (validApiKeys.find((key) => key.isDefault) || validApiKeys[0])?.id ?? null;
 
         return {
           ...prev,
@@ -1361,29 +1361,6 @@ const openGenerateProblemModal = () => {
       });
     },
     [getValidApiKeys]
-  );
-
-  const handleTryApiKeyChange = useCallback(
-    (apiKeyId: string | null) => {
-      setTryConfig((prev) => {
-        const validModels = getValidModels(apiKeyId);
-        const key = apiKeys.find((k) => k.id === apiKeyId);
-        // Keep the current model if still valid, else preselect the key's
-        // default model, else clear.
-        const modelName = validModels.includes(prev.modelName)
-          ? prev.modelName
-          : key?.model && validModels.includes(key.model)
-            ? key.model
-            : "";
-
-        return {
-          ...prev,
-          apiKeyId,
-          modelName,
-        };
-      });
-    },
-    [getValidModels, apiKeys]
   );
 
   const handleTestLeia = async () => {
@@ -2492,12 +2469,10 @@ const openGenerateProblemModal = () => {
                   providersError={providersError}
                   apiKeysError={apiKeysError}
                   modelValue={tryConfig.modelName}
-                  apiKeyValue={tryConfig.apiKeyId}
                   models={validTryModels}
-                  apiKeys={validTryApiKeys}
+                  apiKeyProvidersMapped={apiKeyProvidersMapped}
                   toolsRestricted={problemHasWidgets}
                   onModelChange={handleTryModelChange}
-                  onApiKeyChange={handleTryApiKeyChange}
                   canStart={canStartTry}
                   onStart={handleStartTry}
                   isStarting={testingLeia}

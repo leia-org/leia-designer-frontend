@@ -441,7 +441,7 @@ export const LeiaSearch: React.FC = () => {
         const validApiKeys = getValidApiKeys(modelName);
         const apiKeyId = validApiKeys.some((key) => key.id === current.apiKeyId)
           ? current.apiKeyId
-          : null;
+          : (validApiKeys.find((key) => key.isDefault) || validApiKeys[0])?.id ?? null;
 
         return {
           ...prev,
@@ -454,28 +454,6 @@ export const LeiaSearch: React.FC = () => {
       });
     },
     [getValidApiKeys]
-  );
-
-  const handleTryApiKeyChange = useCallback(
-    (leiaId: string, apiKeyId: string | null) => {
-      setTryConfigByLeia((prev) => {
-        const current = prev[leiaId] || { modelName: "", apiKeyId: null };
-        const validModels = getValidModels(apiKeyId);
-        const modelName = validModels.includes(current.modelName)
-          ? current.modelName
-          : "";
-
-        return {
-          ...prev,
-          [leiaId]: {
-            ...current,
-            apiKeyId,
-            modelName,
-          },
-        };
-      });
-    },
-    [getValidModels]
   );
 
   const handleTest = async (
@@ -1134,14 +1112,10 @@ export const LeiaSearch: React.FC = () => {
                             providersError={providersError}
                             apiKeysError={apiKeysError}
                             modelValue={tryModelName}
-                            apiKeyValue={tryApiKeyId}
                             models={validTryModels}
-                            apiKeys={validTryApiKeys}
+                            apiKeyProvidersMapped={apiKeyProvidersMapped}
                             onModelChange={(value) =>
                               handleTryModelChange(leia.id, value)
-                            }
-                            onApiKeyChange={(value) =>
-                              handleTryApiKeyChange(leia.id, value)
                             }
                             canStart={canStartTry}
                             onStart={() => handleStartTry(leia)}
