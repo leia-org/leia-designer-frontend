@@ -10,6 +10,7 @@ import {
   CpuChipIcon,
   InformationCircleIcon,
   SparklesIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
@@ -1432,6 +1433,12 @@ const openGenerateProblemModal = () => {
     await handleTestLeia();
   };
 
+  useEffect(() => {
+    if (generatedLeia && !isApiKeysLoading && !isProvidersLoading) {
+      ensureTryConfig();
+    }
+  }, [generatedLeia, isApiKeysLoading, isProvidersLoading, ensureTryConfig]);
+
   const handleNextStep = async () => {
     if (currentStep === 3 && isStep3Complete) {
       if (isFinishingLeia) {
@@ -2459,18 +2466,24 @@ const openGenerateProblemModal = () => {
             }
 
             return (
-              <div className="relative">
+              <div className="relative flex">
                 <button
-                  onClick={handleTryMenuToggle}
-                  className="group relative px-2.5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all duration-300 flex items-center gap-2 overflow-hidden w-10 hover:w-22"
-                  aria-expanded={isTryMenuOpen}
-                  aria-haspopup="dialog"
+                  onClick={handleStartTry}
+                  disabled={!canStartTry}
+                  className="rounded-l-lg bg-green-600 px-3 py-2 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300 flex items-center gap-2"
                   id= "try-button"
                 >
                   <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
-                  <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                    Try
-                  </span>
+                  <span>Try</span>
+                </button>
+                <button
+                  onClick={handleTryMenuToggle}
+                  className="rounded-r-lg border-l border-green-700 bg-green-600 px-2 text-white transition-colors hover:bg-green-700"
+                  aria-label="Choose Try settings"
+                  aria-expanded={isTryMenuOpen}
+                  aria-haspopup="dialog"
+                >
+                  <ChevronDownIcon className="h-4 w-4" />
                 </button>
                 <LeiaTryDropdown
                   isOpen={isTryMenuOpen}

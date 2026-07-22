@@ -8,6 +8,7 @@ import {
   TrashIcon,
   BookOpenIcon,
   PlayIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { useApiKeys } from "../hooks/useApiKeys";
@@ -406,9 +407,11 @@ export const LeiaSearch: React.FC = () => {
         const defaultKey = getDefaultKey();
         const validModels = getValidModels(defaultKey?.id);
         const resolvedDefaultModel =
-          defaultModel && validModels.includes(defaultModel)
-            ? defaultModel
-            : "";
+          defaultKey?.model && validModels.includes(defaultKey.model)
+            ? defaultKey.model
+            : defaultModel && validModels.includes(defaultModel)
+              ? defaultModel
+              : validModels[0] ?? "";
 
         return {
           ...prev,
@@ -514,6 +517,33 @@ export const LeiaSearch: React.FC = () => {
       return;
     }
     setTryMenuOpenId(null);
+    await handleTest(leia, config);
+  };
+
+  const handleDefaultTry = async (leia: Leia) => {
+    const existing = tryConfigByLeia[leia.id];
+    if (existing?.modelName && existing.apiKeyId) {
+      await handleTest(leia, existing);
+      return;
+    }
+
+    const defaultKey = getDefaultKey();
+    const validModels = getValidModels(defaultKey?.id);
+    const modelName =
+      defaultKey?.model && validModels.includes(defaultKey.model)
+        ? defaultKey.model
+        : defaultModel && validModels.includes(defaultModel)
+          ? defaultModel
+          : validModels[0] ?? "";
+
+    if (!defaultKey || !modelName) {
+      ensureTryConfig(leia.id);
+      setTryMenuOpenId(leia.id);
+      return;
+    }
+
+    const config = { modelName, apiKeyId: defaultKey.id };
+    setTryConfigByLeia((prev) => ({ ...prev, [leia.id]: config }));
     await handleTest(leia, config);
   };
 
@@ -1051,17 +1081,15 @@ export const LeiaSearch: React.FC = () => {
                             View
                           </span>
                         </button>
-                        <div className="relative">
+                        <div className="group/try relative flex h-[34px]">
                           <button
-                            className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
+                            className={`h-[34px] flex items-center gap-2 overflow-hidden border border-gray-300 px-2.5 py-0 text-sm transition-all duration-300 hover:bg-gray-50 disabled:cursor-wait disabled:bg-gray-100 ${
                               initializingId === leia.id
-                                ? "w-30"
-                                : "w-9 hover:w-20"
+                                ? "w-30 rounded-l-md"
+                                : "w-9 rounded-md group-hover/try:w-20 group-hover/try:rounded-l-md group-hover/try:rounded-r-none"
                             }`}
-                            onClick={() => handleTryMenuToggle(leia.id)}
+                            onClick={() => handleDefaultTry(leia)}
                             disabled={initializingId === leia.id}
-                            aria-expanded={isTryMenuOpen}
-                            aria-haspopup="dialog"
                             id= "try-button"
                             onMouseEnter={() => {
                             setTimeout(() => {
@@ -1076,14 +1104,28 @@ export const LeiaSearch: React.FC = () => {
                           >
                             <LightBulbIcon className="w-4 h-4 flex-shrink-0" />
                             <span
-                              className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
+                              className={`whitespace-nowrap transition-opacity duration-300 ${
                                 initializingId === leia.id
                                   ? "opacity-100"
-                                  : "opacity-0 group-hover:opacity-100"
+                                  : "opacity-0 group-hover/try:opacity-100"
                               }`}
                             >
                               {initializingId === leia.id ? "Starting…" : "Try"}
                             </span>
+                          </button>
+                          <button
+                            className={`h-[34px] overflow-hidden rounded-r-md border-0 p-0 transition-all duration-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 ${
+                              initializingId === leia.id
+                                ? "w-0 border-0 opacity-0"
+                                : "w-0 opacity-0 group-hover/try:w-8 group-hover/try:border-y group-hover/try:border-r group-hover/try:border-gray-300 group-hover/try:px-2 group-hover/try:opacity-100"
+                            }`}
+                            onClick={() => handleTryMenuToggle(leia.id)}
+                            disabled={initializingId === leia.id}
+                            aria-label="Choose Try settings"
+                            aria-expanded={isTryMenuOpen}
+                            aria-haspopup="dialog"
+                          >
+                            <ChevronDownIcon className="h-4 w-4" />
                           </button>
                           <LeiaTryDropdown
                             isOpen={isTryMenuOpen}
