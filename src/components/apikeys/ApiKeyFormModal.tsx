@@ -157,22 +157,21 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Default Model
-                {mode === "edit" && <span className="text-gray-400 font-normal"> (Optional)</span>}
               </label>
               <select
                 name="model"
                 value={formData.model || ""}
                 onChange={handleChange}
-                required={mode === "create"}
+                required
                 disabled={!formData.provider || isLoadingProviders || providerModels.length === 0}
                 className={`w-full border ${errors.model ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50`}
               >
-                <option value="" disabled={mode === "create"}>
+                <option value="" disabled>
                   {!formData.provider
                     ? "Select a provider first"
                     : providerModels.length === 0
                       ? "No models for this provider"
-                      : mode === "create" ? "Select a model" : "-- none --"}
+                      : "Select a model"}
                 </option>
                 {providerModels.map((m) => (
                   <option key={m} value={m}>
