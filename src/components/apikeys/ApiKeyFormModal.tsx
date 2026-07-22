@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from "react";
+import Select from "react-select";
 import type { ApiKey } from "../../models/ApiKeys";
 import { useProviders } from "../../hooks/useProviders";
+import openAiIcon from "../../assets/providers/openai.svg";
+import geminiIcon from "../../assets/providers/gemini.svg";
+import ollamaIcon from "../../assets/providers/ollama.svg";
+
+const providerIcons: Record<string, string> = {
+  openai: openAiIcon,
+  gemini: geminiIcon,
+  ollama: ollamaIcon,
+};
 
 export interface ApiKeyFormModalProps {
   isOpen: boolean;
@@ -20,6 +30,10 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { apiKeysProviderSet, apiKeyProvidersMapped, isLoading: isLoadingProviders } = useProviders();
   const providerModels = (formData.provider && apiKeyProvidersMapped?.[formData.provider]) || [];
+  const providerOptions = apiKeysProviderSet.map((provider) => ({
+    value: provider,
+    label: provider,
+  }));
 
   useEffect(() => {
     if (isOpen) {
@@ -100,23 +114,36 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">API Key Type</label>
-                <select
-                  name="provider"
-                  value={formData.provider || ""}
-                  onChange={handleChange}
-                  className={`w-full border ${errors.provider ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500`}
-                  required
-                  disabled={isLoadingProviders}
-                >
-                  <option value="" disabled>
-                    {isLoadingProviders ? "Loading providers..." : "Select a provider"}
-                  </option>
-                  {apiKeysProviderSet.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  inputId="api-key-provider"
+                  value={providerOptions.find((option) => option.value === formData.provider) || null}
+                  options={providerOptions}
+                  onChange={(option) => setFormData((prev) => ({
+                    ...prev,
+                    provider: option?.value || "",
+                    model: "",
+                  }))}
+                  isDisabled={isLoadingProviders}
+                  isLoading={isLoadingProviders}
+                  placeholder="Select a provider"
+                  formatOptionLabel={(option) => (
+                    <span className="flex items-center gap-2 capitalize">
+                      {providerIcons[option.value] && (
+                        <img src={providerIcons[option.value]} alt="" className="h-5 w-5 object-contain" />
+                      )}
+                      <span>{option.label}</span>
+                    </span>
+                  )}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      minHeight: 38,
+                      borderColor: errors.provider ? '#ef4444' : base.borderColor,
+                      fontSize: 14,
+                    }),
+                  }}
+                />
+                <input type="hidden" name="provider" value={formData.provider || ""} required />
                 {errors.provider && <p className="text-red-500 text-xs mt-1">{errors.provider}</p>}
               </div>
               <div>
