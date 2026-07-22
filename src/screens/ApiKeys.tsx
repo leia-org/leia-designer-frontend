@@ -198,6 +198,7 @@ export const ApiKeysPage: React.FC = () => {
       <ApiKeyFormModal
         isOpen={isFormModalOpen}
         mode={formMode}
+        canSelectDefault={apiKeys.length > 0}
         userRole={user?.role}
         selectedKey={selectedKey}
         onClose={() => {

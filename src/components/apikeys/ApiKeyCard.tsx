@@ -4,7 +4,6 @@ import {
   TrashIcon,
   LinkIcon,
   CubeTransparentIcon,
-  StarIcon as StarSolidIcon
 } from "@heroicons/react/24/solid";
 import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
 import type { ApiKey } from "../../models/ApiKeys"; // Asegúrate de que esta ruta sea correcta en tu proyecto
@@ -63,9 +62,9 @@ export const ApiKeyCard: React.FC<ApiKeyCardProps> = ({ apiKey, onEdit, userRole
         </div>
 
         <div className="flex space-x-2 flex-shrink-0">
-          <button
+          {!apiKey.isDefault && <button
             onClick={handleToggleDefault}
-            title={apiKey.isDefault ? "Unmark Default" : "Mark as Default"}
+            title="Mark as Default"
             disabled={isSaving}
             className={`p-2 bg-white border border-gray-200 rounded-lg text-gray-500 transition-all shadow-sm ${isSaving ? 'opacity-60 cursor-not-allowed' : 'hover:text-yellow-600 hover:bg-yellow-50 hover:border-yellow-200'}`}
           >
@@ -74,12 +73,10 @@ export const ApiKeyCard: React.FC<ApiKeyCardProps> = ({ apiKey, onEdit, userRole
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
               </svg> // Cambiar por iconos
-            ) : apiKey.isDefault ? (
-              <StarSolidIcon className="h-5 w-5 text-yellow-500" />
             ) : (
               <StarOutlineIcon className="h-5 w-5 text-gray-400" />
             )}
-          </button>
+          </button>}
 
           {(!apiKey?.isSystemApiKey|| (userRole && userRole === 'admin')) && (
             <>
