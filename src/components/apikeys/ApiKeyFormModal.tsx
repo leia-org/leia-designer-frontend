@@ -127,20 +127,24 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Default Model <span className="text-gray-400 font-normal">(Optional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Default Model
+                {mode === "edit" && <span className="text-gray-400 font-normal"> (Optional)</span>}
+              </label>
               <select
                 name="model"
                 value={formData.model || ""}
                 onChange={handleChange}
+                required={mode === "create"}
                 disabled={!formData.provider || isLoadingProviders || providerModels.length === 0}
-                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                className={`w-full border ${errors.model ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50`}
               >
-                <option value="">
+                <option value="" disabled={mode === "create"}>
                   {!formData.provider
                     ? "Select a provider first"
                     : providerModels.length === 0
                       ? "No models for this provider"
-                      : "-- none --"}
+                      : mode === "create" ? "Select a model" : "-- none --"}
                 </option>
                 {providerModels.map((m) => (
                   <option key={m} value={m}>
@@ -148,8 +152,8 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Preselected wherever this key is used (you can still change it there).
+              <p className={`text-xs ${errors.model ? 'text-red-500' : 'text-gray-500'} mt-1`}>
+                {errors.model || "Preselected wherever this key is used (you can still change it there)."}
               </p>
             </div>
             <div>
