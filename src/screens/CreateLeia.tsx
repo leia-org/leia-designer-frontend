@@ -721,8 +721,8 @@ export const CreateLeia: React.FC = () => {
   
       const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL;
       const replicationUrl = `${workbenchBaseUrl.replace(
-        /\/$/, "" )}/replications/${encodeURIComponent(
-        activityReplication.data.replication.id)}`;
+      /\/$/, "" )}/login?redirect=/replications/${encodeURIComponent(
+      activityReplication.data.replication.id)}`;
       closeActivityReplicationModal();
       const newWindow = window.open(replicationUrl);
   
