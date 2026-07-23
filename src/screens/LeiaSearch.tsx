@@ -43,6 +43,7 @@ export const LeiaSearch: React.FC = () => {
   } = useApiKeys();
   const {
     apiKeyProvidersMapped,
+    providerProviderModuleMap,
     defaultModel,
     isLoading: isProvidersLoading,
     error: providersError,
@@ -399,53 +400,109 @@ export const LeiaSearch: React.FC = () => {
     [apiKeyProvidersMapped, apiKeys]
   );
 
+  const toolCapableProviders = useMemo(
+    () =>
+      Object.entries(providerProviderModuleMap || {})
+        .filter(([, moduleName]) => moduleName === "openai-responses")
+        .map(([provider]) => provider),
+    [providerProviderModuleMap]
+  );
+
+  const toolCapableModels = useMemo(
+    () =>
+      toolCapableProviders.flatMap(
+        (provider) => apiKeyProvidersMapped[provider] || []
+      ),
+    [apiKeyProvidersMapped, toolCapableProviders]
+  );
+
+  const leiaRequiresTools = useCallback(
+    (leia: Leia) =>
+      Array.isArray(leia.spec?.problem?.spec?.widgets) &&
+      leia.spec.problem.spec.widgets.length > 0,
+    []
+  );
+
+  const getTryModels = useCallback(
+    (leia: Leia) =>
+      leiaRequiresTools(leia) ? toolCapableModels : getValidModels(null),
+    [getValidModels, leiaRequiresTools, toolCapableModels]
+  );
+
+  const getTryApiKeys = useCallback(
+    (leia: Leia, modelName: string | null | undefined) => {
+      const matchingKeys = getValidApiKeys(modelName);
+      return leiaRequiresTools(leia)
+        ? matchingKeys.filter((key) =>
+            toolCapableProviders.includes(key.provider)
+          )
+        : matchingKeys;
+    },
+    [getValidApiKeys, leiaRequiresTools, toolCapableProviders]
+  );
+
   const ensureTryConfig = useCallback(
-    (leiaId: string) => {
+    (leia: Leia) => {
       setTryConfigByLeia((prev) => {
-        if (prev[leiaId]) return prev;
+        const existing = prev[leia.id];
+        const validModels = getTryModels(leia);
+        if (
+          existing?.modelName &&
+          existing.apiKeyId &&
+          validModels.includes(existing.modelName) &&
+          getTryApiKeys(leia, existing.modelName).some(
+            (key) => key.id === existing.apiKeyId
+          )
+        ) {
+          return prev;
+        }
 
         const defaultKey = getDefaultKey();
-        const validModels = getValidModels(defaultKey?.id);
+        const candidateKeys = getTryApiKeys(leia, null);
+        const key =
+          defaultKey && candidateKeys.some((candidate) => candidate.id === defaultKey.id)
+            ? defaultKey
+            : candidateKeys[0] ?? null;
         const resolvedDefaultModel =
-          defaultKey?.model && validModels.includes(defaultKey.model)
-            ? defaultKey.model
+          key?.model && validModels.includes(key.model)
+            ? key.model
             : defaultModel && validModels.includes(defaultModel)
               ? defaultModel
               : validModels[0] ?? "";
 
         return {
           ...prev,
-          [leiaId]: {
+          [leia.id]: {
             modelName: resolvedDefaultModel,
-            apiKeyId: defaultKey?.id ?? null,
+            apiKeyId: key?.id ?? null,
           },
         };
       });
     },
-    [defaultModel, getDefaultKey, getValidModels]
+    [defaultModel, getDefaultKey, getTryApiKeys, getTryModels]
   );
 
   const handleTryMenuToggle = useCallback(
-    (leiaId: string) => {
-      if (initializingId === leiaId) return;
-      setTryMenuOpenId((prev) => (prev === leiaId ? null : leiaId));
-      ensureTryConfig(leiaId);
+    (leia: Leia) => {
+      if (initializingId === leia.id) return;
+      setTryMenuOpenId((prev) => (prev === leia.id ? null : leia.id));
+      ensureTryConfig(leia);
     },
     [ensureTryConfig, initializingId]
   );
 
   const handleTryModelChange = useCallback(
-    (leiaId: string, modelName: string) => {
+    (leia: Leia, modelName: string) => {
       setTryConfigByLeia((prev) => {
-        const current = prev[leiaId] || { modelName: "", apiKeyId: null };
-        const validApiKeys = getValidApiKeys(modelName);
+        const current = prev[leia.id] || { modelName: "", apiKeyId: null };
+        const validApiKeys = getTryApiKeys(leia, modelName);
         const apiKeyId = validApiKeys.some((key) => key.id === current.apiKeyId)
           ? current.apiKeyId
           : (validApiKeys.find((key) => key.isDefault) || validApiKeys[0])?.id ?? null;
 
         return {
           ...prev,
-          [leiaId]: {
+          [leia.id]: {
             ...current,
             modelName,
             apiKeyId,
@@ -453,7 +510,7 @@ export const LeiaSearch: React.FC = () => {
         };
       });
     },
-    [getValidApiKeys]
+    [getTryApiKeys]
   );
 
   const handleTest = async (
@@ -500,27 +557,39 @@ export const LeiaSearch: React.FC = () => {
 
   const handleDefaultTry = async (leia: Leia) => {
     const existing = tryConfigByLeia[leia.id];
-    if (existing?.modelName && existing.apiKeyId) {
+    const validModels = getTryModels(leia);
+    if (
+      existing?.modelName &&
+      existing.apiKeyId &&
+      validModels.includes(existing.modelName) &&
+      getTryApiKeys(leia, existing.modelName).some(
+        (key) => key.id === existing.apiKeyId
+      )
+    ) {
       await handleTest(leia, existing);
       return;
     }
 
     const defaultKey = getDefaultKey();
-    const validModels = getValidModels(defaultKey?.id);
+    const candidateKeys = getTryApiKeys(leia, null);
+    const key =
+      defaultKey && candidateKeys.some((candidate) => candidate.id === defaultKey.id)
+        ? defaultKey
+        : candidateKeys[0] ?? null;
     const modelName =
-      defaultKey?.model && validModels.includes(defaultKey.model)
-        ? defaultKey.model
+      key?.model && validModels.includes(key.model)
+        ? key.model
         : defaultModel && validModels.includes(defaultModel)
           ? defaultModel
           : validModels[0] ?? "";
 
-    if (!defaultKey || !modelName) {
-      ensureTryConfig(leia.id);
+    if (!key || !modelName) {
+      ensureTryConfig(leia);
       setTryMenuOpenId(leia.id);
       return;
     }
 
-    const config = { modelName, apiKeyId: defaultKey.id };
+    const config = { modelName, apiKeyId: key.id };
     setTryConfigByLeia((prev) => ({ ...prev, [leia.id]: config }));
     await handleTest(leia, config);
   };
@@ -919,8 +988,8 @@ export const LeiaSearch: React.FC = () => {
                   const tryConfig = tryConfigByLeia[leia.id];
                   const tryModelName = tryConfig?.modelName ?? "";
                   const tryApiKeyId = tryConfig?.apiKeyId ?? null;
-                  const validTryModels = getValidModels(tryApiKeyId);
-                  const validTryApiKeys = getValidApiKeys(tryModelName);
+                  const validTryModels = getTryModels(leia);
+                  const validTryApiKeys = getTryApiKeys(leia, tryModelName);
                   const isTryMenuOpen = tryMenuOpenId === leia.id;
                   const isTryLoading = isProvidersLoading || isApiKeysLoading;
                   const canStartTry =
@@ -1097,7 +1166,7 @@ export const LeiaSearch: React.FC = () => {
                                 ? "w-0 border-0 opacity-0"
                                 : "w-0 opacity-0 group-hover/try:w-8 group-hover/try:border-y group-hover/try:border-r group-hover/try:border-gray-300 group-hover/try:px-2 group-hover/try:opacity-100"
                             }`}
-                            onClick={() => handleTryMenuToggle(leia.id)}
+                            onClick={() => handleTryMenuToggle(leia)}
                             disabled={initializingId === leia.id}
                             aria-label="Choose Try settings"
                             aria-expanded={isTryMenuOpen}
@@ -1115,7 +1184,7 @@ export const LeiaSearch: React.FC = () => {
                             models={validTryModels}
                             apiKeyProvidersMapped={apiKeyProvidersMapped}
                             onModelChange={(value) =>
-                              handleTryModelChange(leia.id, value)
+                              handleTryModelChange(leia, value)
                             }
                             canStart={canStartTry}
                             onStart={() => handleStartTry(leia)}

@@ -2013,7 +2013,10 @@ const openGenerateProblemModal = () => {
     const toolCapableModels = toolCapableProviders.flatMap(
       (provider) => apiKeyProvidersMapped[provider] || []
     );
-    let validTryModels = getValidModels(tryConfig.apiKeyId);
+    // Show every available model in the Try menu. Selecting one will choose a
+    // compatible API key in handleTryModelChange; filtering by the currently
+    // selected (usually default) key would hide the rest of the catalog.
+    let validTryModels = getValidModels(null);
     let validTryApiKeys = getValidApiKeys(tryConfig.modelName);
     if (problemHasWidgets) {
       validTryModels = validTryModels.filter((m) => toolCapableModels.includes(m));
