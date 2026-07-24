@@ -4,6 +4,7 @@ import { useAuth } from "../../context";
 import LeiaCard from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
 import type { Persona, Problem, Behaviour } from "../../models/Leia";
+import { buildOriginalAvatarPath } from "../../lib/avatar";
 
 interface SelectionColumnProps {
   title: string;
@@ -32,6 +33,7 @@ export const SelectionColumn: React.FC<SelectionColumnProps> = ({
 
   // Determinar si esta columna es de behaviours
   const isBehaviourColumn = title.toLowerCase() === "behaviour";
+  const showItemAvatar = title.toLowerCase() === "persona" || title.toLowerCase() === "problem";
 
   // Determinar si el usuario actual es instructor
   const isCurrentUserInstructor = currentUser?.role === "instructor";
@@ -116,6 +118,16 @@ spec:
                   onDelete ? () => onDelete(item, getResourceType()) : undefined
                 }
                 resourceId={item.id}
+                avatar={"avatar" in item.spec ? item.spec.avatar : undefined}
+                fallbackAvatar={
+                  showItemAvatar
+                    ? buildOriginalAvatarPath(
+                        getResourceType() === "persona" ? "personas" : "problems",
+                        item.id,
+                      )
+                    : undefined
+                }
+                showAvatar={showItemAvatar}
               />
             ))
           ) : (

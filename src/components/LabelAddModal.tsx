@@ -21,7 +21,7 @@ export const LabelAddModal: React.FC<LabelAddModalProps> = ({ leia, onClose, onS
     const { user: currentUser } = useAuth();
     const [search, setSearch] = useState('');
     const [isCreating, setIsCreating] = useState(false);
-    const [newLabel, setNewLabel] = useState({ name: '', color: '#2563eb', secundaryColor: '#bfdbfe', user: currentUser?.id, isGlobal: false });
+    const [newLabel, setNewLabel] = useState({ name: '', color: '#2563eb', secundaryColor: '#bfdbfe', isGlobal: false });
     const selected = allLabels.filter(l => selectedIds.has(l._id));
     const available = allLabels.filter(
     l => !selectedIds.has(l._id) && l.name.toLowerCase().includes(search.toLowerCase())
@@ -39,7 +39,7 @@ export const LabelAddModal: React.FC<LabelAddModalProps> = ({ leia, onClose, onS
       onLabelCreated(created);
       add(created._id);
       setIsCreating(false);
-      setNewLabel({ name: '', color: '#2563eb', secundaryColor: '#bfdbfe', user: currentUser?.id, isGlobal: false });
+      setNewLabel({ name: '', color: '#2563eb', secundaryColor: '#bfdbfe', isGlobal: false });
     } catch {
       setCreateError('Error creating label. Please try again.');
     } finally {
