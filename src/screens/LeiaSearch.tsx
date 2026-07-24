@@ -24,8 +24,6 @@ import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
 import { Avatar } from "../components/shared/Avatar";
 import { buildOriginalAvatarPath } from "../lib/avatar";
-import type { Experiment } from "../models/Experiment";
-
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { ActivityReplicationModal } from "../components/ActivityReplicationModal";
