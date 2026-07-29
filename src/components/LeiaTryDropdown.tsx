@@ -4,6 +4,7 @@ import Select from "react-select";
 import openAiIcon from "../assets/providers/openai.svg";
 import geminiIcon from "../assets/providers/gemini.svg";
 import ollamaIcon from "../assets/providers/ollama.svg";
+import type { ApiKey } from "../models/ApiKeys";
 
 const providerIcons: Record<string, string> = {
   openai: openAiIcon,
@@ -19,9 +20,12 @@ interface LeiaTryDropdownProps {
   apiKeysError?: string | null;
   modelValue: string;
   models: string[];
+  apiKeys: ApiKey[];
+  apiKeyValue: string | null;
   apiKeyProvidersMapped: Record<string, string[]>;
   toolsRestricted?: boolean;
   onModelChange: (value: string) => void;
+  onApiKeyChange: (value: string) => void;
   canStart: boolean;
   onStart: () => void;
   isStarting: boolean;
@@ -37,9 +41,12 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
   apiKeysError,
   modelValue,
   models,
+  apiKeys,
+  apiKeyValue,
   apiKeyProvidersMapped,
   toolsRestricted,
   onModelChange,
+  onApiKeyChange,
   canStart,
   onStart,
   isStarting,
@@ -57,6 +64,14 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
       )?.[0] || "",
   }));
   const selectedModel = modelOptions.find((option) => option.value === modelValue) || null;
+  const apiKeyOptions = apiKeys.map((apiKey) => ({
+    value: apiKey.id,
+    label: `${apiKey.description || apiKey.provider}${
+      apiKey.isDefault ? " (Default)" : ""
+    }`,
+  }));
+  const selectedApiKey =
+    apiKeyOptions.find((option) => option.value === apiKeyValue) || null;
 
   return (
     <>
@@ -96,6 +111,25 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
             }}
           />
         </div>
+        {apiKeyOptions.length > 1 && (
+          <div className="mt-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              API key
+            </label>
+            <Select
+              value={selectedApiKey}
+              options={apiKeyOptions}
+              onChange={(option) => onApiKeyChange(option?.value || "")}
+              isDisabled={isLoading}
+              isLoading={isLoading}
+              placeholder="-- Select API key --"
+              styles={{
+                control: (base) => ({ ...base, minHeight: 38, fontSize: 14 }),
+                menu: (base) => ({ ...base, fontSize: 14 }),
+              }}
+            />
+          </div>
+        )}
         {(providersError || apiKeysError) && (
           <div className="mt-2 text-xs text-red-600">
             {providersError || apiKeysError}

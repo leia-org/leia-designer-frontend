@@ -389,13 +389,16 @@ export const LeiaSearch: React.FC = () => {
 
   const getValidApiKeys = useCallback(
     (modelName: string | null | undefined) => {
-      if (!modelName) return apiKeys;
+      const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
+      if (!modelName) return activeApiKeys;
 
       const validProviders = Object.entries(apiKeyProvidersMapped || {})
         .filter(([, models]) => models.includes(modelName))
         .map(([provider]) => provider);
 
-      return apiKeys.filter((key) => validProviders.includes(key.provider));
+      return activeApiKeys.filter((key) =>
+        validProviders.includes(key.provider)
+      );
     },
     [apiKeyProvidersMapped, apiKeys]
   );
@@ -511,6 +514,19 @@ export const LeiaSearch: React.FC = () => {
       });
     },
     [getTryApiKeys]
+  );
+
+  const handleTryApiKeyChange = useCallback(
+    (leia: Leia, apiKeyId: string) => {
+      setTryConfigByLeia((prev) => ({
+        ...prev,
+        [leia.id]: {
+          ...(prev[leia.id] || { modelName: "" }),
+          apiKeyId: apiKeyId || null,
+        },
+      }));
+    },
+    []
   );
 
   const handleTest = async (
@@ -999,12 +1015,12 @@ export const LeiaSearch: React.FC = () => {
                     !isTryLoading &&
                     !providersError &&
                     !apiKeysError &&
-                    apiKeys.length === 0;
+                    apiKeys.every((key) => key.isActive === false);
                   const showNoMatchingKeys =
                     !isTryLoading &&
                     Boolean(tryModelName) &&
                     validTryApiKeys.length === 0 &&
-                    apiKeys.length > 0;
+                    apiKeys.some((key) => key.isActive !== false);
 
                   return (
                     <li
@@ -1187,10 +1203,15 @@ export const LeiaSearch: React.FC = () => {
                             apiKeysError={apiKeysError}
                             modelValue={tryModelName}
                             models={validTryModels}
+                            apiKeys={validTryApiKeys}
+                            apiKeyValue={tryApiKeyId}
                             apiKeyProvidersMapped={apiKeyProvidersMapped}
                             toolsRestricted={requiresTools}
                             onModelChange={(value) =>
                               handleTryModelChange(leia, value)
+                            }
+                            onApiKeyChange={(value) =>
+                              handleTryApiKeyChange(leia, value)
                             }
                             canStart={canStartTry}
                             onStart={() => handleStartTry(leia)}

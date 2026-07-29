@@ -1276,13 +1276,16 @@ const openGenerateProblemModal = () => {
 
   const getValidApiKeys = useCallback(
     (modelName: string | null | undefined) => {
-      if (!modelName) return apiKeys;
+      const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
+      if (!modelName) return activeApiKeys;
 
       const validProviders = Object.entries(apiKeyProvidersMapped || {})
         .filter(([, models]) => models.includes(modelName))
         .map(([provider]) => provider);
 
-      return apiKeys.filter((key) => validProviders.includes(key.provider));
+      return activeApiKeys.filter((key) =>
+        validProviders.includes(key.provider)
+      );
     },
     [apiKeyProvidersMapped, apiKeys]
   );
@@ -1299,9 +1302,12 @@ const openGenerateProblemModal = () => {
     const toolCapableModels = toolCapableProviders.flatMap(
       (provider) => apiKeyProvidersMapped[provider] || []
     );
+    const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
     const candidateKeys = requiresTools
-      ? apiKeys.filter((key) => toolCapableProviders.includes(key.provider))
-      : apiKeys;
+      ? activeApiKeys.filter((key) =>
+          toolCapableProviders.includes(key.provider)
+        )
+      : activeApiKeys;
 
     setTryConfig((prev) => {
       const prevKeyValid = Boolean(prev.apiKeyId && candidateKeys.some((k) => k.id === prev.apiKeyId));
@@ -1362,6 +1368,10 @@ const openGenerateProblemModal = () => {
     },
     [getValidApiKeys]
   );
+
+  const handleTryApiKeyChange = useCallback((apiKeyId: string) => {
+    setTryConfig((prev) => ({ ...prev, apiKeyId: apiKeyId || null }));
+  }, []);
 
   const handleTestLeia = async () => {
     if (!generatedLeia) {
@@ -2032,12 +2042,12 @@ const openGenerateProblemModal = () => {
       !isTryLoading &&
       !providersError &&
       !apiKeysError &&
-      apiKeys.length === 0;
+      apiKeys.every((key) => key.isActive === false);
     const showNoMatchingKeys =
       !isTryLoading &&
       Boolean(tryConfig.modelName) &&
       validTryApiKeys.length === 0 &&
-      apiKeys.length > 0;
+      apiKeys.some((key) => key.isActive !== false);
 
     return (
       <div className="space-y-6">
@@ -2477,9 +2487,12 @@ const openGenerateProblemModal = () => {
                   apiKeysError={apiKeysError}
                   modelValue={tryConfig.modelName}
                   models={validTryModels}
+                  apiKeys={validTryApiKeys}
+                  apiKeyValue={tryConfig.apiKeyId}
                   apiKeyProvidersMapped={apiKeyProvidersMapped}
                   toolsRestricted={problemHasWidgets}
                   onModelChange={handleTryModelChange}
+                  onApiKeyChange={handleTryApiKeyChange}
                   canStart={canStartTry}
                   onStart={handleStartTry}
                   isStarting={testingLeia}
