@@ -10,6 +10,7 @@ import {
   CpuChipIcon,
   InformationCircleIcon,
   SparklesIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
@@ -1275,13 +1276,16 @@ const openGenerateProblemModal = () => {
 
   const getValidApiKeys = useCallback(
     (modelName: string | null | undefined) => {
-      if (!modelName) return apiKeys;
+      const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
+      if (!modelName) return activeApiKeys;
 
       const validProviders = Object.entries(apiKeyProvidersMapped || {})
         .filter(([, models]) => models.includes(modelName))
         .map(([provider]) => provider);
 
-      return apiKeys.filter((key) => validProviders.includes(key.provider));
+      return activeApiKeys.filter((key) =>
+        validProviders.includes(key.provider)
+      );
     },
     [apiKeyProvidersMapped, apiKeys]
   );
@@ -1298,9 +1302,12 @@ const openGenerateProblemModal = () => {
     const toolCapableModels = toolCapableProviders.flatMap(
       (provider) => apiKeyProvidersMapped[provider] || []
     );
+    const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
     const candidateKeys = requiresTools
-      ? apiKeys.filter((key) => toolCapableProviders.includes(key.provider))
-      : apiKeys;
+      ? activeApiKeys.filter((key) =>
+          toolCapableProviders.includes(key.provider)
+        )
+      : activeApiKeys;
 
     setTryConfig((prev) => {
       const prevKeyValid = Boolean(prev.apiKeyId && candidateKeys.some((k) => k.id === prev.apiKeyId));
@@ -1350,7 +1357,7 @@ const openGenerateProblemModal = () => {
         const validApiKeys = getValidApiKeys(modelName);
         const apiKeyId = validApiKeys.some((key) => key.id === prev.apiKeyId)
           ? prev.apiKeyId
-          : null;
+          : (validApiKeys.find((key) => key.isDefault) || validApiKeys[0])?.id ?? null;
 
         return {
           ...prev,
@@ -1362,28 +1369,9 @@ const openGenerateProblemModal = () => {
     [getValidApiKeys]
   );
 
-  const handleTryApiKeyChange = useCallback(
-    (apiKeyId: string | null) => {
-      setTryConfig((prev) => {
-        const validModels = getValidModels(apiKeyId);
-        const key = apiKeys.find((k) => k.id === apiKeyId);
-        // Keep the current model if still valid, else preselect the key's
-        // default model, else clear.
-        const modelName = validModels.includes(prev.modelName)
-          ? prev.modelName
-          : key?.model && validModels.includes(key.model)
-            ? key.model
-            : "";
-
-        return {
-          ...prev,
-          apiKeyId,
-          modelName,
-        };
-      });
-    },
-    [getValidModels, apiKeys]
-  );
+  const handleTryApiKeyChange = useCallback((apiKeyId: string) => {
+    setTryConfig((prev) => ({ ...prev, apiKeyId: apiKeyId || null }));
+  }, []);
 
   const handleTestLeia = async () => {
     if (!generatedLeia) {
@@ -1431,6 +1419,12 @@ const openGenerateProblemModal = () => {
     setIsTryMenuOpen(false);
     await handleTestLeia();
   };
+
+  useEffect(() => {
+    if (generatedLeia && !isApiKeysLoading && !isProvidersLoading) {
+      ensureTryConfig();
+    }
+  }, [generatedLeia, isApiKeysLoading, isProvidersLoading, ensureTryConfig]);
 
   const handleNextStep = async () => {
     if (currentStep === 3 && isStep3Complete) {
@@ -2029,7 +2023,10 @@ const openGenerateProblemModal = () => {
     const toolCapableModels = toolCapableProviders.flatMap(
       (provider) => apiKeyProvidersMapped[provider] || []
     );
-    let validTryModels = getValidModels(tryConfig.apiKeyId);
+    // Show every available model in the Try menu. Selecting one will choose a
+    // compatible API key in handleTryModelChange; filtering by the currently
+    // selected (usually default) key would hide the rest of the catalog.
+    let validTryModels = getValidModels(null);
     let validTryApiKeys = getValidApiKeys(tryConfig.modelName);
     if (problemHasWidgets) {
       validTryModels = validTryModels.filter((m) => toolCapableModels.includes(m));
@@ -2045,12 +2042,12 @@ const openGenerateProblemModal = () => {
       !isTryLoading &&
       !providersError &&
       !apiKeysError &&
-      apiKeys.length === 0;
+      apiKeys.every((key) => key.isActive === false);
     const showNoMatchingKeys =
       !isTryLoading &&
       Boolean(tryConfig.modelName) &&
       validTryApiKeys.length === 0 &&
-      apiKeys.length > 0;
+      apiKeys.some((key) => key.isActive !== false);
 
     return (
       <div className="space-y-6">
@@ -2459,19 +2456,29 @@ const openGenerateProblemModal = () => {
             }
 
             return (
-              <div className="relative">
+              <div className="relative flex">
                 <button
-                  onClick={handleTryMenuToggle}
-                  className="group relative px-2.5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all duration-300 flex items-center gap-2 overflow-hidden w-10 hover:w-22"
-                  aria-expanded={isTryMenuOpen}
-                  aria-haspopup="dialog"
+                  onClick={showNoApiKeys ? handleTryMenuToggle : handleStartTry}
+                  disabled={!showNoApiKeys && !canStartTry}
+                  className={`bg-green-600 px-3 py-2 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300 flex items-center gap-2 ${
+                    showNoApiKeys ? "rounded-lg" : "rounded-l-lg"
+                  }`}
                   id= "try-button"
                 >
                   <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
-                  <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                    Try
-                  </span>
+                  <span>Try</span>
                 </button>
+                {!showNoApiKeys && (
+                  <button
+                    onClick={handleTryMenuToggle}
+                    className="rounded-r-lg border-l border-green-700 bg-green-600 px-2 text-white transition-colors hover:bg-green-700"
+                    aria-label="Choose Try settings"
+                    aria-expanded={isTryMenuOpen}
+                    aria-haspopup="dialog"
+                  >
+                    <ChevronDownIcon className="h-4 w-4" />
+                  </button>
+                )}
                 <LeiaTryDropdown
                   isOpen={isTryMenuOpen}
                   onClose={() => setIsTryMenuOpen(false)}
@@ -2479,9 +2486,10 @@ const openGenerateProblemModal = () => {
                   providersError={providersError}
                   apiKeysError={apiKeysError}
                   modelValue={tryConfig.modelName}
-                  apiKeyValue={tryConfig.apiKeyId}
                   models={validTryModels}
                   apiKeys={validTryApiKeys}
+                  apiKeyValue={tryConfig.apiKeyId}
+                  apiKeyProvidersMapped={apiKeyProvidersMapped}
                   toolsRestricted={problemHasWidgets}
                   onModelChange={handleTryModelChange}
                   onApiKeyChange={handleTryApiKeyChange}

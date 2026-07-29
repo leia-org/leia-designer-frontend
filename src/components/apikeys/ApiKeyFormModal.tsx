@@ -1,11 +1,22 @@
 import React, { useState, useEffect } from "react";
+import Select from "react-select";
 import type { ApiKey } from "../../models/ApiKeys";
 import { useProviders } from "../../hooks/useProviders";
+import openAiIcon from "../../assets/providers/openai.svg";
+import geminiIcon from "../../assets/providers/gemini.svg";
+import ollamaIcon from "../../assets/providers/ollama.svg";
+
+const providerIcons: Record<string, string> = {
+  openai: openAiIcon,
+  gemini: geminiIcon,
+  ollama: ollamaIcon,
+};
 
 export interface ApiKeyFormModalProps {
   isOpen: boolean;
   mode: "create" | "edit";
   selectedKey: ApiKey | null;
+  canSelectDefault?: boolean;
   userRole?: string;
   onClose: () => void;
 
@@ -13,12 +24,16 @@ export interface ApiKeyFormModalProps {
   errors?: Record<string, string>;
 }
 
-export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, selectedKey, userRole, onClose, onSave, errors = {} }) => {
+export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, selectedKey, canSelectDefault = false, userRole, onClose, onSave, errors = {} }) => {
   const [formData, setFormData] = useState<Partial<ApiKey>>({});
   const [, setInitialFormData] = useState<Partial<ApiKey> | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { apiKeysProviderSet, apiKeyProvidersMapped, isLoading: isLoadingProviders } = useProviders();
   const providerModels = (formData.provider && apiKeyProvidersMapped?.[formData.provider]) || [];
+  const providerOptions = apiKeysProviderSet.map((provider) => ({
+    value: provider,
+    label: provider,
+  }));
 
   useEffect(() => {
     if (isOpen) {
@@ -99,23 +114,36 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">API Key Type</label>
-                <select
-                  name="provider"
-                  value={formData.provider || ""}
-                  onChange={handleChange}
-                  className={`w-full border ${errors.provider ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500`}
-                  required
-                  disabled={isLoadingProviders}
-                >
-                  <option value="" disabled>
-                    {isLoadingProviders ? "Loading providers..." : "Select a provider"}
-                  </option>
-                  {apiKeysProviderSet.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  inputId="api-key-provider"
+                  value={providerOptions.find((option) => option.value === formData.provider) || null}
+                  options={providerOptions}
+                  onChange={(option) => setFormData((prev) => ({
+                    ...prev,
+                    provider: option?.value || "",
+                    model: "",
+                  }))}
+                  isDisabled={isLoadingProviders}
+                  isLoading={isLoadingProviders}
+                  placeholder="Select a provider"
+                  formatOptionLabel={(option) => (
+                    <span className="flex items-center gap-2 capitalize">
+                      {providerIcons[option.value] && (
+                        <img src={providerIcons[option.value]} alt="" className="h-5 w-5 object-contain" />
+                      )}
+                      <span>{option.label}</span>
+                    </span>
+                  )}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      minHeight: 38,
+                      borderColor: errors.provider ? '#ef4444' : base.borderColor,
+                      fontSize: 14,
+                    }),
+                  }}
+                />
+                <input type="hidden" name="provider" value={formData.provider || ""} required />
                 {errors.provider && <p className="text-red-500 text-xs mt-1">{errors.provider}</p>}
               </div>
               <div>
@@ -127,20 +155,23 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Default Model <span className="text-gray-400 font-normal">(Optional)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Default Model
+              </label>
               <select
                 name="model"
                 value={formData.model || ""}
                 onChange={handleChange}
+                required
                 disabled={!formData.provider || isLoadingProviders || providerModels.length === 0}
-                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                className={`w-full border ${errors.model ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50`}
               >
-                <option value="">
+                <option value="" disabled>
                   {!formData.provider
                     ? "Select a provider first"
                     : providerModels.length === 0
                       ? "No models for this provider"
-                      : "-- none --"}
+                      : "Select a model"}
                 </option>
                 {providerModels.map((m) => (
                   <option key={m} value={m}>
@@ -148,8 +179,8 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Preselected wherever this key is used (you can still change it there).
+              <p className={`text-xs ${errors.model ? 'text-red-500' : 'text-gray-500'} mt-1`}>
+                {errors.model || "Preselected wherever this key is used (you can still change it there)."}
               </p>
             </div>
             <div>
@@ -161,7 +192,7 @@ export const ApiKeyFormModal: React.FC<ApiKeyFormModalProps> = ({ isOpen, mode, 
               <label className="block text-sm font-medium text-gray-700 mb-1">Management URL <span className="text-gray-400 font-normal">(Optional)</span></label>
               <input type="url" name="managementUrl" value={formData.managementUrl || ""} onChange={handleChange} className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 text-blue-600" placeholder="https://..." />
             </div>
-            {mode === "create" && (
+            {mode === "create" && canSelectDefault && (
               <div className="pt-2 border-t border-gray-100 mt-4">
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input

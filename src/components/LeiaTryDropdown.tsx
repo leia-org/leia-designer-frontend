@@ -1,6 +1,16 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import Select from "react-select";
+import openAiIcon from "../assets/providers/openai.svg";
+import geminiIcon from "../assets/providers/gemini.svg";
+import ollamaIcon from "../assets/providers/ollama.svg";
 import type { ApiKey } from "../models/ApiKeys";
+
+const providerIcons: Record<string, string> = {
+  openai: openAiIcon,
+  gemini: geminiIcon,
+  ollama: ollamaIcon,
+};
 
 interface LeiaTryDropdownProps {
   isOpen: boolean;
@@ -9,12 +19,13 @@ interface LeiaTryDropdownProps {
   providersError?: string | null;
   apiKeysError?: string | null;
   modelValue: string;
-  apiKeyValue: string | null;
   models: string[];
   apiKeys: ApiKey[];
+  apiKeyValue: string | null;
+  apiKeyProvidersMapped: Record<string, string[]>;
   toolsRestricted?: boolean;
   onModelChange: (value: string) => void;
-  onApiKeyChange: (value: string | null) => void;
+  onApiKeyChange: (value: string) => void;
   canStart: boolean;
   onStart: () => void;
   isStarting: boolean;
@@ -29,9 +40,10 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
   providersError,
   apiKeysError,
   modelValue,
-  apiKeyValue,
   models,
   apiKeys,
+  apiKeyValue,
+  apiKeyProvidersMapped,
   toolsRestricted,
   onModelChange,
   onApiKeyChange,
@@ -42,6 +54,24 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
   showNoMatchingKeys,
 }) => {
   if (!isOpen) return null;
+
+  const modelOptions = models.map((model) => ({
+    value: model,
+    label: model,
+    provider:
+      Object.entries(apiKeyProvidersMapped).find(([, providerModels]) =>
+        providerModels.includes(model)
+      )?.[0] || "",
+  }));
+  const selectedModel = modelOptions.find((option) => option.value === modelValue) || null;
+  const apiKeyOptions = apiKeys.map((apiKey) => ({
+    value: apiKey.id,
+    label: `${apiKey.description || apiKey.provider}${
+      apiKey.isDefault ? " (Default)" : ""
+    }`,
+  }));
+  const selectedApiKey =
+    apiKeyOptions.find((option) => option.value === apiKeyValue) || null;
 
   return (
     <>
@@ -60,42 +90,46 @@ export const LeiaTryDropdown: React.FC<LeiaTryDropdownProps> = ({
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Model
           </label>
-          <select
-            className="w-full border border-gray-300 rounded-md px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            value={modelValue}
-            onChange={(e) => onModelChange(e.target.value)}
-            disabled={isLoading}
-          >
-            <option value="">
-              {isLoading ? "Loading models..." : "-- Select model --"}
-            </option>
-            {models.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={selectedModel}
+            options={modelOptions}
+            onChange={(option) => onModelChange(option?.value || "")}
+            isDisabled={isLoading}
+            isLoading={isLoading}
+            placeholder="-- Select model --"
+            formatOptionLabel={(option) => (
+              <span className="flex items-center gap-2">
+                {providerIcons[option.provider] && (
+                  <img src={providerIcons[option.provider]} alt="" className="h-5 w-5 object-contain" />
+                )}
+                <span>{option.label}</span>
+              </span>
+            )}
+            styles={{
+              control: (base) => ({ ...base, minHeight: 38, fontSize: 14 }),
+              menu: (base) => ({ ...base, fontSize: 14 }),
+            }}
+          />
         </div>
-        <div className="mt-2">
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            API Key
-          </label>
-          <select
-            className="w-full border border-gray-300 rounded-md px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            value={apiKeyValue || ""}
-            onChange={(e) => onApiKeyChange(e.target.value || null)}
-            disabled={isLoading}
-          >
-            <option value="">
-              {isLoading ? "Loading keys..." : "-- Select API key --"}
-            </option>
-            {apiKeys.map((key) => (
-              <option key={key.id} value={key.id}>
-                {key.description}
-              </option>
-            ))}
-          </select>
-        </div>
+        {apiKeyOptions.length > 1 && (
+          <div className="mt-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              API key
+            </label>
+            <Select
+              value={selectedApiKey}
+              options={apiKeyOptions}
+              onChange={(option) => onApiKeyChange(option?.value || "")}
+              isDisabled={isLoading}
+              isLoading={isLoading}
+              placeholder="-- Select API key --"
+              styles={{
+                control: (base) => ({ ...base, minHeight: 38, fontSize: 14 }),
+                menu: (base) => ({ ...base, fontSize: 14 }),
+              }}
+            />
+          </div>
+        )}
         {(providersError || apiKeysError) && (
           <div className="mt-2 text-xs text-red-600">
             {providersError || apiKeysError}
