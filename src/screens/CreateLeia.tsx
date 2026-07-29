@@ -2448,23 +2448,27 @@ const openGenerateProblemModal = () => {
             return (
               <div className="relative flex">
                 <button
-                  onClick={handleStartTry}
-                  disabled={!canStartTry}
-                  className="rounded-l-lg bg-green-600 px-3 py-2 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300 flex items-center gap-2"
+                  onClick={showNoApiKeys ? handleTryMenuToggle : handleStartTry}
+                  disabled={!showNoApiKeys && !canStartTry}
+                  className={`bg-green-600 px-3 py-2 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300 flex items-center gap-2 ${
+                    showNoApiKeys ? "rounded-lg" : "rounded-l-lg"
+                  }`}
                   id= "try-button"
                 >
                   <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
                   <span>Try</span>
                 </button>
-                <button
-                  onClick={handleTryMenuToggle}
-                  className="rounded-r-lg border-l border-green-700 bg-green-600 px-2 text-white transition-colors hover:bg-green-700"
-                  aria-label="Choose Try settings"
-                  aria-expanded={isTryMenuOpen}
-                  aria-haspopup="dialog"
-                >
-                  <ChevronDownIcon className="h-4 w-4" />
-                </button>
+                {!showNoApiKeys && (
+                  <button
+                    onClick={handleTryMenuToggle}
+                    className="rounded-r-lg border-l border-green-700 bg-green-600 px-2 text-white transition-colors hover:bg-green-700"
+                    aria-label="Choose Try settings"
+                    aria-expanded={isTryMenuOpen}
+                    aria-haspopup="dialog"
+                  >
+                    <ChevronDownIcon className="h-4 w-4" />
+                  </button>
+                )}
                 <LeiaTryDropdown
                   isOpen={isTryMenuOpen}
                   onClose={() => setIsTryMenuOpen(false)}

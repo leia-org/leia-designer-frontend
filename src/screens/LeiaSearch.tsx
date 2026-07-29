@@ -988,6 +988,7 @@ export const LeiaSearch: React.FC = () => {
                   const tryConfig = tryConfigByLeia[leia.id];
                   const tryModelName = tryConfig?.modelName ?? "";
                   const tryApiKeyId = tryConfig?.apiKeyId ?? null;
+                  const requiresTools = leiaRequiresTools(leia);
                   const validTryModels = getTryModels(leia);
                   const validTryApiKeys = getTryApiKeys(leia, tryModelName);
                   const isTryMenuOpen = tryMenuOpenId === leia.id;
@@ -1133,7 +1134,9 @@ export const LeiaSearch: React.FC = () => {
                             className={`h-[34px] flex items-center gap-2 overflow-hidden border border-gray-300 px-2.5 py-0 text-sm transition-all duration-300 hover:bg-gray-50 disabled:cursor-wait disabled:bg-gray-100 ${
                               initializingId === leia.id
                                 ? "w-30 rounded-l-md"
-                                : "w-9 rounded-md group-hover/try:w-20 group-hover/try:rounded-l-md group-hover/try:rounded-r-none"
+                                : showNoApiKeys
+                                  ? "w-9 rounded-md group-hover/try:w-20"
+                                  : "w-9 rounded-md group-hover/try:w-20 group-hover/try:rounded-l-md group-hover/try:rounded-r-none"
                             }`}
                             onClick={() => handleDefaultTry(leia)}
                             disabled={initializingId === leia.id}
@@ -1160,20 +1163,22 @@ export const LeiaSearch: React.FC = () => {
                               {initializingId === leia.id ? "Starting…" : "Try"}
                             </span>
                           </button>
-                          <button
-                            className={`h-[34px] overflow-hidden rounded-r-md border-0 p-0 transition-all duration-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 ${
-                              initializingId === leia.id
-                                ? "w-0 border-0 opacity-0"
-                                : "w-0 opacity-0 group-hover/try:w-8 group-hover/try:border-y group-hover/try:border-r group-hover/try:border-gray-300 group-hover/try:px-2 group-hover/try:opacity-100"
-                            }`}
-                            onClick={() => handleTryMenuToggle(leia)}
-                            disabled={initializingId === leia.id}
-                            aria-label="Choose Try settings"
-                            aria-expanded={isTryMenuOpen}
-                            aria-haspopup="dialog"
-                          >
-                            <ChevronDownIcon className="h-4 w-4" />
-                          </button>
+                          {!showNoApiKeys && (
+                            <button
+                              className={`h-[34px] overflow-hidden rounded-r-md border-0 p-0 transition-all duration-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 ${
+                                initializingId === leia.id
+                                  ? "w-0 border-0 opacity-0"
+                                  : "w-0 opacity-0 group-hover/try:w-8 group-hover/try:border-y group-hover/try:border-r group-hover/try:border-gray-300 group-hover/try:px-2 group-hover/try:opacity-100"
+                              }`}
+                              onClick={() => handleTryMenuToggle(leia)}
+                              disabled={initializingId === leia.id}
+                              aria-label="Choose Try settings"
+                              aria-expanded={isTryMenuOpen}
+                              aria-haspopup="dialog"
+                            >
+                              <ChevronDownIcon className="h-4 w-4" />
+                            </button>
+                          )}
                           <LeiaTryDropdown
                             isOpen={isTryMenuOpen}
                             onClose={() => setTryMenuOpenId(null)}
@@ -1183,6 +1188,7 @@ export const LeiaSearch: React.FC = () => {
                             modelValue={tryModelName}
                             models={validTryModels}
                             apiKeyProvidersMapped={apiKeyProvidersMapped}
+                            toolsRestricted={requiresTools}
                             onModelChange={(value) =>
                               handleTryModelChange(leia, value)
                             }
