@@ -8,6 +8,7 @@ import {
   TrashIcon,
   BookOpenIcon,
   PlayIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import api from "../lib/axios";
 import { useApiKeys } from "../hooks/useApiKeys";
@@ -41,6 +42,7 @@ export const LeiaSearch: React.FC = () => {
   } = useApiKeys();
   const {
     apiKeyProvidersMapped,
+    providerProviderModuleMap,
     defaultModel,
     isLoading: isProvidersLoading,
     error: providersError,
@@ -386,62 +388,123 @@ export const LeiaSearch: React.FC = () => {
 
   const getValidApiKeys = useCallback(
     (modelName: string | null | undefined) => {
-      if (!modelName) return apiKeys;
+      const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
+      if (!modelName) return activeApiKeys;
 
       const validProviders = Object.entries(apiKeyProvidersMapped || {})
         .filter(([, models]) => models.includes(modelName))
         .map(([provider]) => provider);
 
-      return apiKeys.filter((key) => validProviders.includes(key.provider));
+      return activeApiKeys.filter((key) =>
+        validProviders.includes(key.provider)
+      );
     },
     [apiKeyProvidersMapped, apiKeys]
   );
 
+  const toolCapableProviders = useMemo(
+    () =>
+      Object.entries(providerProviderModuleMap || {})
+        .filter(([, moduleName]) => moduleName === "openai-responses")
+        .map(([provider]) => provider),
+    [providerProviderModuleMap]
+  );
+
+  const toolCapableModels = useMemo(
+    () =>
+      toolCapableProviders.flatMap(
+        (provider) => apiKeyProvidersMapped[provider] || []
+      ),
+    [apiKeyProvidersMapped, toolCapableProviders]
+  );
+
+  const leiaRequiresTools = useCallback(
+    (leia: Leia) =>
+      Array.isArray(leia.spec?.problem?.spec?.widgets) &&
+      leia.spec.problem.spec.widgets.length > 0,
+    []
+  );
+
+  const getTryModels = useCallback(
+    (leia: Leia) =>
+      leiaRequiresTools(leia) ? toolCapableModels : getValidModels(null),
+    [getValidModels, leiaRequiresTools, toolCapableModels]
+  );
+
+  const getTryApiKeys = useCallback(
+    (leia: Leia, modelName: string | null | undefined) => {
+      const matchingKeys = getValidApiKeys(modelName);
+      return leiaRequiresTools(leia)
+        ? matchingKeys.filter((key) =>
+            toolCapableProviders.includes(key.provider)
+          )
+        : matchingKeys;
+    },
+    [getValidApiKeys, leiaRequiresTools, toolCapableProviders]
+  );
+
   const ensureTryConfig = useCallback(
-    (leiaId: string) => {
+    (leia: Leia) => {
       setTryConfigByLeia((prev) => {
-        if (prev[leiaId]) return prev;
+        const existing = prev[leia.id];
+        const validModels = getTryModels(leia);
+        if (
+          existing?.modelName &&
+          existing.apiKeyId &&
+          validModels.includes(existing.modelName) &&
+          getTryApiKeys(leia, existing.modelName).some(
+            (key) => key.id === existing.apiKeyId
+          )
+        ) {
+          return prev;
+        }
 
         const defaultKey = getDefaultKey();
-        const validModels = getValidModels(defaultKey?.id);
+        const candidateKeys = getTryApiKeys(leia, null);
+        const key =
+          defaultKey && candidateKeys.some((candidate) => candidate.id === defaultKey.id)
+            ? defaultKey
+            : candidateKeys[0] ?? null;
         const resolvedDefaultModel =
-          defaultModel && validModels.includes(defaultModel)
-            ? defaultModel
-            : "";
+          key?.model && validModels.includes(key.model)
+            ? key.model
+            : defaultModel && validModels.includes(defaultModel)
+              ? defaultModel
+              : validModels[0] ?? "";
 
         return {
           ...prev,
-          [leiaId]: {
+          [leia.id]: {
             modelName: resolvedDefaultModel,
-            apiKeyId: defaultKey?.id ?? null,
+            apiKeyId: key?.id ?? null,
           },
         };
       });
     },
-    [defaultModel, getDefaultKey, getValidModels]
+    [defaultModel, getDefaultKey, getTryApiKeys, getTryModels]
   );
 
   const handleTryMenuToggle = useCallback(
-    (leiaId: string) => {
-      if (initializingId === leiaId) return;
-      setTryMenuOpenId((prev) => (prev === leiaId ? null : leiaId));
-      ensureTryConfig(leiaId);
+    (leia: Leia) => {
+      if (initializingId === leia.id) return;
+      setTryMenuOpenId((prev) => (prev === leia.id ? null : leia.id));
+      ensureTryConfig(leia);
     },
     [ensureTryConfig, initializingId]
   );
 
   const handleTryModelChange = useCallback(
-    (leiaId: string, modelName: string) => {
+    (leia: Leia, modelName: string) => {
       setTryConfigByLeia((prev) => {
-        const current = prev[leiaId] || { modelName: "", apiKeyId: null };
-        const validApiKeys = getValidApiKeys(modelName);
+        const current = prev[leia.id] || { modelName: "", apiKeyId: null };
+        const validApiKeys = getTryApiKeys(leia, modelName);
         const apiKeyId = validApiKeys.some((key) => key.id === current.apiKeyId)
           ? current.apiKeyId
-          : null;
+          : (validApiKeys.find((key) => key.isDefault) || validApiKeys[0])?.id ?? null;
 
         return {
           ...prev,
-          [leiaId]: {
+          [leia.id]: {
             ...current,
             modelName,
             apiKeyId,
@@ -449,29 +512,20 @@ export const LeiaSearch: React.FC = () => {
         };
       });
     },
-    [getValidApiKeys]
+    [getTryApiKeys]
   );
 
   const handleTryApiKeyChange = useCallback(
-    (leiaId: string, apiKeyId: string | null) => {
-      setTryConfigByLeia((prev) => {
-        const current = prev[leiaId] || { modelName: "", apiKeyId: null };
-        const validModels = getValidModels(apiKeyId);
-        const modelName = validModels.includes(current.modelName)
-          ? current.modelName
-          : "";
-
-        return {
-          ...prev,
-          [leiaId]: {
-            ...current,
-            apiKeyId,
-            modelName,
-          },
-        };
-      });
+    (leia: Leia, apiKeyId: string) => {
+      setTryConfigByLeia((prev) => ({
+        ...prev,
+        [leia.id]: {
+          ...(prev[leia.id] || { modelName: "" }),
+          apiKeyId: apiKeyId || null,
+        },
+      }));
     },
-    [getValidModels]
+    []
   );
 
   const handleTest = async (
@@ -513,6 +567,45 @@ export const LeiaSearch: React.FC = () => {
       return;
     }
     setTryMenuOpenId(null);
+    await handleTest(leia, config);
+  };
+
+  const handleDefaultTry = async (leia: Leia) => {
+    const existing = tryConfigByLeia[leia.id];
+    const validModels = getTryModels(leia);
+    if (
+      existing?.modelName &&
+      existing.apiKeyId &&
+      validModels.includes(existing.modelName) &&
+      getTryApiKeys(leia, existing.modelName).some(
+        (key) => key.id === existing.apiKeyId
+      )
+    ) {
+      await handleTest(leia, existing);
+      return;
+    }
+
+    const defaultKey = getDefaultKey();
+    const candidateKeys = getTryApiKeys(leia, null);
+    const key =
+      defaultKey && candidateKeys.some((candidate) => candidate.id === defaultKey.id)
+        ? defaultKey
+        : candidateKeys[0] ?? null;
+    const modelName =
+      key?.model && validModels.includes(key.model)
+        ? key.model
+        : defaultModel && validModels.includes(defaultModel)
+          ? defaultModel
+          : validModels[0] ?? "";
+
+    if (!key || !modelName) {
+      ensureTryConfig(leia);
+      setTryMenuOpenId(leia.id);
+      return;
+    }
+
+    const config = { modelName, apiKeyId: key.id };
+    setTryConfigByLeia((prev) => ({ ...prev, [leia.id]: config }));
     await handleTest(leia, config);
   };
 
@@ -841,8 +934,9 @@ export const LeiaSearch: React.FC = () => {
                   const tryConfig = tryConfigByLeia[leia.id];
                   const tryModelName = tryConfig?.modelName ?? "";
                   const tryApiKeyId = tryConfig?.apiKeyId ?? null;
-                  const validTryModels = getValidModels(tryApiKeyId);
-                  const validTryApiKeys = getValidApiKeys(tryModelName);
+                  const requiresTools = leiaRequiresTools(leia);
+                  const validTryModels = getTryModels(leia);
+                  const validTryApiKeys = getTryApiKeys(leia, tryModelName);
                   const isTryMenuOpen = tryMenuOpenId === leia.id;
                   const isTryLoading = isProvidersLoading || isApiKeysLoading;
                   const canStartTry =
@@ -851,12 +945,12 @@ export const LeiaSearch: React.FC = () => {
                     !isTryLoading &&
                     !providersError &&
                     !apiKeysError &&
-                    apiKeys.length === 0;
+                    apiKeys.every((key) => key.isActive === false);
                   const showNoMatchingKeys =
                     !isTryLoading &&
                     Boolean(tryModelName) &&
                     validTryApiKeys.length === 0 &&
-                    apiKeys.length > 0;
+                    apiKeys.some((key) => key.isActive !== false);
 
                   return (
                     <li
@@ -981,17 +1075,17 @@ export const LeiaSearch: React.FC = () => {
                             View
                           </span>
                         </button>
-                        <div className="relative">
+                        <div className="group/try relative flex h-[34px]">
                           <button
-                            className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
+                            className={`h-[34px] flex items-center gap-2 overflow-hidden border border-gray-300 px-2.5 py-0 text-sm transition-all duration-300 hover:bg-gray-50 disabled:cursor-wait disabled:bg-gray-100 ${
                               initializingId === leia.id
-                                ? "w-30"
-                                : "w-9 hover:w-20"
+                                ? "w-30 rounded-l-md"
+                                : showNoApiKeys
+                                  ? "w-9 rounded-md group-hover/try:w-20"
+                                  : "w-9 rounded-md group-hover/try:w-20 group-hover/try:rounded-l-md group-hover/try:rounded-r-none"
                             }`}
-                            onClick={() => handleTryMenuToggle(leia.id)}
+                            onClick={() => handleDefaultTry(leia)}
                             disabled={initializingId === leia.id}
-                            aria-expanded={isTryMenuOpen}
-                            aria-haspopup="dialog"
                             id= "try-button"
                             onMouseEnter={() => {
                             setTimeout(() => {
@@ -1006,15 +1100,31 @@ export const LeiaSearch: React.FC = () => {
                           >
                             <LightBulbIcon className="w-4 h-4 flex-shrink-0" />
                             <span
-                              className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
+                              className={`whitespace-nowrap transition-opacity duration-300 ${
                                 initializingId === leia.id
                                   ? "opacity-100"
-                                  : "opacity-0 group-hover:opacity-100"
+                                  : "opacity-0 group-hover/try:opacity-100"
                               }`}
                             >
                               {initializingId === leia.id ? "Starting…" : "Try"}
                             </span>
                           </button>
+                          {!showNoApiKeys && (
+                            <button
+                              className={`h-[34px] overflow-hidden rounded-r-md border-0 p-0 transition-all duration-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 ${
+                                initializingId === leia.id
+                                  ? "w-0 border-0 opacity-0"
+                                  : "w-0 opacity-0 group-hover/try:w-8 group-hover/try:border-y group-hover/try:border-r group-hover/try:border-gray-300 group-hover/try:px-2 group-hover/try:opacity-100"
+                              }`}
+                              onClick={() => handleTryMenuToggle(leia)}
+                              disabled={initializingId === leia.id}
+                              aria-label="Choose Try settings"
+                              aria-expanded={isTryMenuOpen}
+                              aria-haspopup="dialog"
+                            >
+                              <ChevronDownIcon className="h-4 w-4" />
+                            </button>
+                          )}
                           <LeiaTryDropdown
                             isOpen={isTryMenuOpen}
                             onClose={() => setTryMenuOpenId(null)}
@@ -1022,14 +1132,16 @@ export const LeiaSearch: React.FC = () => {
                             providersError={providersError}
                             apiKeysError={apiKeysError}
                             modelValue={tryModelName}
-                            apiKeyValue={tryApiKeyId}
                             models={validTryModels}
                             apiKeys={validTryApiKeys}
+                            apiKeyValue={tryApiKeyId}
+                            apiKeyProvidersMapped={apiKeyProvidersMapped}
+                            toolsRestricted={requiresTools}
                             onModelChange={(value) =>
-                              handleTryModelChange(leia.id, value)
+                              handleTryModelChange(leia, value)
                             }
                             onApiKeyChange={(value) =>
-                              handleTryApiKeyChange(leia.id, value)
+                              handleTryApiKeyChange(leia, value)
                             }
                             canStart={canStartTry}
                             onStart={() => handleStartTry(leia)}
