@@ -10,6 +10,7 @@ import {
   CpuChipIcon,
   InformationCircleIcon,
   SparklesIcon,
+  EllipsisHorizontalIcon,
 } from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
@@ -437,8 +438,26 @@ export const CreateLeia: React.FC = () => {
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
+  const [showFinishActionsMenu, setShowFinishActionsMenu] = useState(false);
   const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
   const [nameActivityReplication, setNameActivityReplication] = useState("");
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showFinishActionsMenu &&
+        !(event.target as Element)?.closest(".finish-actions-menu")
+      ) {
+        setShowFinishActionsMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showFinishActionsMenu]);
+
   const startGuidedTour = useCallback((startStep: WizardStep = 2) => {
     tourRef.current?.destroy();
     setIsTryMenuOpen(false);
@@ -4253,34 +4272,58 @@ const openGenerateProblemModal = () => {
               </p>
             </div>
 
-            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
-              <button
-                onClick={() => {
-                  setShowFinishModal(false);
-                  navigate("/leias");
-                }}
-                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Go to Home Page
-              </button>
-              <button
-                onClick={() => {
-                  setShowFinishModal(false);
-                  setShowAddToActivityModal(true);
-                }}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Add to Activity
-              </button>
-              <button
-                onClick={() => {
-                  setShowFinishModal(false);
-                  handleQuickReplication(createdLeiaResource);
-                }}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                Quick Replication
-              </button>
+            <div className="px-6 py-4 bg-gray-50 rounded-b-xl">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowFinishModal(false);
+                    setShowFinishActionsMenu(false);
+                    navigate("/leias");
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Go to Home Page
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFinishModal(false);
+                    setShowFinishActionsMenu(false);
+                    handleQuickReplication(createdLeiaResource);
+                  }}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Quick Replication
+                </button>
+                <div className="relative finish-actions-menu">
+                  <button
+                    type="button"
+                    onClick={() => setShowFinishActionsMenu((open) => !open)}
+                    className="h-full px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center"
+                    title="More actions"
+                    aria-label="More actions"
+                    aria-expanded={showFinishActionsMenu}
+                    aria-haspopup="menu"
+                  >
+                    <EllipsisHorizontalIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              {showFinishActionsMenu && (
+                <div className="finish-actions-menu mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFinishActionsMenu(false);
+                      setShowFinishModal(false);
+                      setShowAddToActivityModal(true);
+                    }}
+                    className="w-full rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+                    role="menuitem"
+                  >
+                    Add to Activity
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
