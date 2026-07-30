@@ -25,10 +25,9 @@ import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
 import { Avatar } from "../components/shared/Avatar";
 import { buildOriginalAvatarPath } from "../lib/avatar";
-import type { Experiment } from "../models/Experiment";
-
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
+import { ActivityReplicationModal } from "../components/ActivityReplicationModal";
 type VersionFilter = "" | "latest";
 
 export const LeiaSearch: React.FC = () => {
@@ -633,107 +632,77 @@ export const LeiaSearch: React.FC = () => {
     setDeleteError(null);
   }, []);
 
-
-  const handleQuickReplication = useCallback(async (leia: Leia) => {
-    try {
-      const encodedLeiaName = encodeURIComponent(leia.metadata.name);
-      const activityExists = await api.get(`api/v1/experiments/exists/${encodedLeiaName}`);
-      const replicationExists = await api.get(`api/v1/workbench/replications/exists/${encodedLeiaName}`);
-      if (!activityExists.data.exists && !replicationExists.data.exists) {
-        const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
-        leiaId: leia.id,
-        leiaName: leia.metadata.name,
-      });
-
-      const replication = await api.post(
-        `/api/v1/workbench/replications`,
-        {
-          name: leia.metadata.name.trim(),
-          experiment: activity.id,
-        }
-      );
-      toast.success("LEIA replicated successfully", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-      const workbenchBaseUrl =
-      import.meta.env.VITE_WORKBENCH_URL;
-      const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/replications/${encodeURIComponent(replication.data.id)}`;
-      const newWindow = window.open(replicationUrl);
-      if (!newWindow) {
-        toast.error("Popup blocked or could not open replication", {
-          position: "bottom-right",
-          autoClose: 2000,
-          });
-    }      }
-      else {
-        setNameActivityReplication(leia.metadata.name+`-v2`);
-        setSelectedLeia(leia);
-        setShowActivityReplicationModal(true);
-        return null;
-      }
-      
-    } catch (error) {
-      console.error("Error quick replicating LEIA:", error);
-    }
-  }, []);
-
   const closeActivityReplicationModal = useCallback(() => {
     setShowActivityReplicationModal(false);
     setSelectedLeia(null);
     setNameActivityReplication("");
   }, []);
+  const handleQuickReplication = useCallback(async (leia?: Leia) => {
+  const targetLeia = leia ?? selectedLeia;
 
-  const confirmActivityReplication = useCallback(async () => {
-    if (!selectedLeia) return;
-    try {
-      const encodedActivityName = encodeURIComponent(nameActivityReplication);
-      const activityExists = await api.get(`api/v1/experiments/exists/${encodedActivityName}`);
-      const replicationExists = await api.get(`api/v1/workbench/replications/exists/${encodedActivityName}`);
-      if (!activityExists.data.exists && !replicationExists.data.exists) {
-      const { data: activity } = await api.post<Experiment>("/api/v1/experiments/leia", {
-        leiaId: selectedLeia.id,
-        leiaName: nameActivityReplication.trim(),
+  if (!targetLeia) {
+    toast.error("No LEIA selected", {
+      position: "bottom-right",
+      autoClose: 3000,
+    });
+    return;
+  }
+
+  try {
+    const leiaName = nameActivityReplication || targetLeia.metadata.name || "";
+    const activityReplication = await api.post(`/api/v1/experiments/leia/`, {
+      leiaName,
+      leiaId: targetLeia.id,
+    });
+    toast.success("LEIA replicated successfully", {
+      position: "bottom-right",
+      autoClose: 3000,
+    });
+
+    const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL;
+    const replicationUrl = `${workbenchBaseUrl.replace(
+      /\/$/, "" )}/login?redirect=/replications/${encodeURIComponent(
+      activityReplication.data.replication.id)}`;
+    closeActivityReplicationModal();
+    const newWindow = window.open(replicationUrl);
+
+    if (!newWindow) {
+      toast.error("Popup blocked or could not open replication", {
+        position: "bottom-right",
+        autoClose: 2000,
       });
+    }
+  } catch (error) {
+    const axiosError = error as {
+      response?: {
+        status?: number;
+        data?: {
+          error?: string;
+          data?: Array<{ id: string; name: string }>;
+        };
+      };
+    };
 
-      const replication = await api.post(
-        `/api/v1/workbench/replications`,
-        {
-          name: nameActivityReplication.trim(),
-          experiment: activity.id,
-        }
-      );
-      toast.success("LEIA replicated successfully", {
+    if (axiosError.response?.status === 409) {
+      toast.info(axiosError.response?.data?.error, {
         position: "bottom-right",
         autoClose: 3000,
       });
-      closeActivityReplicationModal();
-      setNameActivityReplication("");
-      const workbenchBaseUrl =
-      import.meta.env.VITE_WORKBENCH_URL;
-      const replicationUrl = `${workbenchBaseUrl.replace(/\/$/, "")}/replications/${encodeURIComponent(replication.data.id)}`;
-      const newWindow = window.open(replicationUrl);
-      if (!newWindow) {
-        toast.error("Popup blocked or could not open replication", {
-          position: "bottom-right",
-          autoClose: 2000,
-          });
-            }
-          } else {
-        toast.error("An activity or replication with that name already exists. Please choose a different name.", {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-      }
-    } catch (error) {
-      console.error("Error replicating LEIA:", error);
-        toast.error("Error replicating LEIA. Please try again.", {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-    }
-  }, [closeActivityReplicationModal, nameActivityReplication, selectedLeia]);
 
+      if (!nameActivityReplication) {
+        setNameActivityReplication(targetLeia.metadata.name + "-v2");
+      }
+      setSelectedLeia(targetLeia);
+      setShowActivityReplicationModal(true);
+      return;
+    }
+
+    toast.error("Error replicating LEIA. Please try again.", {
+      position: "bottom-right",
+      autoClose: 3000,
+    });
+  }
+}, [closeActivityReplicationModal, nameActivityReplication, selectedLeia]);
 
   const confirmDeleteLeia = async (leia: Leia) => {
     setIsDeleting(true);
@@ -857,52 +826,13 @@ export const LeiaSearch: React.FC = () => {
           handleCloseExperimentsModal();
         }}
       />
-      {showActivityReplicationModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeActivityReplicationModal();
-          }}
-        >
-          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
-            <div className="p-6" onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Replicate activity
-              </h2>
-
-              <label className="mt-5 block text-sm font-medium text-gray-700">
-                Activity and Replication name
-              </label>
-              <input
-                type="text"
-                value={nameActivityReplication}
-                onChange={(e) => setNameActivityReplication(e.target.value)}
-                placeholder="Activity replication name"
-                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                autoFocus
-              />
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeActivityReplicationModal}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmActivityReplication}
-                  disabled={!nameActivityReplication.trim()}
-                  className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  Replicate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ActivityReplicationModal
+        isOpen={showActivityReplicationModal}
+        name={nameActivityReplication}
+        onNameChange={setNameActivityReplication}
+        onConfirm={() => handleQuickReplication()}
+        onClose={closeActivityReplicationModal}
+      />
       <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
         <div className="flex items-end gap-4 mb-6">
           <div className="flex-1">
@@ -1251,7 +1181,7 @@ export const LeiaSearch: React.FC = () => {
                                   : "opacity-0 group-hover:opacity-100"
                               }`}
                             >
-                              {selectedLeia?.id === leia.id
+                              {selectedLeia?.id === leia.id 
                                 ? "Adding to Activity"
                                 : "Add to Activity"}
                             </span>
@@ -1259,7 +1189,10 @@ export const LeiaSearch: React.FC = () => {
                         )}
                         {user?.role==="admin" && (<button
                           className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-40"
-                          onClick={() => handleQuickReplication(leia)}
+                          onClick={() => {
+                            setSelectedLeia(leia);
+                            handleQuickReplication(leia);
+                          }}
                         >
                           <BookOpenIcon className="w-4 h-4 flex-shrink-0" />
                           <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
