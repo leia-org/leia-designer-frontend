@@ -1,6 +1,16 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { ArrowDownTrayIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import PersonIcon from "@mui/icons-material/Person";
+import {
+  Avatar as MuiAvatar,
+  Box,
+  Button,
+  CircularProgress,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
 import { Avatar } from "../components/shared/Avatar";
@@ -64,20 +74,23 @@ interface EditLocalState {
 }
 
 const TypingAnimation = () => (
-  <div className="flex items-center space-x-1.5">
-    <div
-      className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-      style={{ animationDuration: "0.6s" }}
-    ></div>
-    <div
-      className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-      style={{ animationDuration: "0.6s", animationDelay: "0.2s" }}
-    ></div>
-    <div
-      className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-      style={{ animationDuration: "0.6s", animationDelay: "0.4s" }}
-    ></div>
-  </div>
+  <Stack direction="row" spacing={0.75}>
+    {[0, 0.2, 0.4].map((delay) => (
+      <Box
+        component="span"
+        key={delay}
+        sx={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          bgcolor: "text.disabled",
+          animation: "leiaTyping 0.6s ease-in-out infinite alternate",
+          animationDelay: `${delay}s`,
+          "@keyframes leiaTyping": { from: { transform: "translateY(0)" }, to: { transform: "translateY(-4px)" } },
+        }}
+      />
+    ))}
+  </Stack>
 );
 
 interface Message {
@@ -556,122 +569,66 @@ export const Chat = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <Box sx={{ position: "relative", display: "flex", flex: 1, flexDirection: "column", minHeight: 0, bgcolor: "background.paper" }}>
       <Header
         title="Chat"
         description="Test and interact with a LEIA configuration"
         showNavigation={false}
         rightContent={
-          <div className="flex gap-2">
-            <button
-              onClick={handleOpenSolutionEditor}
-              className="px-4 py-1.5 text-sm text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button variant="outlined" color="inherit" onClick={handleOpenSolutionEditor}>
               Solution Editor
-            </button>
-            <button
-              onClick={() => setShowInstructions(!showInstructions)}
-              className="px-4 py-1.5 text-sm text-blue-600 bg-white border border-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
+            </Button>
+            <Button variant="outlined" onClick={() => setShowInstructions(!showInstructions)}>
               {showInstructions ? "Hide Instructions" : "Instructions"}
-            </button>
-            <button
-              onClick={handleFinishConversation}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-700 border border-blue-800 rounded-md hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
-            >
+            </Button>
+            <Button variant="contained" onClick={handleFinishConversation}>
               Continue Configuration
-            </button>
+            </Button>
             {transcription && (
-              <button
+              <Button
+                color="success"
+                variant="contained"
                 onClick={handleSaveTranscription}
                 disabled={savingTranscription || messages.length === 0}
-                className="px-4 py-1.5 text-sm text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                startIcon={savingTranscription ? <CircularProgress color="inherit" size={14} /> : undefined}
               >
-                {savingTranscription ? (
-                  <>
-                    <ArrowPathIcon className="animate-spin h-4 w-4" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <ArrowDownTrayIcon className="w-4 h-4" />
-                    Save Transcription
-                  </>
-                )}
-              </button>
+                {savingTranscription ? "Saving..." : "Save Transcription"}
+              </Button>
             )}
-          </div>
+          </Stack>
         }
       />
       <ToastContainer />
 
       {showInstructions && problemDescription && (
-        <div className="bg-blue-50 border-b border-blue-200 px-4 py-4">
-          <div className="max-w-3xl mx-auto">
-            <h3 className="text-lg font-semibold text-blue-900 mb-2">
+        <Box sx={{ px: 2, py: 2, bgcolor: "surfaces.accent", borderBottom: 1, borderColor: "primary.light" }}>
+          <Box sx={{ maxWidth: 768, mx: "auto" }}>
+            <Typography variant="subtitle2" color="primary.dark" gutterBottom>
               Instructions
-            </h3>
-            <p className="text-sm text-blue-800 whitespace-pre-wrap">
+            </Typography>
+            <Typography variant="body2" color="primary.dark" sx={{ whiteSpace: "pre-wrap" }}>
               {problemDescription}
-            </p>
-          </div>
-        </div>
+            </Typography>
+          </Box>
+        </Box>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
-      <div
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <Box
         ref={chatMessagesRef}
-        className="flex-1 overflow-y-auto px-4 pb-24 scroll-smooth"
+        sx={{ flex: 1, overflowY: "auto", px: 2, pb: 12 }}
       >
-        <div className="max-w-3xl mx-auto space-y-4 py-4">
+        <Stack spacing={2} sx={{ maxWidth: 768, mx: "auto", py: 2 }}>
           {messages.map((msg, index) => (
-            <div
+            <Stack
               key={index}
-              className={`flex items-end gap-2 ${
-                msg.isLeia ? "flex-row" : "flex-row-reverse"
-              }`}
+              direction="row"
+              spacing={1}
+              alignItems="flex-end"
+              justifyContent={msg.isLeia ? "flex-start" : "flex-end"}
             >
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${
-                  msg.isLeia ? "bg-blue-50" : "bg-blue-600"
-                }`}
-              >
-                {msg.isLeia ? (
-                  <Avatar
-                    src={personaAvatar}
-                    fallbackSrc={personaAvatarFallback}
-                    alt="Persona avatar"
-                    label="Persona"
-                    size="md"
-                    className="border-blue-100 bg-blue-50"
-                  />
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className="w-6 h-6 text-white"
-                  >
-                    <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
-                  </svg>
-                )}
-              </div>
-              <div
-                className={`max-w-[80%] px-4 py-2 ${
-                  msg.isLeia
-                    ? "bg-white border border-gray-200 text-gray-900 rounded-t-2xl rounded-r-2xl rounded-bl-md"
-                    : "bg-blue-600 text-white rounded-t-2xl rounded-l-2xl rounded-br-md"
-                }`}
-              >
-                <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                  {msg.text}
-                </p>
-              </div>
-            </div>
-          ))}
-          {sendingMessage && (
-            <div className="flex items-end gap-2">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-blue-50">
+              {msg.isLeia && (
                 <Avatar
                   src={personaAvatar}
                   fallbackSrc={personaAvatarFallback}
@@ -680,62 +637,99 @@ export const Chat = () => {
                   size="md"
                   className="border-blue-100 bg-blue-50"
                 />
-              </div>
-              <div className="min-w-[60px] bg-white border border-gray-200 rounded-t-2xl rounded-r-2xl rounded-bl-md px-4 py-3">
+              )}
+              <Paper
+                variant={msg.isLeia ? "outlined" : undefined}
+                elevation={msg.isLeia ? 0 : 1}
+                sx={{
+                  maxWidth: "80%",
+                  px: 2,
+                  py: 1.25,
+                  bgcolor: msg.isLeia ? "background.paper" : "primary.main",
+                  color: msg.isLeia ? "text.primary" : "primary.contrastText",
+                  borderRadius: 2.5,
+                  borderBottomLeftRadius: msg.isLeia ? 0.5 : 2.5,
+                  borderBottomRightRadius: msg.isLeia ? 2.5 : 0.5,
+                }}
+              >
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", lineHeight: 1.65 }}>
+                  {msg.text}
+                </Typography>
+              </Paper>
+              {!msg.isLeia && (
+                <MuiAvatar sx={{ width: 32, height: 32, bgcolor: "primary.main" }}>
+                  <PersonIcon fontSize="small" />
+                </MuiAvatar>
+              )}
+            </Stack>
+          ))}
+          {sendingMessage && (
+            <Stack direction="row" spacing={1} alignItems="flex-end">
+              <Avatar
+                src={personaAvatar}
+                fallbackSrc={personaAvatarFallback}
+                alt="Persona avatar"
+                label="Persona"
+                size="md"
+                className="border-blue-100 bg-blue-50"
+              />
+              <Paper variant="outlined" sx={{ minWidth: 60, px: 2, py: 1.5, borderRadius: 2.5, borderBottomLeftRadius: 0.5 }}>
                 <TypingAnimation />
-              </div>
-            </div>
+              </Paper>
+            </Stack>
           )}
-        </div>
-      </div>
+        </Stack>
+      </Box>
       {hasWidgets && (
-        <div className="w-1/2 bg-neutral-900 text-white flex flex-col overflow-hidden border-l border-neutral-800">
+        <Box sx={{ width: "50%", display: "flex", flexDirection: "column", overflow: "hidden", bgcolor: "#171717", color: "common.white", borderLeft: 1, borderColor: "#262626" }}>
           <VoiceModeWithWidgets widgets={widgetDefs}>
             {({ rightSlot, leftSlot }) => (
               <>
                 <ToolsBridge onTools={handleToolsSync} />
-                <div className="flex-1 min-h-0 flex flex-col">
-                  {leftSlot && <div className="flex-1 min-h-0">{leftSlot}</div>}
-                  {rightSlot && <div className="flex-1 min-h-0">{rightSlot}</div>}
-                </div>
+                <Box sx={{ display: "flex", flex: 1, minHeight: 0, flexDirection: "column" }}>
+                  {leftSlot && <Box sx={{ flex: 1, minHeight: 0 }}>{leftSlot}</Box>}
+                  {rightSlot && <Box sx={{ flex: 1, minHeight: 0 }}>{rightSlot}</Box>}
+                </Box>
               </>
             )}
           </VoiceModeWithWidgets>
-        </div>
+        </Box>
       )}
-      </div>
+      </Box>
 
-      <div className="absolute bottom-[72px] left-0 right-0 h-24 pointer-events-none"></div>
+      <Box sx={{ position: "absolute", right: 0, bottom: 9, left: 0, height: 96, pointerEvents: "none" }} />
 
-      <div
-        className="absolute bottom-0 left-0 right-0 px-4 pb-6 bg-white"
-        style={{ right: hasWidgets ? "50%" : 0 }}
+      <Box
+        sx={{ position: "absolute", right: hasWidgets ? "50%" : 0, bottom: 0, left: 0, px: 2, pb: 3, bgcolor: "background.paper" }}
       >
-        <div className="max-w-3xl mx-auto">
-          <form
+        <Box sx={{ maxWidth: 768, mx: "auto" }}>
+          <Paper
+            component="form"
             onSubmit={handleSubmit}
-            className="flex gap-2 bg-white rounded-lg p-3 shadow-[0_0_10px_rgba(0,0,0,0.1)] hover:shadow-[0_0_15px_rgba(0,0,0,0.15)] transition-all"
+            sx={{ display: "flex", alignItems: "flex-end", gap: 1, p: 1.5, boxShadow: 3 }}
           >
-            <textarea
-              ref={inputRef}
+            <TextField
+              inputRef={inputRef}
               value={newMessageText}
               onChange={handleTextareaChange}
-              onKeyDown={handleKeyDown}
               placeholder="Type a message... (Shift+Enter for new line)"
-              className="flex-1 px-2 py-1.5 bg-transparent border-none focus:outline-none text-[15px] resize-none overflow-y-auto"
-              style={{ minHeight: "40px", maxHeight: "150px" }}
+              multiline
+              variant="standard"
+              fullWidth
               rows={1}
+              slotProps={{ input: { disableUnderline: true }, htmlInput: { onKeyDown: handleKeyDown } }}
+              sx={{ "& .MuiInputBase-root": { px: 1, py: 0.75, alignItems: "flex-start" }, "& textarea": { maxHeight: 150, overflowY: "auto" } }}
             />
-            <button
+            <Button
               type="submit"
               disabled={!newMessageText.trim()}
-              className="px-5 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="contained"
             >
               Send
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+            </Button>
+          </Paper>
+        </Box>
+      </Box>
+    </Box>
   );
 };

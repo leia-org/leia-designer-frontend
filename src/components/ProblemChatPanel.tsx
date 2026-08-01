@@ -1,13 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import SendIcon from "@mui/icons-material/Send";
 import {
-  PaperClipIcon,
-  PaperAirplaneIcon,
-  SparklesIcon,
-} from "@heroicons/react/24/solid";
+  Alert,
+  Box,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
-import { useApiKeys } from "../hooks/useApiKeys";
-import { useProviders } from "../hooks/useProviders";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
@@ -93,7 +100,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Optional process tags.",
+          description: "Activity process tags. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
         },
         extends: componentScoped(
           "ADD to the paired persona/behaviour/problem spec (e.g. add persona personality traits). Empty object {} unless asked to compose.",
@@ -148,7 +155,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_behaviour",
     description:
-      "Writes a NEW, COMPLETE behaviour into the editor, replacing the current one. It must be written specifically for the exact current Problem, including its real task, subject, technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. The behaviour defines the role the AI plays opposite the student (e.g. a client being interviewed, a teammate). Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
+      "Writes a NEW, COMPLETE behaviour into the editor, replacing the current one. It must be written specifically for the exact current Problem, including its real task, subject, technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. The behaviour defines the role the AI plays opposite the student (e.g. a client being interviewed, a teammate). Use {{persona.firstName}}-style template tags where natural. Its `process` MUST exactly match the Problem `process`; call get_current_problem first when a problem already exists. Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -158,7 +165,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Optional process tags.",
+          description: "Must exactly match the current Problem process tags.",
         },
         tooltip: { type: "string", description: "Short helper tooltip describing this behaviour." },
       },
@@ -194,26 +201,52 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "list_personas",
     description:
-      "Lists EXISTING personas the instructor already has, so you can REUSE one (by id) instead of creating a new one. Returns [{ id, name, firstName, description }]. Prefer reusing a suitable existing persona; only create a new one with apply_persona when none fits.",
+      "Lists existing personas the instructor can reuse. Prefer a suitable existing persona and only create a new one when none fits.",
     parameters: { type: "object", properties: {} },
   },
   {
     name: "use_persona",
     description:
-      "Selects an EXISTING persona (by its id, from list_personas) as the LEIA's persona, instead of creating a new one. Returns { status, name } or { error }.",
+      "Selects an existing persona by id from list_personas instead of creating a duplicate.",
     parameters: {
       type: "object",
-      properties: { id: { type: "string", description: "The persona id from list_personas." } },
+      properties: {
+        id: { type: "string", description: "Persona id returned by list_personas." },
+      },
       required: ["id"],
+    },
+  },
+  {
+    name: "set_leia_name",
+    description:
+      "Suggests a short, clear learner-facing title for the complete LEIA. Call this after you understand the activity, and call it again only if the activity changes materially.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "A concise human-readable LEIA title, not kebab-case.",
+        },
+      },
+      required: ["name"],
     },
   },
 ];
 
-type ChatRole = "user" | "assistant" | "system";
-interface ChatMessage {
-  role: ChatRole;
+export type ProblemChatRole = "user" | "assistant" | "system";
+
+export interface ProblemChatMessage {
+  role: ProblemChatRole;
   text: string;
 }
+
+export interface ProblemChatState {
+  messages: ProblemChatMessage[];
+  input: string;
+}
+
+type ChatRole = ProblemChatRole;
+type ChatMessage = ProblemChatMessage;
 
 interface ProblemChatPanelProps {
   currentProblem: Problem | null;
@@ -224,6 +257,11 @@ interface ProblemChatPanelProps {
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
   onUsePersona: (id: string) => { ok: boolean; name?: string };
+  onSetLeiaName?: (name: string) => void;
+  modelName: string;
+  apiKeyId: string | null;
+  initialChatState?: ProblemChatState;
+  onChatStateChange?: (state: ProblemChatState) => void;
 }
 
 export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
@@ -235,57 +273,14 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   onApplyBehaviour,
   onApplyPersona,
   onUsePersona,
+  onSetLeiaName,
+  modelName,
+  apiKeyId,
+  initialChatState,
+  onChatStateChange,
 }) => {
-  const { apiKeys, getDefaultKey, isLoading: apiKeysLoading } = useApiKeys();
-  const { apiKeyProvidersMapped, defaultModel, isLoading: providersLoading } = useProviders();
-
-  // The problem-chat always runs on OpenAI (Responses API + PDF input), so only
-  // OpenAI models/keys are selectable here.
-  const openaiKeys = useMemo(
-    () => apiKeys.filter((k) => k.provider === "openai"),
-    [apiKeys],
-  );
-  const openaiModels = useMemo(
-    () => apiKeyProvidersMapped?.openai || [],
-    [apiKeyProvidersMapped],
-  );
-
-  const [selectedApiKeyId, setSelectedApiKeyId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>("");
-
-  const optionsLoading = apiKeysLoading || providersLoading;
-
-  // Seed sensible defaults once the keys/models load (default OpenAI key, and
-  // the model preselected from that key's default model).
-  useEffect(() => {
-    if (optionsLoading) return;
-    let keyId = selectedApiKeyId && openaiKeys.some((k) => k.id === selectedApiKeyId) ? selectedApiKeyId : null;
-    if (!keyId) {
-      const def = getDefaultKey();
-      keyId = def && def.provider === "openai" ? def.id : (openaiKeys[0]?.id ?? null);
-      if (keyId !== selectedApiKeyId) setSelectedApiKeyId(keyId);
-    }
-    const keyModel = openaiKeys.find((k) => k.id === keyId)?.model;
-    setSelectedModel((prev) => {
-      if (prev && openaiModels.includes(prev)) return prev;
-      if (keyModel && openaiModels.includes(keyModel)) return keyModel;
-      if (defaultModel && openaiModels.includes(defaultModel)) return defaultModel;
-      return openaiModels[0] ?? "";
-    });
-  }, [optionsLoading, openaiKeys, openaiModels, defaultModel, getDefaultKey, selectedApiKeyId]);
-
-  // Manually choosing a key preselects that key's default model.
-  const handleSelectApiKey = useCallback(
-    (id: string | null) => {
-      setSelectedApiKeyId(id);
-      const keyModel = openaiKeys.find((k) => k.id === id)?.model;
-      if (keyModel && openaiModels.includes(keyModel)) setSelectedModel(keyModel);
-    },
-    [openaiKeys, openaiModels],
-  );
-
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialChatState?.messages ?? []);
+  const [input, setInput] = useState(() => initialChatState?.input ?? "");
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -294,6 +289,10 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    onChatStateChange?.({ messages, input });
+  }, [input, messages, onChatStateChange]);
+
   // Always read the freshest resources when the model calls get_current_*.
   const currentProblemRef = useRef<Problem | null>(currentProblem);
   currentProblemRef.current = currentProblem;
@@ -301,17 +300,15 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviourRef.current = currentBehaviour;
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
-  // Latest list of existing personas the chat can reuse by id.
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
-  const ready = Boolean(selectedModel && selectedApiKeyId);
-  const hasOpenaiKeys = openaiKeys.length > 0;
+  const ready = Boolean(modelName && apiKeyId);
 
   // Changing the model/key invalidates the server-side session.
   useEffect(() => {
     chatIdRef.current = null;
-  }, [selectedModel, selectedApiKeyId]);
+  }, [modelName, apiKeyId]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
@@ -321,17 +318,18 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     setMessages((prev) => [...prev, { role, text }]);
 
   const stripAvatar = (spec: Record<string, unknown>): ProblemSpec => {
-    const { avatar: _avatar, ...rest } = spec;
-    return rest as unknown as ProblemSpec;
+    const cleanSpec = { ...spec };
+    delete cleanSpec.avatar;
+    return cleanSpec as unknown as ProblemSpec;
   };
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (chatIdRef.current) return chatIdRef.current;
-    if (!selectedModel || !selectedApiKeyId) throw new Error("Select a model and API key first");
-    const chatId = await openProblemChat(selectedModel, selectedApiKeyId);
+    if (!modelName || !apiKeyId) throw new Error("Select a model and API key first");
+    const chatId = await openProblemChat(modelName, apiKeyId);
     chatIdRef.current = chatId;
     return chatId;
-  }, [selectedModel, selectedApiKeyId]);
+  }, [modelName, apiKeyId]);
 
   const handleAttach = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -367,16 +365,19 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       const calls = response.toolCalls;
       if (!Array.isArray(calls) || calls.length === 0) break;
 
-      // Tool calls may arrive in parallel. Apply the new problem before its
-      // activity-specific behaviour so invalidating the stale behaviour cannot
-      // erase the replacement from the same model turn.
+      // Tool calls may be returned in parallel. Applying the problem first is
+      // important because it invalidates the previous behaviour; the new,
+      // activity-specific behaviour must be applied afterwards.
       const priority: Record<string, number> = {
         get_current_problem: 0,
         get_current_behaviour: 0,
         get_current_persona: 0,
+        list_personas: 0,
         apply_problem: 10,
         apply_behaviour: 20,
         apply_persona: 30,
+        use_persona: 30,
+        set_leia_name: 40,
       };
       const orderedCalls = [...calls].sort(
         (left, right) => (priority[left.name] ?? 100) - (priority[right.name] ?? 100),
@@ -409,6 +410,15 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           onApplyPersona(spec, name);
           pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
+        } else if (call.name === "set_leia_name") {
+          const name = typeof args.name === "string" ? args.name.trim() : "";
+          if (name) {
+            onSetLeiaName?.(name);
+            pushMessage("system", `✓ LEIA title suggested: "${name}".`);
+            output = { status: "applied", name };
+          } else {
+            output = { error: "a non-empty LEIA title is required" };
+          }
         } else if (call.name === "get_current_problem") {
           output = currentProblemRef.current?.spec ?? null;
         } else if (call.name === "get_current_behaviour") {
@@ -416,18 +426,21 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         } else if (call.name === "get_current_persona") {
           output = currentPersonaRef.current?.spec ?? null;
         } else if (call.name === "list_personas") {
-          output = personasRef.current.map((p) => ({
-            id: p.id,
-            name: p.metadata?.name,
-            firstName: p.spec?.firstName,
-            description: typeof p.spec?.description === "string" ? p.spec.description.slice(0, 240) : undefined,
+          output = personasRef.current.map((persona) => ({
+            id: persona.id,
+            name: persona.metadata?.name,
+            firstName: persona.spec?.firstName,
+            description:
+              typeof persona.spec?.description === "string"
+                ? persona.spec.description.slice(0, 240)
+                : undefined,
           }));
         } else if (call.name === "use_persona") {
           const id = typeof args.id === "string" ? args.id : "";
-          const res = onUsePersona(id);
-          if (res.ok) {
-            pushMessage("system", `✓ Using existing persona${res.name ? ` ("${res.name}")` : ""}.`);
-            output = { status: "selected", name: res.name };
+          const result = onUsePersona(id);
+          if (result.ok) {
+            pushMessage("system", `✓ Using existing persona${result.name ? ` ("${result.name}")` : ""}.`);
+            output = { status: "selected", name: result.name };
           } else {
             output = { error: `no persona with id '${id}'` };
           }
@@ -468,163 +481,147 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full rounded-lg border border-gray-200 bg-white">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
-        <SparklesIcon className="h-4 w-4 text-blue-600" />
-        <span className="text-sm font-semibold text-gray-800">AI Assistant</span>
-      </div>
+    <Paper variant="outlined" sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider" }}>
+        <AutoAwesomeIcon color="primary" fontSize="small" />
+        <Typography variant="subtitle2">AI Assistant</Typography>
+      </Stack>
 
-      {/* Model + API key selectors (OpenAI only — the assistant runs on OpenAI). */}
-      <div className="px-3 py-2 border-b border-gray-100">
-        {hasOpenaiKeys ? (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">Model</label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                disabled={optionsLoading}
-                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">{optionsLoading ? "Loading…" : "-- model --"}</option>
-                {openaiModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">API Key</label>
-              <select
-                value={selectedApiKeyId ?? ""}
-                onChange={(e) => handleSelectApiKey(e.target.value || null)}
-                disabled={optionsLoading}
-                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">{optionsLoading ? "Loading…" : "-- key --"}</option>
-                {openaiKeys.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.description}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        ) : (
-          <div className="text-[11px] text-amber-700">
-            {optionsLoading ? (
-              "Loading API keys…"
-            ) : (
-              <>
-                No OpenAI API key available.{" "}
-                <Link to="/administration/api-keys" className="text-blue-600 underline">
-                  Create one
-                </Link>{" "}
-                to use the assistant.
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Transcript */}
-      <div ref={transcriptRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3 min-h-[160px]">
+      <Stack ref={transcriptRef} spacing={1.5} sx={{ flex: 1, minHeight: 160, overflowY: "auto", px: 2, py: 1.5 }}>
         {messages.length === 0 ? (
-          <div className="text-xs text-gray-400 italic">
+          <Typography variant="caption" color="text.disabled" fontStyle="italic">
             Attach a PDF of a past exercise or describe what you want, and I'll build the whole
-            LEIA — problem, behaviour and persona — writing each into its editor with a name.
+            LEIA — problem, behaviour and persona — writing each into its editor and suggesting a LEIA title.
             E.g. "create a requirements-elicitation activity about a library booking system".
-          </div>
+          </Typography>
         ) : (
           messages.map((msg, i) => {
             if (msg.role === "system") {
               return (
-                <div key={i} className="text-[11px] text-green-700 bg-green-50 rounded px-2 py-1">
+                <Typography key={i} variant="caption" sx={{ px: 1, py: 0.5, bgcolor: "#F0FDF4", color: "success.dark", borderRadius: 1 }}>
                   {msg.text}
-                </div>
+                </Typography>
               );
             }
             const isUser = msg.role === "user";
             return (
-              <div key={i} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] px-3 py-2 rounded-lg text-sm whitespace-pre-wrap ${
-                    isUser
-                      ? "bg-blue-600 text-white rounded-br-sm"
-                      : "bg-gray-100 text-gray-800 rounded-bl-sm"
-                  }`}
+              <Box key={i} sx={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                <Paper
+                  variant={isUser ? undefined : "outlined"}
+                  elevation={isUser ? 1 : 0}
+                  sx={{
+                    maxWidth: "85%",
+                    px: 1.5,
+                    py: 1,
+                    bgcolor: isUser ? "primary.main" : "surfaces.subtle",
+                    color: isUser ? "primary.contrastText" : "text.primary",
+                    borderRadius: 1.5,
+                    borderBottomRightRadius: isUser ? 0.5 : 1.5,
+                    borderBottomLeftRadius: isUser ? 1.5 : 0.5,
+                  }}
                 >
-                  {msg.text}
-                </div>
-              </div>
+                  {isUser ? (
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{msg.text}</Typography>
+                  ) : (
+                    <Box
+                      sx={{
+                        fontSize: 14,
+                        lineHeight: 1.55,
+                        "& p": { m: 0 },
+                        "& p + p": { mt: 1 },
+                        "& ul, & ol": { my: 0.75, pl: 2.5 },
+                        "& li + li": { mt: 0.35 },
+                        "& pre": {
+                          m: 0,
+                          mt: 1,
+                          p: 1,
+                          overflowX: "auto",
+                          borderRadius: 1,
+                          bgcolor: "rgba(15, 23, 42, 0.08)",
+                          fontSize: 12,
+                        },
+                        "& :not(pre) > code": {
+                          px: 0.45,
+                          py: 0.1,
+                          borderRadius: 0.5,
+                          bgcolor: "rgba(15, 23, 42, 0.08)",
+                          fontSize: "0.88em",
+                        },
+                      }}
+                    >
+                      <ReactMarkdown>{msg.text}</ReactMarkdown>
+                    </Box>
+                  )}
+                </Paper>
+              </Box>
             );
           })
         )}
-        {sending && <div className="text-xs text-gray-400 italic">Thinking…</div>}
-      </div>
+        {sending && <Typography variant="caption" color="text.disabled" fontStyle="italic">Thinking…</Typography>}
+      </Stack>
 
-      {/* Attachments */}
       {attachments.length > 0 && (
-        <div className="px-3 py-2 border-t border-gray-100 flex flex-wrap gap-2">
+        <Stack direction="row" flexWrap="wrap" useFlexGap spacing={0.75} sx={{ px: 2, py: 1, borderTop: 1, borderColor: "divider" }}>
           {attachments.map((file) => (
-            <span
+            <Chip
               key={file.fileId}
-              className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-600"
-            >
-              <PaperClipIcon className="h-3 w-3" />
-              {file.filename}
-            </span>
+              icon={<AttachFileIcon />}
+              label={file.filename}
+              size="small"
+            />
           ))}
-        </div>
+        </Stack>
       )}
 
-      {error && <div className="px-3 py-1 text-[11px] text-red-600">{error}</div>}
+      {error && <Alert severity="error" sx={{ mx: 2, mb: 1 }}>{error}</Alert>}
 
-      {/* Composer */}
-      <div className="border-t border-gray-200 p-2">
-        <div className="flex items-end gap-2">
+      <Box sx={{ p: 1, borderTop: 1, borderColor: "divider" }}>
+        <Stack direction="row" alignItems="flex-end" spacing={1}>
           <input
             ref={fileInputRef}
             type="file"
             accept="application/pdf"
-            className="hidden"
+            hidden
             onChange={handleAttach}
           />
-          <button
+          <IconButton
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={!ready || uploading || sending}
-            title="Attach a PDF"
-            className="p-2 text-gray-500 hover:text-blue-600 disabled:opacity-40"
+            aria-label="Attach a PDF"
+            color="primary"
           >
             {uploading ? (
-              <span className="block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              <CircularProgress size={18} />
             ) : (
-              <PaperClipIcon className="h-5 w-5" />
+              <AttachFileIcon />
             )}
-          </button>
-          <textarea
+          </IconButton>
+          <TextField
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onChange={(event) => setInput(event.target.value)}
             disabled={!ready || sending}
-            rows={1}
+            multiline
+            minRows={1}
+            maxRows={5}
             placeholder={ready ? "Describe the problem or ask to convert the PDF…" : "Select a model and key…"}
-            className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50"
-            style={{ maxHeight: 120 }}
+            fullWidth
+            slotProps={{ htmlInput: { onKeyDown: handleKeyDown } }}
+            sx={{ "& textarea": { maxHeight: 120, overflowY: "auto" } }}
           />
-          <button
+          <IconButton
             type="button"
             onClick={() => void handleSend()}
             disabled={!ready || sending || !input.trim()}
-            className="p-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-40"
+            color="primary"
+            sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" } }}
+            aria-label="Send message"
           >
-            <PaperAirplaneIcon className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-    </div>
+            <SendIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      </Box>
+    </Paper>
   );
 };
 

@@ -1,18 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useState } from "react";
 import { Editor, loader } from "@monaco-editor/react";
-import { TrashIcon } from "@heroicons/react/24/outline";
+import CheckIcon from "@mui/icons-material/Check";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import { Box, Chip, IconButton, Paper, Popper, Stack, Typography } from "@mui/material";
 import { useAuth } from "../context";
 import type { User } from "../models/User";
 import { Avatar } from "./shared/Avatar";
 
-// Ensure YAML language support is loaded
 loader.init().then((monaco) => {
-  // Register YAML language if not already registered
-  if (
-    !monaco.languages
-      .getLanguages()
-      .find((lang: { id: string }) => lang.id === "yaml")
-  ) {
+  if (!monaco.languages.getLanguages().find((language: { id: string }) => language.id === "yaml")) {
     monaco.languages.register({ id: "yaml" });
   }
 });
@@ -51,43 +47,55 @@ export default function LeiaCard({
   showAvatar = false,
 }: LeiaCardProps) {
   const [showPopup, setShowPopup] = useState(false);
-  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
   const { user: currentUser } = useAuth();
 
-  // Determinar si el usuario puede eliminar este recurso
   const canDelete =
     currentUser &&
     onDelete &&
     resourceId &&
     (currentUser.role === "admin" || (user && currentUser.id === user.id));
 
-  useEffect(() => {
-    if (showPopup && cardRef.current) {
-      const rect = cardRef.current.getBoundingClientRect();
-      setPopoverPosition({
-        top: rect.top + rect.height / 2,
-        left: rect.right + 8,
-      });
-    }
-  }, [showPopup]);
+  const roleLabel =
+    user?.role === "admin"
+      ? "Administrator"
+      : user?.role === "advanced"
+        ? "Advanced"
+        : "Instructor";
+  const roleColor =
+    user?.role === "admin" ? "secondary.main" : user?.role === "advanced" ? "primary.main" : "success.main";
 
   return (
-    <div
+    <Box
       ref={cardRef}
-      className="relative"
       onMouseEnter={() => !hideContentForInstructor && setShowPopup(true)}
       onMouseLeave={() => setShowPopup(false)}
     >
-      <div
-        className={`p-4 rounded-lg cursor-pointer transition-colors ${
-          selected
-            ? "bg-blue-50 border-2 border-blue-500"
-            : "border border-gray-200 hover:border-blue-300"
-        }`}
+      <Paper
+        variant="outlined"
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
         onClick={onClick}
+        onKeyDown={(event) => {
+          if (onClick && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+        sx={{
+          p: 2,
+          cursor: onClick ? "pointer" : "default",
+          borderWidth: selected ? 2 : 1,
+          borderColor: selected ? "primary.main" : "divider",
+          bgcolor: selected ? "surfaces.selected" : "background.paper",
+          transition: (theme) => theme.transitions.create(["border-color", "background-color"]),
+          "&:hover": onClick
+            ? { borderColor: selected ? "primary.main" : "primary.light" }
+            : undefined,
+          "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
+        }}
       >
-        <div className="flex gap-3">
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
           {showAvatar && (
             <Avatar
               src={avatar}
@@ -97,142 +105,113 @@ export default function LeiaCard({
               size="md"
             />
           )}
-          <div className="min-w-0 flex-1">
-            <div className="flex justify-between items-start mb-1 gap-2">
-              <h3 className="text-lg font-semibold text-gray-900 break-words">
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+              <Typography variant="subtitle2" sx={{ pr: 1 }}>
                 {title}
-              </h3>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                  v{version}
-                </span>
+              </Typography>
+              <Stack direction="row" spacing={0.75} alignItems="center" flexShrink={0}>
+                <Chip label={`v${version}`} size="small" />
                 {user && (
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      isPublished
-                        ? "bg-green-100 text-green-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {isPublished ? "Published" : "Unpublished"}
-                  </span>
+                  <Chip
+                    label={isPublished ? "Published" : "Unpublished"}
+                    size="small"
+                    color={isPublished ? "success" : "warning"}
+                    variant="outlined"
+                  />
                 )}
                 {canDelete && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
+                  <IconButton
+                    aria-label="Delete resource"
+                    color="error"
+                    size="small"
+                    onClick={(event) => {
+                      event.stopPropagation();
                       onDelete?.();
                     }}
-                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                    title="Delete resource"
                   >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
                 )}
-              </div>
-            </div>
-            {/* User information */}
-            {user && user.email && user.role ? (
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                <span>{user.email}</span>
-                <span className="flex items-center gap-1">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${
-                      user.role === "admin"
-                        ? "bg-purple-500"
-                        : user.role === "advanced"
-                          ? "bg-blue-500"
-                          : "bg-green-500"
-                    }`}
-                  ></span>
-                  {user.role === "admin"
-                    ? "Administrator"
-                    : user.role === "advanced"
-                      ? "Advanced"
-                      : "Instructor"}
-                </span>
-              </div>
-            ) : null}
-            {!hideContentForInstructor && (
-              <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
-                {description}
-              </p>
-            )}
-            {selected && (
-              <div className="mt-3 flex items-center text-blue-600 text-sm font-medium">
-                <svg
-                  className="w-4 h-4 mr-1"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Selected
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+              </Stack>
+            </Stack>
 
-      {/* Popup de YAML con Monaco Editor */}
-      {showPopup && yaml && !hideContentForInstructor && (
-        <div
-          className="fixed z-[9999] transition-opacity duration-200"
-          style={{
-            top: popoverPosition.top,
-            left: popoverPosition.left,
-            transform: "translateY(-50%)",
-          }}
-        >
-          <div className="bg-gray-900 rounded-lg shadow-xl p-2 w-[500px] h-[300px]">
-            <Editor
-              height="100%"
-              language="yaml"
-              theme="vs-dark"
-              value={yaml}
-              options={{
-                readOnly: true,
-                minimap: { enabled: false },
-                fontSize: 12,
-                lineNumbers: "off",
-                folding: false,
-                lineDecorationsWidth: 0,
-                lineNumbersMinChars: 0,
-                renderLineHighlight: "none",
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                automaticLayout: true,
-                contextmenu: false,
-                hover: { enabled: false },
-                links: false,
-                occurrencesHighlight: "off",
-                renderValidationDecorations: "off",
-                selectionHighlight: false,
-              }}
-              beforeMount={(monaco) => {
-                // Ensure YAML language is available
-                if (
-                  !monaco.languages
-                    .getLanguages()
-                    .find((lang: { id: string }) => lang.id === "yaml")
-                ) {
-                  monaco.languages.register({ id: "yaml" });
-                }
-              }}
-            />
-          </div>
-          <div
-            className="absolute left-0 top-1/2 -ml-2 w-0 h-0 
-            border-t-[6px] border-r-[6px] border-b-[6px] 
-            border-t-transparent border-r-gray-900 border-b-transparent"
-            style={{ transform: "translateY(-50%)" }}
-          ></div>
-        </div>
-      )}
-    </div>
+            {user?.email && user.role && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {user.email}
+                </Typography>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: roleColor }} />
+                  <Typography variant="caption" color="text.secondary">
+                    {roleLabel}
+                  </Typography>
+                </Stack>
+              </Stack>
+            )}
+
+            {!hideContentForInstructor && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: user?.email && user.role ? 1 : 1.25, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+              >
+                {description}
+              </Typography>
+            )}
+
+            {selected && (
+              <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 1.5, color: "primary.main" }}>
+                <CheckIcon fontSize="small" />
+                <Typography variant="body2" fontWeight={600}>
+                  Selected
+                </Typography>
+              </Stack>
+            )}
+          </Box>
+        </Stack>
+      </Paper>
+
+      <Popper
+        open={showPopup && Boolean(yaml) && !hideContentForInstructor}
+        anchorEl={cardRef.current}
+        placement="right"
+        sx={{ zIndex: (theme) => theme.zIndex.tooltip }}
+        modifiers={[{ name: "offset", options: { offset: [0, 8] } }]}
+      >
+        <Paper sx={{ width: 500, height: 300, p: 1, bgcolor: "#1E1E1E", overflow: "hidden" }}>
+          <Editor
+            height="100%"
+            language="yaml"
+            theme="vs-dark"
+            value={yaml}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              fontSize: 12,
+              lineNumbers: "off",
+              folding: false,
+              lineDecorationsWidth: 0,
+              lineNumbersMinChars: 0,
+              renderLineHighlight: "none",
+              scrollBeyondLastLine: false,
+              wordWrap: "on",
+              automaticLayout: true,
+              contextmenu: false,
+              hover: { enabled: false },
+              links: false,
+              occurrencesHighlight: "off",
+              renderValidationDecorations: "off",
+              selectionHighlight: false,
+            }}
+            beforeMount={(monaco) => {
+              if (!monaco.languages.getLanguages().find((language: { id: string }) => language.id === "yaml")) {
+                monaco.languages.register({ id: "yaml" });
+              }
+            }}
+          />
+        </Paper>
+      </Popper>
+    </Box>
   );
 }

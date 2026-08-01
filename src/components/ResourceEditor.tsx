@@ -1,8 +1,23 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Editor } from "@monaco-editor/react";
-import * as Tabs from "@radix-ui/react-tabs";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  FormControlLabel,
+  MenuItem,
+  Paper,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from "@mui/material";
 import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia";
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
+import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
 
 type ResourceType = "persona" | "problem" | "behaviour";
@@ -22,6 +37,7 @@ type EditableSpec = Record<string, unknown>;
 type MermaidParser = {
   initialize: (config: { startOnLoad: boolean }) => void;
   parse: (text: string) => Promise<unknown>;
+  render: (id: string, text: string) => Promise<{ svg: string }>;
 };
 
 let mermaidParserPromise: Promise<MermaidParser> | null = null;
@@ -37,33 +53,27 @@ const loadMermaidParser = async (): Promise<MermaidParser> => {
   return mermaidParserPromise;
 };
 
+const unwrapMermaidCodeFence = (value: string): string => {
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/^```(?:mermaid)?\s*\r?\n([\s\S]*?)\r?\n?```\s*$/i);
+  return fenced ? fenced[1].trim() : trimmed;
+};
+
 const extractMermaidSolution = (data: unknown): string | null => {
-  if (!data || typeof data !== "object") {
-    return null;
-  }
+  if (!data || typeof data !== "object") return null;
 
   const problemData = data as ProblemEditorData;
-  if (problemData.solutionFormat !== "mermaid") {
+  if (problemData.solutionFormat !== "mermaid" || typeof problemData.solution !== "string") {
     return null;
   }
 
-  if (typeof problemData.solution !== "string") {
-    return null;
-  }
-
-  const trimmedSolution = problemData.solution.trim();
-  return trimmedSolution.length > 0 ? trimmedSolution : null;
+  const solution = unwrapMermaidCodeFence(problemData.solution);
+  return solution.length > 0 ? solution : null;
 };
 
 const getMermaidErrorMessage = (error: unknown): string => {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
-  }
-
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
   return "Invalid Mermaid syntax";
 };
 
@@ -99,100 +109,133 @@ const restoreOriginalAvatar = (
 };
 
 const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
-  const segments: HighlightSegment[] = [];
-  if (!text) {
-    return segments;
-  }
+  if (!text) return [];
 
-  const regex = /\{\{[^}]+\}\}/g;
+  const segments: HighlightSegment[] = [];
+  const expression = /\{\{[^}]+\}\}/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = expression.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({
-        text: text.slice(lastIndex, match.index),
-        highlight: false,
-      });
+      segments.push({ text: text.slice(lastIndex, match.index), highlight: false });
     }
-
     segments.push({ text: match[0], highlight: true });
-    lastIndex = regex.lastIndex;
+    lastIndex = expression.lastIndex;
   }
 
   if (lastIndex < text.length) {
-    segments.push({
-      text: text.slice(lastIndex),
-      highlight: false,
-    });
+    segments.push({ text: text.slice(lastIndex), highlight: false });
   }
 
   return segments.length ? segments : [{ text, highlight: false }];
 };
 
-const HighlightableInput: React.FC<
-  React.InputHTMLAttributes<HTMLInputElement>
-> = ({ value, className = "", placeholder, ...rest }) => {
+type HighlightableInputProps = Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "className" | "color" | "value"
+> & {
+  value?: string | number | readonly string[];
+};
+
+const highlightTokenSx = {
+  borderRadius: 0.5,
+  bgcolor: "#F3E8FF",
+  color: "#7E22CE",
+};
+
+const highlightableControlSx = {
+  width: "100%",
+  display: "block",
+  boxSizing: "border-box",
+  px: 1.5,
+  py: 1,
+  border: 1,
+  borderColor: "divider",
+  borderRadius: 1,
+  bgcolor: "transparent",
+  color: "transparent",
+  caretColor: "primary.main",
+  font: "inherit",
+  lineHeight: 1.5,
+  position: "relative",
+  zIndex: 1,
+  "&:focus": {
+    outline: "none",
+    borderColor: "primary.main",
+    boxShadow: "0 0 0 2px rgba(37, 99, 235, 0.16)",
+  },
+};
+
+const HighlightableInput: React.FC<HighlightableInputProps> = ({
+  value,
+  placeholder,
+  ...rest
+}) => {
   const normalizedValue =
     value === undefined || value === null
       ? ""
       : Array.isArray(value)
         ? value.join(", ")
         : String(value);
-
-  const segments = useMemo(
-    () => splitPlaceholderSegments(normalizedValue),
-    [normalizedValue],
-  );
-  const showPlaceholder = normalizedValue.length === 0;
+  const segments = useMemo(() => splitPlaceholderSegments(normalizedValue), [normalizedValue]);
 
   return (
-    <div className="relative w-full">
-      <input
+    <Box sx={{ position: "relative", width: "100%" }}>
+      <Box
+        component="input"
         {...rest}
         value={normalizedValue}
-        className={`${className} relative z-10 bg-transparent text-transparent caret-blue-600`}
         placeholder={placeholder}
+        sx={highlightableControlSx}
       />
-      <div
-        className="pointer-events-none absolute inset-[3px] z-0 flex items-center px-3 py-2 text-gray-900 whitespace-pre break-words overflow-hidden rounded-md"
+      <Box
         aria-hidden="true"
-        style={{ font: "inherit" }}
+        sx={{
+          pointerEvents: "none",
+          position: "absolute",
+          inset: 1,
+          zIndex: 0,
+          display: "flex",
+          alignItems: "center",
+          overflow: "hidden",
+          px: 1.5,
+          py: 1,
+          color: "text.primary",
+          whiteSpace: "pre",
+          borderRadius: 1,
+          font: "inherit",
+        }}
       >
-        {showPlaceholder ? (
-          placeholder ? (
-            <span className="text-gray-400">{placeholder}</span>
-          ) : null
+        {normalizedValue.length === 0 ? (
+          placeholder && <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
         ) : (
-          segments.map((segment, index) =>
-            segment.highlight ? (
-              <span
-                key={`placeholder-${index}`}
-                className="rounded bg-purple-100 inline text-purple-700"
-              >
-                {segment.text}
-              </span>
-            ) : (
-              <span key={`text-${index}`}>{segment.text}</span>
-            ),
-          )
+          segments.map((segment, index) => (
+            <Box component="span" key={`${segment.text}-${index}`} sx={segment.highlight ? highlightTokenSx : undefined}>
+              {segment.text}
+            </Box>
+          ))
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };
 
-const HighlightableTextarea: React.FC<
-  React.TextareaHTMLAttributes<HTMLTextAreaElement>
-> = ({ value, className = "", placeholder, onScroll, ...rest }) => {
-  const normalizedValue =
-    value === undefined || value === null ? "" : String(value);
+type HighlightableTextareaProps = Omit<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  "className" | "color" | "value"
+> & {
+  value?: string | number | readonly string[];
+};
 
-  const segments = useMemo(
-    () => splitPlaceholderSegments(normalizedValue),
-    [normalizedValue],
-  );
-  const showPlaceholder = normalizedValue.length === 0;
+const HighlightableTextarea: React.FC<HighlightableTextareaProps> = ({
+  value,
+  placeholder,
+  onScroll,
+  ...rest
+}) => {
+  const normalizedValue = value === undefined || value === null ? "" : String(value);
+  const segments = useMemo(() => splitPlaceholderSegments(normalizedValue), [normalizedValue]);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const handleScroll: React.UIEventHandler<HTMLTextAreaElement> = (event) => {
@@ -204,48 +247,64 @@ const HighlightableTextarea: React.FC<
   };
 
   return (
-    <div className="relative w-full">
-      <textarea
+    <Box sx={{ position: "relative", width: "100%" }}>
+      <Box
+        component="textarea"
         {...rest}
         value={normalizedValue}
-        onScroll={handleScroll}
-        className={`${className} relative z-10 bg-transparent text-transparent caret-blue-600`}
         placeholder={placeholder}
+        onScroll={handleScroll}
+        sx={{
+          ...highlightableControlSx,
+          resize: "vertical",
+        }}
       />
-      <div
+      <Box
         ref={overlayRef}
-        className="pointer-events-none absolute inset-[3px] z-0 overflow-auto px-3 py-2 text-gray-900 whitespace-pre-wrap break-words rounded-md"
         aria-hidden="true"
-        style={{ font: "inherit" }}
+        sx={{
+          pointerEvents: "none",
+          position: "absolute",
+          inset: 1,
+          zIndex: 0,
+          overflow: "auto",
+          px: 1.5,
+          py: 1,
+          color: "text.primary",
+          whiteSpace: "pre-wrap",
+          overflowWrap: "break-word",
+          borderRadius: 1,
+          font: "inherit",
+        }}
       >
-        {showPlaceholder ? (
-          placeholder ? (
-            <span className="text-gray-400">{placeholder}</span>
-          ) : null
+        {normalizedValue.length === 0 ? (
+          placeholder && <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
         ) : (
-          segments.map((segment, index) =>
-            segment.highlight ? (
-              <span
-                key={`placeholder-${index}`}
-                className="rounded bg-purple-100 text-purple-700"
-              >
-                {segment.text}
-              </span>
-            ) : (
-              <span key={`text-${index}`}>{segment.text}</span>
-            ),
-          )
+          segments.map((segment, index) => (
+            <Box component="span" key={`${segment.text}-${index}`} sx={segment.highlight ? highlightTokenSx : undefined}>
+              {segment.text}
+            </Box>
+          ))
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };
+
+const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <Box>
+    <Typography variant="body2" fontWeight={600} sx={{ display: "block", mb: 0.75 }}>
+      {label}
+    </Typography>
+    {children}
+  </Box>
+);
 
 interface ResourceEditorProps {
   resourceType: ResourceType;
   initialData?: Partial<Persona> | Partial<Problem> | Partial<Behaviour>;
   apiVersion?: string;
-  onSave: (data: any, apiVersion: string) => void;
+  onSave: (data: any, apiVersion: string, resourceName: string) => void;
   onCancel: () => void;
 }
 
@@ -260,8 +319,14 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const [activeTab, setActiveTab] = useState<"visual" | "code">("visual");
   const [jsonContent, setJsonContent] = useState("");
   const [visualData, setVisualData] = useState<any>({});
+  const [resourceName, setResourceName] = useState("");
+  const [resourceNameError, setResourceNameError] = useState<string | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [mermaidError, setMermaidError] = useState<string | null>(null);
+  const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
+  const mermaidPreviewId = useRef(
+    `resource-editor-mermaid-${Math.random().toString(36).slice(2)}`,
+  ).current;
   const processOptions = [
     { value: "requirements-elicitation", label: "Requirements Elicitation" },
     { value: "game", label: "Game" },
@@ -269,71 +334,67 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   ];
 
   const validateMermaidSyntax = async (data: unknown): Promise<string | null> => {
-    const mermaidSolution = extractMermaidSolution(data);
-    if (!mermaidSolution) {
-      return null;
-    }
+    const solution = extractMermaidSolution(data);
+    if (!solution) return null;
 
     try {
       const mermaid = await loadMermaidParser();
-      await mermaid.parse(mermaidSolution);
+      await mermaid.parse(solution);
       return null;
-    } catch (error: unknown) {
+    } catch (error) {
       return getMermaidErrorMessage(error);
     }
   };
 
-  // Inicializar datos
   useEffect(() => {
+    setResourceName(initialData?.metadata?.name ?? "");
+    setResourceNameError(null);
+
     if (initialData?.spec) {
       const editableSpec = stripAvatar(initialData.spec);
       setVisualData(editableSpec);
       setJsonContent(JSON.stringify(editableSpec, null, 2));
-    } else {
-      const emptySpec = (() => {
-        switch (resourceType) {
-          case "persona":
-            return {
-              fullName: "",
-              firstName: "",
-              description: "",
-              personality: "",
-              subjectPronoum: "",
-              objectPronoum: "",
-              possesivePronoum: "",
-              possesiveAdjective: "",
-            };
-          case "problem":
-            return {
-              description: "",
-              personaBackground: "",
-              details: "",
-              solution: "",
-              initialSolution: "",
-              solutionFormat: "text",
-              evaluationPrompt: "",
-              process: [],
-              extends: {},
-              overrides: {},
-              constrainedTo: {},
-            };
-          case "behaviour":
-            return {
-              description: "",
-              role: "",
-              process: [],
-              tooltip: "",
-            };
-          default:
-            return {};
-        }
-      })();
-      setVisualData(emptySpec);
-      setJsonContent(JSON.stringify(emptySpec, null, 2));
+      return;
     }
+
+    const emptySpec = (() => {
+      switch (resourceType) {
+        case "persona":
+          return {
+            fullName: "",
+            firstName: "",
+            description: "",
+            personality: "",
+            subjectPronoum: "",
+            objectPronoum: "",
+            possesivePronoum: "",
+            possesiveAdjective: "",
+          };
+        case "problem":
+          return {
+            description: "",
+            personaBackground: "",
+            details: "",
+            solution: "",
+            initialSolution: "",
+            solutionFormat: "text",
+            evaluationPrompt: "",
+            process: [],
+            extends: {},
+            overrides: {},
+            constrainedTo: {},
+          };
+        case "behaviour":
+          return { description: "", role: "", process: [], tooltip: "" };
+        default:
+          return {};
+      }
+    })();
+
+    setVisualData(emptySpec);
+    setJsonContent(JSON.stringify(emptySpec, null, 2));
   }, [initialData, resourceType]);
 
-  // Sincronizar de visual a código
   useEffect(() => {
     if (activeTab === "code") {
       setJsonContent(JSON.stringify(stripAvatar(visualData), null, 2));
@@ -352,9 +413,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         solutionFormat: visualData?.solutionFormat,
         solution: visualData?.solution,
       }).then((error) => {
-        if (!cancelled) {
-          setMermaidError(error);
-        }
+        if (!cancelled) setMermaidError(error);
       });
     }, 250);
 
@@ -364,11 +423,33 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     };
   }, [resourceType, visualData?.solutionFormat, visualData?.solution]);
 
+  useEffect(() => {
+    const solution = extractMermaidSolution({
+      solutionFormat: visualData?.solutionFormat,
+      solution: visualData?.solution,
+    });
+    if (resourceType !== "problem" || !solution) {
+      setMermaidSvg(null);
+      return;
+    }
+
+    let cancelled = false;
+    void loadMermaidParser()
+      .then((mermaid) => mermaid.render(mermaidPreviewId, solution))
+      .then(({ svg }) => {
+        if (!cancelled) setMermaidSvg(svg);
+      })
+      .catch(() => {
+        if (!cancelled) setMermaidSvg(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mermaidPreviewId, resourceType, visualData?.solutionFormat, visualData?.solution]);
+
   const handleVisualChange = (field: string, value: any) => {
-    setVisualData((prev: any) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setVisualData((previous: any) => ({ ...previous, [field]: value }));
   };
 
   const handleJsonChange = (value: string | undefined) => {
@@ -380,377 +461,265 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         const parsed = stripAvatar(JSON.parse(value));
         setVisualData(parsed);
       }
-    } catch (err) {
+    } catch {
       setJsonError("Invalid JSON format");
       setMermaidError(null);
     }
   };
 
   const handleSave = async () => {
+    const normalizedResourceName = resourceName.trim();
+    if (!normalizedResourceName) {
+      setResourceNameError("Resource name is required");
+      return;
+    }
+
     let dataToSave: unknown = visualData;
 
     if (activeTab === "code") {
       try {
         const parsed = stripAvatar(JSON.parse(jsonContent));
         dataToSave = parsed;
-      } catch (err) {
+      } catch {
         setJsonError("Cannot save: Invalid JSON format");
         return;
       }
     }
 
     if (resourceType === "problem") {
+      const solution = extractMermaidSolution(dataToSave);
+      if (solution && dataToSave && typeof dataToSave === "object" && !Array.isArray(dataToSave)) {
+        dataToSave = { ...(dataToSave as Record<string, unknown>), solution };
+      }
       const validationError = await validateMermaidSyntax(dataToSave);
       setMermaidError(validationError);
-
-      if (validationError) {
-        return;
-      }
+      if (validationError) return;
     }
 
     onSave(
       restoreOriginalAvatar(stripAvatar(dataToSave), initialData),
       currentApiVersion,
+      normalizedResourceName,
     );
   };
 
   const renderPersonaForm = () => (
-    <div className="space-y-4 p-4 max-h-[400px] overflow-y-auto">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Full Name
-        </label>
+    <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
+      <Field label="Full Name">
         <HighlightableInput
           type="text"
           value={visualData.fullName || ""}
-          onChange={(e) => handleVisualChange("fullName", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("fullName", event.target.value)}
           placeholder="e.g., Dr. Alice Johnson"
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          First Name
-        </label>
+      </Field>
+      <Field label="First Name">
         <HighlightableInput
           type="text"
           value={visualData.firstName || ""}
-          onChange={(e) => handleVisualChange("firstName", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("firstName", event.target.value)}
           placeholder="e.g., Alice"
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Description
-        </label>
+      </Field>
+      <Field label="Description">
         <HighlightableTextarea
           value={visualData.description || ""}
-          onChange={(e) => handleVisualChange("description", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("description", event.target.value)}
           rows={3}
           placeholder="Describe the persona..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Personality
-        </label>
+      </Field>
+      <Field label="Personality">
         <HighlightableTextarea
           value={visualData.personality || ""}
-          onChange={(e) => handleVisualChange("personality", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("personality", event.target.value)}
           rows={3}
           placeholder="Describe personality traits..."
         />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Subject Pronoun
-          </label>
+      </Field>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+        <Field label="Subject Pronoun">
           <HighlightableInput
             type="text"
             value={visualData.subjectPronoum || ""}
-            onChange={(e) =>
-              handleVisualChange("subjectPronoum", e.target.value)
-            }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            onChange={(event) => handleVisualChange("subjectPronoum", event.target.value)}
             placeholder="e.g., she, he, they"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Object Pronoun
-          </label>
+        </Field>
+        <Field label="Object Pronoun">
           <HighlightableInput
             type="text"
             value={visualData.objectPronoum || ""}
-            onChange={(e) =>
-              handleVisualChange("objectPronoum", e.target.value)
-            }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            onChange={(event) => handleVisualChange("objectPronoum", event.target.value)}
             placeholder="e.g., her, him, them"
           />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Possessive Pronoun
-          </label>
+        </Field>
+      </Box>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+        <Field label="Possessive Pronoun">
           <HighlightableInput
             type="text"
             value={visualData.possesivePronoum || ""}
-            onChange={(e) =>
-              handleVisualChange("possesivePronoum", e.target.value)
-            }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            onChange={(event) => handleVisualChange("possesivePronoum", event.target.value)}
             placeholder="e.g., hers, his, theirs"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Possessive Adjective
-          </label>
+        </Field>
+        <Field label="Possessive Adjective">
           <HighlightableInput
             type="text"
             value={visualData.possesiveAdjective || ""}
-            onChange={(e) =>
-              handleVisualChange("possesiveAdjective", e.target.value)
-            }
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            onChange={(event) => handleVisualChange("possesiveAdjective", event.target.value)}
             placeholder="e.g., her, his, their"
           />
-        </div>
-      </div>
-    </div>
+        </Field>
+      </Box>
+    </Stack>
   );
 
   const renderProcessCheckboxes = () => (
-    <div className="space-y-2">
+    <Stack spacing={0.25}>
       {processOptions.map(({ value, label }) => {
         const currentProcess: string[] = visualData.process || [];
         const isChecked = currentProcess.includes(value);
         const hasOther = currentProcess.includes("other");
-        const disabled = !isChecked && (
-          (value === "other" && currentProcess.length > 0) ||
-          (value !== "other" && hasOther)
-        );
+        const disabled = !isChecked && ((value === "other" && currentProcess.length > 0) || (value !== "other" && hasOther));
+
         return (
-          <label
-            className={`flex items-center ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+          <FormControlLabel
             key={value}
-          >
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={isChecked}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  // "other" es exclusivo; el resto se pueden combinar
-                  if (value === "other") {
-                    handleVisualChange("process", ["other"]);
-                  } else {
-                    handleVisualChange("process", [...currentProcess, value]);
+            disabled={disabled}
+            control={
+              <Checkbox
+                size="small"
+                checked={isChecked}
+                onChange={(event) => {
+                  if (event.target.checked) {
+                    handleVisualChange("process", value === "other" ? ["other"] : [...currentProcess, value]);
+                    return;
                   }
-                } else {
-                  handleVisualChange(
-                    "process",
-                    currentProcess.filter((p: string) => p !== value),
-                  );
-                }
-              }}
-              className="mr-2"
-            />
-            {label}
-          </label>
+                  handleVisualChange("process", currentProcess.filter((process) => process !== value));
+                }}
+              />
+            }
+            label={<Typography variant="body2">{label}</Typography>}
+            sx={{ m: 0 }}
+          />
         );
       })}
-    </div>
+    </Stack>
   );
 
   const renderProblemForm = () => (
-    <div className="space-y-4 p-4 max-h-[400px] overflow-y-auto">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Description
-        </label>
+    <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
+      <Field label="Description">
         <HighlightableTextarea
           value={visualData.description || ""}
-          onChange={(e) => handleVisualChange("description", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("description", event.target.value)}
           rows={3}
           placeholder="Describe the problem..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Persona Background
-        </label>
+      </Field>
+      <Field label="Persona Background">
         <HighlightableTextarea
           value={visualData.personaBackground || ""}
-          onChange={(e) =>
-            handleVisualChange("personaBackground", e.target.value)
-          }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("personaBackground", event.target.value)}
           rows={2}
           placeholder="Background context for the persona..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Details
-        </label>
+      </Field>
+      <Field label="Details">
         <HighlightableTextarea
           value={visualData.details || ""}
-          onChange={(e) => handleVisualChange("details", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("details", event.target.value)}
           rows={3}
           placeholder="Additional details..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Solution
-        </label>
+      </Field>
+      <Field label="Solution">
         <HighlightableTextarea
           value={visualData.solution || ""}
-          onChange={(e) => handleVisualChange("solution", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("solution", event.target.value)}
           rows={3}
           placeholder="Expected solution..."
         />
-        {visualData.solutionFormat === "mermaid" && mermaidError && (
-          <div className="mt-2 text-sm text-red-600 whitespace-pre-wrap">
-            {mermaidError}
-          </div>
+        {visualData.solutionFormat === "mermaid" && extractMermaidSolution(visualData) && (
+          <Box sx={{ mt: 1.5, height: 280, overflow: "hidden", border: 1, borderColor: "divider", borderRadius: 1 }}>
+            <FormatPreview
+              code={extractMermaidSolution(visualData) || ""}
+              format="mermaid"
+              mermaidSvg={mermaidSvg}
+              error={mermaidError}
+            />
+          </Box>
         )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Initial Solution
-        </label>
+      </Field>
+      <Field label="Initial Solution">
         <HighlightableTextarea
           value={visualData.initialSolution || ""}
-          onChange={(e) =>
-            handleVisualChange("initialSolution", e.target.value)
-          }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("initialSolution", event.target.value)}
           rows={3}
           placeholder="Initial Solution..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Solution Format
-        </label>
-        <select
-          value={visualData.solutionFormat || "text"}
-          onChange={(e) => handleVisualChange("solutionFormat", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-        >
-          <option value="text">Plain Text</option>
-          <option value="mermaid">Mermaid Diagram</option>
-          <option value="yaml">YAML</option>
-          <option value="markdown">Markdown</option>
-          <option value="html">HTML</option>
-          <option value="json">JSON</option>
-          <option value="xml">XML</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Evaluation Prompt
-        </label>
+      </Field>
+      <TextField
+        select
+        label="Solution Format"
+        value={visualData.solutionFormat || "text"}
+        onChange={(event) => handleVisualChange("solutionFormat", event.target.value)}
+        fullWidth
+      >
+        <MenuItem value="text">Plain Text</MenuItem>
+        <MenuItem value="mermaid">Mermaid Diagram</MenuItem>
+        <MenuItem value="yaml">YAML</MenuItem>
+        <MenuItem value="markdown">Markdown</MenuItem>
+        <MenuItem value="html">HTML</MenuItem>
+        <MenuItem value="json">JSON</MenuItem>
+        <MenuItem value="xml">XML</MenuItem>
+      </TextField>
+      <Field label="Evaluation Prompt">
         <HighlightableTextarea
           value={visualData.evaluationPrompt || ""}
-          onChange={(e) =>
-            handleVisualChange("evaluationPrompt", e.target.value)
-          }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          onChange={(event) => handleVisualChange("evaluationPrompt", event.target.value)}
           rows={2}
           placeholder="Prompt for evaluating the solution..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Process
-        </label>
-        {renderProcessCheckboxes()}
-      </div>
-
+      </Field>
+      <Field label="Process">{renderProcessCheckboxes()}</Field>
       <ProblemWidgetsEditor
         widgets={(visualData.widgets as ProblemWidget[]) ?? []}
-        onChange={(next) =>
-          handleVisualChange("widgets", next.length > 0 ? next : undefined)
-        }
+        onChange={(widgets) => handleVisualChange("widgets", widgets.length > 0 ? widgets : undefined)}
       />
-    </div>
+    </Stack>
   );
 
   const renderBehaviourForm = () => (
-    <div className="space-y-4 p-4 max-h-[400px] overflow-y-auto">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Description
-        </label>
+    <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
+      <Field label="Description">
         <HighlightableTextarea
           value={visualData.description || ""}
-          onChange={(e) => handleVisualChange("description", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("description", event.target.value)}
           rows={3}
           placeholder="Describe the behaviour..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Role
-        </label>
+      </Field>
+      <Field label="Role">
         <HighlightableInput
           type="text"
           value={visualData.role || ""}
-          onChange={(e) => handleVisualChange("role", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("role", event.target.value)}
           placeholder="e.g., Facilitator"
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Tooltip
-        </label>
+      </Field>
+      <Field label="Tooltip">
         <HighlightableTextarea
           value={visualData.tooltip || ""}
-          onChange={(e) => handleVisualChange("tooltip", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          onChange={(event) => handleVisualChange("tooltip", event.target.value)}
           rows={2}
           placeholder="Tooltip text for this behaviour..."
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Process
-        </label>
-        {renderProcessCheckboxes()}
-      </div>
-    </div>
+      </Field>
+      <Field label="Process">{renderProcessCheckboxes()}</Field>
+    </Stack>
   );
 
   const renderForm = () => {
@@ -766,137 +735,119 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     }
   };
 
+  const resourceLabel = `${resourceType.charAt(0).toUpperCase()}${resourceType.slice(1)}`;
+
   return (
-    <div className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex justify-between items-center pb-4 border-b">
-          <h4 className="text-lg font-semibold text-gray-900">
-            Edit {resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}
-          </h4>
-          <div className="flex items-center space-x-2">
-            {resourceType === "problem" && (
-              <button
-                type="button"
-                onClick={() =>
-                  downloadProblemPdf(
-                    visualData,
-                    (initialData as Partial<Problem>)?.metadata?.name || "Problem",
-                  )
-                }
-                className="inline-flex items-center gap-1 px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
-                title="Download the problem statement (boletín) as a PDF"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-                </svg>
-                PDF
-              </button>
-            )}
-            <label className="text-sm font-medium text-gray-700">
-              API Version:
-            </label>
-            <select
-              value={currentApiVersion}
-              onChange={(e) => setCurrentApiVersion(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="v1">v1</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <Tabs.Root
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value as "visual" | "code")}
+    <Paper variant="outlined" sx={{ p: 3 }}>
+      <Stack spacing={2}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ sm: "center" }}
+          justifyContent="space-between"
+          spacing={1.5}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         >
-          <Tabs.List className="flex border-b border-gray-200">
-            <Tabs.Trigger
-              value="visual"
-              className="px-4 py-2 text-sm font-medium text-gray-700 border-b-2 border-transparent hover:text-gray-900 hover:border-gray-300 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 transition-colors"
-            >
-              Visual Editor
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="code"
-              className="px-4 py-2 text-sm font-medium text-gray-700 border-b-2 border-transparent hover:text-gray-900 hover:border-gray-300 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 transition-colors"
-            >
-              Code Editor
-            </Tabs.Trigger>
-          </Tabs.List>
-
-          <Tabs.Content value="visual" className="pt-4">
-            {renderForm()}
-          </Tabs.Content>
-
-          <Tabs.Content value="code" className="pt-4">
-            <div className="border border-gray-300 rounded-lg overflow-hidden">
-              <Editor
-                height="400px"
-                language="json"
-                theme="vs-light"
-                value={jsonContent}
-                onChange={handleJsonChange}
-                options={{
-                  readOnly: false,
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  fontSize: 12,
-                  lineNumbers: "on",
-                  glyphMargin: false,
-                  folding: true,
-                  lineDecorationsWidth: 0,
-                  lineNumbersMinChars: 3,
-                  automaticLayout: true,
-                  contextmenu: false,
-                  scrollbar: {
-                    vertical: "auto",
-                    horizontal: "auto",
-                    handleMouseWheel: true,
-                  },
-                  overviewRulerLanes: 0,
-                  hideCursorInOverviewRuler: true,
-                  overviewRulerBorder: false,
-                  wordWrap: "on",
-                }}
-              />
-            </div>
-            {jsonError && (
-              <div className="mt-2 text-sm text-red-600">{jsonError}</div>
+          <Typography variant="h6">Edit {resourceLabel}</Typography>
+          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+            {resourceType === "problem" && (
+              <Button
+                type="button"
+                color="inherit"
+                variant="outlined"
+                size="small"
+                startIcon={<DownloadOutlinedIcon />}
+                title="Download the problem statement (boletín) as a PDF"
+                onClick={() => downloadProblemPdf(visualData, resourceName.trim() || "Problem")}
+              >
+                PDF
+              </Button>
             )}
-            {!jsonError &&
-              resourceType === "problem" &&
-              mermaidError &&
-              extractMermaidSolution(visualData) && (
-                <div className="mt-2 text-sm text-red-600 whitespace-pre-wrap">
-                  {mermaidError}
-                </div>
-              )}
-          </Tabs.Content>
-        </Tabs.Root>
+            <TextField
+              select
+              label="API Version"
+              value={currentApiVersion}
+              onChange={(event) => setCurrentApiVersion(event.target.value)}
+              size="small"
+              sx={{ minWidth: 128 }}
+            >
+              <MenuItem value="v1">v1</MenuItem>
+            </TextField>
+          </Stack>
+        </Stack>
 
-        {/* Buttons */}
-        <div className="flex justify-end space-x-3 pt-4 border-t">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition-colors text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={jsonError !== null || mermaidError !== null}
-            className={`px-4 py-2 rounded-lg transition-colors text-sm ${
-              jsonError || mermaidError
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
-          >
+        <Box>
+          <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)} aria-label="Resource editor mode">
+            <Tab value="visual" label="Visual Editor" />
+            <Tab value="code" label="Code Editor" />
+          </Tabs>
+          {activeTab === "visual" && (
+            <Stack spacing={2} sx={{ pt: 2 }}>
+              <TextField
+                required
+                label={`${resourceLabel} name`}
+                value={resourceName}
+                onChange={(event) => {
+                  setResourceName(event.target.value);
+                  if (resourceNameError) setResourceNameError(null);
+                }}
+                error={Boolean(resourceNameError)}
+                helperText={resourceNameError || "Used to identify this resource in the LEIA library."}
+                fullWidth
+              />
+              {renderForm()}
+            </Stack>
+          )}
+          {activeTab === "code" && (
+            <Box sx={{ pt: 2 }}>
+              <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+                <Editor
+                  height="400px"
+                  language="json"
+                  theme="vs-light"
+                  value={jsonContent}
+                  onChange={handleJsonChange}
+                  options={{
+                    readOnly: false,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 12,
+                    lineNumbers: "on",
+                    glyphMargin: false,
+                    folding: true,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 3,
+                    automaticLayout: true,
+                    contextmenu: false,
+                    scrollbar: { vertical: "auto", horizontal: "auto", handleMouseWheel: true },
+                    overviewRulerLanes: 0,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerBorder: false,
+                    wordWrap: "on",
+                  }}
+                />
+              </Paper>
+              {jsonError && <Alert severity="error" sx={{ mt: 1 }}>{jsonError}</Alert>}
+              {!jsonError && resourceType === "problem" && extractMermaidSolution(visualData) && (
+                <Box sx={{ mt: 1.5, height: 280, overflow: "hidden", border: 1, borderColor: "divider", borderRadius: 1 }}>
+                  <FormatPreview
+                    code={extractMermaidSolution(visualData) || ""}
+                    format="mermaid"
+                    mermaidSvg={mermaidSvg}
+                    error={mermaidError}
+                  />
+                </Box>
+              )}
+            </Box>
+          )}
+        </Box>
+
+        <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ pt: 2, borderTop: 1, borderColor: "divider" }}>
+          <Button color="inherit" onClick={onCancel}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave} disabled={jsonError !== null || mermaidError !== null}>
             Save
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </Stack>
+      </Stack>
+    </Paper>
   );
 };
