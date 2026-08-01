@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { Box } from "@mui/material";
+import { turnstileSiteKey } from "../config/turnstile";
 
 declare global {
   interface Window {
@@ -32,12 +34,12 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
     let intervalId: number | undefined;
 
     const renderWidget = () => {
-      if (!containerRef.current || !window.turnstile || widgetId) {
+      if (!containerRef.current || !window.turnstile || widgetId || !turnstileSiteKey) {
         return;
       }
 
       widgetId = window.turnstile.render(containerRef.current, {
-        sitekey: import.meta.env.VITE_CLOUDFLARE_SITE_KEY,
+        sitekey: turnstileSiteKey,
         callback: onTokenChange,
         "expired-callback": () => onTokenChange(""),
         "error-callback": () => onTokenChange(""),
@@ -65,5 +67,5 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
     };
   }, [onTokenChange]);
 
-  return <div ref={containerRef} className="flex justify-center"></div>;
+  return <Box ref={containerRef} sx={{ display: "flex", justifyContent: "center" }} />;
 };

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
-import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import { Box, Stack, Typography } from "@mui/material";
 import { useAuth } from "../../context";
 import LeiaCard from "../LeiaCard";
 import { SearchFilter } from "./SearchFilter";
@@ -74,31 +75,33 @@ spec:
   };
 
   return (
-    <div className="h-full flex flex-col bg-white border-r border-gray-200">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-end justify-between mb-4">
-          <div className="flex items-center gap-2 h-full">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            <CheckCircleIcon
-              className={`w-6 h-6 ${
-                selectedItem ? "text-green-500" : "text-gray-400"
-              }`}
-            />
-          </div>
-          {rightHeaderElement && <div>{rightHeaderElement}</div>}
-        </div>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        bgcolor: "background.paper",
+        borderRight: 1,
+        borderColor: "divider",
+      }}
+    >
+      <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+        <Stack direction="row" alignItems="flex-end" justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography variant="h6">{title}</Typography>
+            <CheckCircleOutlineIcon color={selectedItem ? "success" : "disabled"} />
+          </Stack>
+          {rightHeaderElement && <Box>{rightHeaderElement}</Box>}
+        </Stack>
         <SearchFilter
           placeholder={placeholder}
           value={filterValue}
           onChange={setFilterValue}
         />
-      </div>
+      </Box>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="space-y-3">
-          {/* Filtered Items */}
+      <Box sx={{ flex: 1, overflowY: "auto", p: 2 }}>
+        <Stack spacing={1.5}>
           {filteredItems.length > 0 ? (
             filteredItems.map((item) => (
               <LeiaCard
@@ -131,12 +134,12 @@ spec:
               />
             ))
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
               {filterValue ? "No results found" : "No items available"}
-            </div>
+            </Typography>
           )}
-        </div>
-      </div>
-    </div>
+        </Stack>
+      </Box>
+    </Box>
   );
 };

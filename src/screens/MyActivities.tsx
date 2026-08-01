@@ -8,27 +8,48 @@ import { z } from "zod";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
-import {
-  ExclamationCircleIcon,
-  ArrowPathIcon,
-  BriefcaseIcon,
-  MagnifyingGlassIcon,
-  PlusIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  EyeIcon,
-  TrashIcon,
-  LinkIcon,
-  PencilIcon,
-  SparklesIcon,
-  ExclamationTriangleIcon,
-  DocumentIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import Select from "react-select";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
-import * as Tabs from "@radix-ui/react-tabs";
+import AddIcon from "@mui/icons-material/Add";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import BusinessCenterOutlinedIcon from "@mui/icons-material/BusinessCenterOutlined";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import LinkIcon from "@mui/icons-material/Link";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SearchIcon from "@mui/icons-material/Search";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Collapse,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  MenuItem,
+  Paper,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import "../styles/monaco-tooltip-fix.css";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
@@ -943,97 +964,107 @@ export const MyActivities: React.FC = () => {
     setJsonEditError(null);
   };
 
+  const closeTranscriptionView = () => {
+    setShowTranscriptionModal(false);
+    setTranscriptionMessages([]);
+  };
+
+  const renderJsonPreview = () => {
+    if (jsonEditError) {
+      return (
+        <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ height: "100%" }}>
+          <ErrorOutlineIcon color="error" sx={{ fontSize: 48 }} />
+          <Typography color="error" variant="h6">Invalid JSON</Typography>
+          <Typography color="error" variant="body2" align="center">{jsonEditError}</Typography>
+        </Stack>
+      );
+    }
+
+    try {
+      const messages = JSON.parse(jsonEditText || "[]");
+      if (Array.isArray(messages) && messages.length > 0) {
+        return <TranscriptionView messages={messages} />;
+      }
+      return (
+        <Stack alignItems="center" justifyContent="center" spacing={1} sx={{ height: "100%" }}>
+          <DescriptionOutlinedIcon sx={{ fontSize: 48, color: "text.disabled" }} />
+          <Typography variant="h6">No messages</Typography>
+          <Typography color="text.secondary">Add messages in the editor to see the preview.</Typography>
+        </Stack>
+      );
+    } catch {
+      return (
+        <Stack alignItems="center" justifyContent="center" spacing={1} sx={{ height: "100%" }}>
+          <ErrorOutlineIcon color="error" sx={{ fontSize: 48 }} />
+          <Typography color="error" variant="h6">Invalid JSON</Typography>
+          <Typography color="error" variant="body2">Check the syntax in the editor.</Typography>
+        </Stack>
+      );
+    }
+  };
+
+  const filteredExperiments = (experiments || []).filter((experiment) =>
+    experiment.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
   return (
-    <div className="flex flex-col h-screen bg-white">
-      <Header
-        title="My Activities"
-        description="View and manage your activities"
-      />
+    <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
+      <Header title="My Activities" description="View and manage your activities" />
       <ToastContainer />
 
-      {/* Create Activity Modal */}
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
+      <Dialog
+        open={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setNewExperimentName("");
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Create New Activity</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <TextField
+              autoFocus
+              label="Activity Name"
+              placeholder="Enter activity name..."
+              value={newExperimentName}
+              onChange={(event) => setNewExperimentName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && newExperimentName.trim()) {
+                  void handleCreateExperiment();
+                }
+              }}
+              fullWidth
+            />
+            {creatingNewExperiment && (
+              <Alert severity="info" icon={<CircularProgress size={16} />}>
+                Creating activity...
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            color="inherit"
+            onClick={() => {
               setShowCreateModal(false);
               setNewExperimentName("");
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
-            <div
-              className="p-6"
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Create New Activity
-              </h2>
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateExperiment}
+            disabled={!newExperimentName.trim() || creatingNewExperiment}
+            startIcon={creatingNewExperiment ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
+          >
+            {creatingNewExperiment ? "Creating..." : "Create Activity"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-              <div id="activities" className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Activity Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter activity name..."
-                    value={newExperimentName}
-                    onChange={(e) => setNewExperimentName(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && newExperimentName.trim()) {
-                        handleCreateExperiment();
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    autoFocus
-                  />
-                </div>
-
-                {creatingNewExperiment && (
-                  <div className="flex items-center justify-center text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                    Creating activity...
-                  </div>
-                )}
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setNewExperimentName("");
-                    }}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateExperiment}
-                    disabled={
-                      !newExperimentName.trim() || creatingNewExperiment
-                    }
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
-                  >
-                    {creatingNewExperiment ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Creating...
-                      </>
-                    ) : (
-                      "Create Activity"
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* LEIA Content Modal - Mantener montado para mejor rendimiento */}
       {(showLeiaModal || preloadModal) && (
         <LeiaViewModal
           leia={selectedLeia}
@@ -1042,929 +1073,497 @@ export const MyActivities: React.FC = () => {
         />
       )}
 
-      {/* Transcription View Modal */}
-      {showTranscriptionModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowTranscriptionModal(false);
-              setTranscriptionMessages([]);
-            }
-          }}
+      <Dialog open={showTranscriptionModal} onClose={closeTranscriptionView} fullWidth maxWidth="lg">
+        <DialogTitle sx={{ pr: 7 }}>
+          Transcription Messages
+          <IconButton aria-label="Close" onClick={closeTranscriptionView} sx={{ position: "absolute", top: 12, right: 12 }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ height: "70vh", p: 0 }}>
+          <TranscriptionView messages={transcriptionMessages} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showPreviewModal}
+        onClose={generatingPreview ? undefined : handleCancelPreviewTranscription}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle sx={{ pr: 7 }}>
+          Transcription Preview
+          <IconButton
+            aria-label="Close"
+            onClick={handleCancelPreviewTranscription}
+            disabled={generatingPreview}
+            sx={{ position: "absolute", top: 12, right: 12 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ height: "70vh", p: 0 }}>
+          {generatingPreview ? (
+            <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ height: "100%" }}>
+              <CircularProgress />
+              <Typography variant="h6">Generating transcription...</Typography>
+              <Typography color="text.secondary">This may take a few moments.</Typography>
+            </Stack>
+          ) : previewMessages.length > 0 ? (
+            <TranscriptionView messages={previewMessages} />
+          ) : (
+            <Stack alignItems="center" justifyContent="center" spacing={1} sx={{ height: "100%" }}>
+              <ErrorOutlineIcon sx={{ color: "text.disabled", fontSize: 48 }} />
+              <Typography variant="h6">No messages generated</Typography>
+              <Typography color="text.secondary">Something went wrong during generation.</Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        {!generatingPreview && previewMessages.length > 0 && (
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button color="inherit" onClick={handleCancelPreviewTranscription}>Cancel</Button>
+            <Button variant="contained" startIcon={<CheckIcon />} onClick={handleSavePreviewTranscription}>
+              Save Transcription
+            </Button>
+          </DialogActions>
+        )}
+      </Dialog>
+
+      <Dialog open={showJsonEditModal} onClose={handleCancelJsonEdit} fullWidth maxWidth="xl">
+        <DialogTitle sx={{ pr: 7 }}>
+          JSON Editor
+          <IconButton aria-label="Close" onClick={handleCancelJsonEdit} sx={{ position: "absolute", top: 12, right: 12 }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <Tabs
+          value={jsonEditTab}
+          onChange={(_, value) => handleJsonEditTabChange(value as "editor" | "preview")}
+          sx={{ px: 3, borderBottom: 1, borderColor: "divider" }}
         >
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl mx-4 h-[80vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Transcription Messages
-              </h2>
-              <button
-                onClick={() => {
-                  setShowTranscriptionModal(false);
-                  setTranscriptionMessages([]);
-                }}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
+          <Tab value="editor" label="Editor" />
+          <Tab value="preview" label="Preview" />
+        </Tabs>
+        <DialogContent dividers sx={{ height: "65vh", p: jsonEditTab === "editor" ? 1 : 0 }}>
+          {jsonEditTab === "editor" ? (
+            <Editor
+              height="100%"
+              defaultLanguage="json"
+              value={jsonEditText}
+              onChange={handleJsonEditorChange}
+              onMount={handleMonacoEditorMount}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                wordWrap: "on",
+                formatOnPaste: true,
+                formatOnType: true,
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                tabSize: 2,
+                insertSpaces: true,
+                renderLineHighlight: "line",
+                renderWhitespace: "boundary",
+                bracketPairColorization: { enabled: true },
+                quickSuggestions: true,
+                hover: { enabled: true, delay: 100, sticky: true },
+                fixedOverflowWidgets: true,
+              }}
+              theme="vs"
+            />
+          ) : (
+            renderJsonPreview()
+          )}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: "space-between", px: 3, py: 2 }}>
+          <Typography variant="body2" color="error">{jsonEditError || ""}</Typography>
+          <Stack direction="row" spacing={1}>
+            <Button color="inherit" onClick={handleCancelJsonEdit}>Cancel</Button>
+            <Button variant="contained" onClick={handleSaveJsonEdit} disabled={Boolean(jsonEditError)} startIcon={<CheckIcon />}>
+              Save Changes
+            </Button>
+          </Stack>
+        </DialogActions>
+      </Dialog>
 
-            {/* Modal Content - TranscriptionView */}
-            <div className="flex-1 overflow-hidden">
-              <TranscriptionView messages={transcriptionMessages} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Transcription Preview Modal */}
-      {showPreviewModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !generatingPreview) {
-              handleCancelPreviewTranscription();
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl mx-4 h-[80vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Transcription Preview
-              </h2>
-              <button
-                onClick={handleCancelPreviewTranscription}
-                disabled={generatingPreview}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-hidden">
-              {generatingPreview ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                  <p className="text-gray-600 text-lg mb-2">
-                    Generating transcription...
-                  </p>
-                  <p className="text-gray-500 text-sm">
-                    This may take a few moments
-                  </p>
-                </div>
-              ) : previewMessages.length > 0 ? (
-                <TranscriptionView messages={previewMessages} />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="text-gray-400 mb-4">
-                    <ExclamationCircleIcon className="w-12 h-12 mx-auto" />
-                  </div>
-                  <p className="text-gray-600 text-lg mb-2">
-                    No messages generated
-                  </p>
-                  <p className="text-gray-500 text-sm">
-                    Something went wrong during generation
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            {!generatingPreview && previewMessages.length > 0 && (
-              <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200">
-                <button
-                  onClick={handleCancelPreviewTranscription}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSavePreviewTranscription}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  Save Transcription
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* JSON Edit Modal */}
-      {showJsonEditModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              handleCancelJsonEdit();
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-5xl mx-4 h-[85vh] flex flex-col relative">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                JSON Editor
-              </h2>
-              <button
-                onClick={handleCancelJsonEdit}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-
-            {/* Tabs Container */}
-            <Tabs.Root
-              value={jsonEditTab}
-              onValueChange={(value) =>
-                handleJsonEditTabChange(value as "editor" | "preview")
-              }
-              className="flex-1 flex flex-col overflow-hidden"
-            >
-              {/* Tab Header */}
-              <Tabs.List className="flex border-b border-gray-200">
-                <Tabs.Trigger
-                  value="editor"
-                  className="px-4 py-2 text-sm font-medium transition-colors data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-blue-50 text-gray-600 hover:text-gray-800"
-                >
-                  Editor
-                </Tabs.Trigger>
-                <Tabs.Trigger
-                  value="preview"
-                  className="px-4 py-2 text-sm font-medium transition-colors data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 data-[state=active]:bg-blue-50 text-gray-600 hover:text-gray-800"
-                >
-                  Preview
-                </Tabs.Trigger>
-              </Tabs.List>
-
-              {/* Editor Tab Content */}
-              <Tabs.Content value="editor" className="flex-1 overflow-hidden">
-                <div className="h-full relative" style={{ paddingTop: "8px" }}>
-                  <Editor
-                    height="calc(100% - 8px)"
-                    defaultLanguage="json"
-                    value={jsonEditText}
-                    onChange={handleJsonEditorChange}
-                    onMount={handleMonacoEditorMount}
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 14,
-                      wordWrap: "on",
-                      formatOnPaste: true,
-                      formatOnType: true,
-                      automaticLayout: true,
-                      scrollBeyondLastLine: false,
-                      tabSize: 2,
-                      insertSpaces: true,
-                      renderLineHighlight: "line",
-                      renderWhitespace: "boundary",
-                      bracketPairColorization: { enabled: true },
-                      suggest: {
-                        showKeywords: true,
-                        showSnippets: true,
-                      },
-                      quickSuggestions: true,
-                      // Tooltip and hover configuration
-                      hover: {
-                        enabled: true,
-                        delay: 100,
-                        sticky: true,
-                      },
-                      // Fix tooltip positioning issues
-                      fixedOverflowWidgets: true,
-                    }}
-                    theme="vs"
-                  />
-                </div>
-              </Tabs.Content>
-
-              {/* Preview Tab Content */}
-              <Tabs.Content value="preview" className="flex-1 overflow-hidden">
-                <div className="h-full">
-                  {jsonEditError ? (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="text-red-400 mb-4">
-                        <ExclamationTriangleIcon className="w-12 h-12 mx-auto" />
-                      </div>
-                      <p className="text-red-600 text-lg mb-2">Invalid JSON</p>
-                      <p className="text-red-500 text-sm text-center max-w-md">
-                        {jsonEditError}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="h-full">
-                      {(() => {
-                        try {
-                          const messages = JSON.parse(jsonEditText || "[]");
-                          return Array.isArray(messages) &&
-                            messages.length > 0 ? (
-                            <TranscriptionView messages={messages} />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center h-full">
-                              <div className="text-gray-400 mb-4">
-                                <DocumentIcon className="w-12 h-12 mx-auto" />
-                              </div>
-                              <p className="text-gray-600 text-lg mb-2">
-                                No messages
-                              </p>
-                              <p className="text-gray-500 text-sm">
-                                Add messages in the editor to see the preview
-                              </p>
-                            </div>
-                          );
-                        } catch {
-                          return (
-                            <div className="flex flex-col items-center justify-center h-full">
-                              <div className="text-red-400 mb-4">
-                                <ExclamationTriangleIcon className="w-12 h-12 mx-auto" />
-                              </div>
-                              <p className="text-red-600 text-lg mb-2">
-                                Invalid JSON
-                              </p>
-                              <p className="text-red-500 text-sm">
-                                Check the syntax in the editor
-                              </p>
-                            </div>
-                          );
-                        }
-                      })()}
-                    </div>
-                  )}
-                </div>
-              </Tabs.Content>
-            </Tabs.Root>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between p-4 border-t border-gray-200">
-              {/* Error message on the left */}
-              <div className="flex-1">
-                {jsonEditError && (
-                  <div className="flex items-center gap-2 text-red-700 text-sm">
-                    <ExclamationTriangleIcon className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    <span className="truncate">{jsonEditError}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Buttons on the right */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleCancelJsonEdit}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveJsonEdit}
-                  disabled={!!jsonEditError}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Activities Header with Search and Create */}
-      <div className="border-b border-gray-200 bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between gap-4">
-            {/* Search Bar */}
-            <div className="flex-1 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search activities..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                //disabled
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white text-gray-900 cursor-text focus:outline-none"
-              />
-            </div>
-
-            {/* Create Button */}
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-            >
-              <PlusIcon className="h-5 w-5" />
+      <Box sx={{ borderBottom: 1, borderColor: "divider", bgcolor: "background.paper" }}>
+        <Container maxWidth="lg" sx={{ py: 2 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }}>
+            <TextField
+              placeholder="Search activities..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                ),
+              }}
+            />
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowCreateModal(true)}>
               New Activity
-            </button>
-          </div>
-        </div>
-      </div>
+            </Button>
+          </Stack>
+        </Container>
+      </Box>
 
-      <div className="flex-1">
+      <Container maxWidth="lg" sx={{ flex: 1, py: 3 }}>
         {loadingExperiments ? (
-          // Loading State - Centered both ways
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading activities...</p>
-            </div>
-          </div>
+          <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 320 }}>
+            <CircularProgress />
+            <Typography color="text.secondary">Loading activities...</Typography>
+          </Stack>
         ) : errorLoadingExperiments ? (
-          // Error State - Centered both ways
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md px-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                <div className="text-red-500 mb-4">
-                  <ExclamationCircleIcon className="w-12 h-12 mx-auto" />
-                </div>
-                <h3 className="text-lg font-medium text-red-800 mb-2">
-                  Something went wrong
-                </h3>
-                <p className="text-red-600 text-sm mb-4">
-                  {errorLoadingExperiments}
-                </p>
-                <button
-                  onClick={fetchExperiments}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center gap-2 mx-auto"
-                >
-                  <ArrowPathIcon className="w-4 h-4" />
-                  Try Again
-                </button>
-              </div>
-            </div>
-          </div>
+          <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 320 }}>
+            <Alert severity="error" sx={{ maxWidth: 520 }}>
+              <Typography variant="subtitle2">Something went wrong</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>{errorLoadingExperiments}</Typography>
+              <Button color="error" variant="contained" size="small" startIcon={<RefreshIcon />} sx={{ mt: 1.5 }} onClick={fetchExperiments}>
+                Try Again
+              </Button>
+            </Alert>
+          </Stack>
         ) : experiments ? (
-          // Success State
-          <div className="max-w-6xl mx-auto px-6 py-6 w-full">
-            <div className="grid gap-4">
-              {experiments.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-gray-400 mb-4">
-                    <BriefcaseIcon className="w-16 h-16 mx-auto" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No activities yet
-                  </h3>
-                  <p className="text-gray-500">
-                    Create your first activity to get started
-                  </p>
-                  <div className="mt-6 flex justify-center">
-                    <input
-                      type="text"
-                      value={newExperimentName}
-                      onChange={(e) => setNewExperimentName(e.target.value)}
-                      placeholder="Activity Name"
-                      className="px-4 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      disabled={creatingNewExperiment}
-                    />
-                    <button
-                      onClick={handleCreateExperiment}
-                      className={`px-4 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2 ${
-                        creatingNewExperiment
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
-                      disabled={
-                        creatingNewExperiment || !newExperimentName.trim()
-                      }
+          experiments.length === 0 ? (
+            <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 320, textAlign: "center" }}>
+              <BusinessCenterOutlinedIcon sx={{ fontSize: 64, color: "text.disabled" }} />
+              <Typography variant="h6">No activities yet</Typography>
+              <Typography color="text.secondary">Create your first activity to get started.</Typography>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: "100%", maxWidth: 440, mt: 1 }}>
+                <TextField
+                  size="small"
+                  placeholder="Activity Name"
+                  value={newExperimentName}
+                  onChange={(event) => setNewExperimentName(event.target.value)}
+                  disabled={creatingNewExperiment}
+                  fullWidth
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleCreateExperiment}
+                  disabled={creatingNewExperiment || !newExperimentName.trim()}
+                  startIcon={creatingNewExperiment ? <CircularProgress color="inherit" size={16} /> : <AddIcon />}
+                >
+                  Create
+                </Button>
+              </Stack>
+            </Stack>
+          ) : (
+            <Stack spacing={1.5}>
+              {filteredExperiments.map((experiment, experimentIndex) => {
+                const expanded = expandedExperiments.has(experiment.id);
+
+                return (
+                  <Paper
+                    key={experiment.id}
+                    id={experimentIndex === 0 ? "first-activity-open" : undefined}
+                    variant="outlined"
+                    sx={{ overflow: "hidden" }}
+                  >
+                    <Stack
+                      id={experimentIndex === 0 ? "first-activity" : undefined}
+                      direction={{ xs: "column", md: "row" }}
+                      justifyContent="space-between"
+                      alignItems={{ md: "flex-start" }}
+                      spacing={2}
+                      sx={{ p: 2.5 }}
                     >
-                      {creatingNewExperiment ? (
-                        <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Create Activity"
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {experiments.filter((experiment) => experiment.name.toLowerCase().includes(searchQuery.toLowerCase())).map((experiment, index) => (
-                    <div
-                      key={experiment.id}
-                      id = {index === 0 ? "first-activity-open" : undefined}
-                      className="bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow duration-200"
-                    >
-                      {/* Experiment Header */}
-                      <div id={index === 0 ? "first-activity" : undefined} className="p-6 pb-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">
-                              {experiment.name}
-                            </h3>
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
-                              <span>
-                                Created:{" "}
-                                {new Date(
-                                  experiment.createdAt
-                                ).toLocaleDateString()}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <img
-                                  src="/logo/leia_puzzle_black.png"
-                                  alt="LEIA"
-                                  className="w-4 h-4"
-                                />
-                                {experiment.leias?.length || 0} LEIAs
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {experiment.isPublished && (
-                              <span
-                                className={`px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-200`}
-                              >
-                                Published
-                              </span>
-                            )}
-                            {experiment.isPublished &&<button 
-                              onClick={() => handleFastReplication(experiment.id)}
-                              className="h-8 px-3 text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 flex items-center gap-1"
-                              title="Replicate activity"
+                      <Box>
+                        <Typography variant="h6">{experiment.name}</Typography>
+                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 0.75 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Created: {new Date(experiment.createdAt).toLocaleDateString()}
+                          </Typography>
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <Box component="img" src="/logo/leia_puzzle_black.png" alt="" sx={{ width: 16, height: 16 }} />
+                            <Typography variant="caption" color="text.secondary">
+                              {experiment.leias?.length || 0} LEIAs
+                            </Typography>
+                          </Stack>
+                        </Stack>
+                      </Box>
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        {experiment.isPublished && <Chip label="Published" color="success" size="small" />}
+                        {experiment.isPublished ? (
+                          <Button size="small" color="secondary" variant="contained" startIcon={<ContentCopyIcon />} onClick={() => handleFastReplication(experiment.id)}>
+                            Replicate
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => publishExperiment(experiment)}
+                              disabled={publishingExperiments.has(experiment.id)}
+                              startIcon={publishingExperiments.has(experiment.id) ? <CircularProgress color="inherit" size={14} /> : <AddIcon />}
                             >
-                              Replicate
-                            </button>}
-                            {!experiment.isPublished && (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => publishExperiment(experiment)}
-                                  disabled={publishingExperiments.has(
-                                    experiment.id
-                                  )}
-                                  className="h-8 px-3 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-1"
-                                >
-                                  {publishingExperiments.has(experiment.id) ? (
-                                    <>
-                                      <ArrowPathIcon className="w-3 h-3 animate-spin" />
-                                      Publishing...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <PlusIcon className="w-4 h-4" />
-                                      Publish
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleDeleteExperiment(experiment.id)
-                                  }
-                                  className="h-8 px-3 flex items-center gap-2 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors duration-200 text-xs font-medium"
-                                  title="Delete activity"
-                                >
-                                  <TrashIcon className="w-4 h-4" />
-                                  Delete Activity
-                                </button>
-                              </div>
-                            )}
-                            <button
-                              onClick={() => toggleExperiment(experiment.id)}
-                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                              {publishingExperiments.has(experiment.id) ? "Publishing..." : "Publish"}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="error"
+                              startIcon={<DeleteOutlineIcon />}
+                              onClick={() => handleDeleteExperiment(experiment.id)}
                             >
-                              {expandedExperiments.has(experiment.id) ? (
-                                <ChevronUpIcon className="w-5 h-5" />
-                              ) : (
-                                <ChevronDownIcon className="w-5 h-5" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                        <IconButton
+                          aria-label={expanded ? "Collapse activity" : "Expand activity"}
+                          onClick={() => toggleExperiment(experiment.id)}
+                        >
+                          {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        </IconButton>
+                      </Stack>
+                    </Stack>
 
-                      {/* LEIAs Accordion */}
-                      {expandedExperiments.has(experiment.id) && (
-                        <div className="border-t border-gray-200">
-                          {experiment.leias && experiment.leias.length > 0 ? (
-                            <div className="divide-y divide-gray-100">
-                              {experiment.leias.map((leiaConfig, index) => {
-                                const leia =
-                                  typeof leiaConfig.leia === "object"
-                                    ? leiaConfig.leia
-                                    : null;
-                                return (
-                                  <div
-                                    key={leiaConfig.id || index}
-                                    className="p-4"
-                                  >
-                                    <div className="p-2">
-                                      {/* First row: LEIA name, mode selector, delete button */}
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                          <div className="flex items-center gap-2">
-                                            <h4 className="font-medium text-gray-900">
-                                              {leia?.metadata?.name ||
-                                                `LEIA ${index + 1}`}
-                                            </h4>
-                                            {leia && (
-                                              <button
-                                                onClick={() =>
-                                                  viewLeiaContent(leia)
-                                                }
-                                                onMouseEnter={() =>
-                                                  setPreloadModal(true)
-                                                }
-                                                className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                                title="View LEIA content"
-                                              >
-                                                <EyeIcon className="w-4 h-4" />
-                                              </button>
-                                            )}
-                                          </div>
+                    <Collapse in={expanded}>
+                      <Box sx={{ borderTop: 1, borderColor: "divider" }}>
+                        {experiment.leias && experiment.leias.length > 0 ? (
+                          <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
+                            {experiment.leias.map((leiaConfig, leiaIndex) => {
+                              const leia = typeof leiaConfig.leia === "object" ? leiaConfig.leia : null;
+                              const leiaKey = experiment.id + "-" + leiaConfig.id;
+                              const hasTranscription =
+                                Boolean(leiaConfig.configuration?.data?.messages) ||
+                                Boolean(leiaConfig.configuration?.data?.link);
+                              const urlValue = urlInputValues[leiaKey] || "";
+                              const validUrl = !urlValue || isValidUrl(urlValue);
 
-                                          {/* Mode selector */}
-                                          {leiaConfig.configuration?.mode && (
-                                            <div className="flex items-center gap-2">
-                                              <span className="font-medium text-gray-600 text-sm">
-                                                Mode:
-                                              </span>
-                                              {experiment.isPublished ? (
-                                                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                                  {
-                                                    leiaConfig.configuration
-                                                      .mode
-                                                  }
-                                                </span>
-                                              ) : (
-                                                <Select
-                                                  value={{
-                                                    value:
-                                                      leiaConfig.configuration
-                                                        .mode,
-                                                    label:
-                                                      leiaConfig.configuration
-                                                        .mode,
-                                                  }}
-                                                  options={[
-                                                    {
-                                                      value: "standard",
-                                                      label: "standard",
-                                                    },
-                                                    {
-                                                      value: "transcription",
-                                                      label: "transcription",
-                                                    },
-                                                  ]}
-                                                  onChange={(
-                                                    selectedOption
-                                                  ) => {
-                                                    if (selectedOption) {
-                                                      handleUpdateExperimentLeiaMode(
-                                                        experiment.id,
-                                                        leiaConfig.id,
-                                                        leiaConfig,
-                                                        selectedOption.value
-                                                      );
-                                                    }
-                                                  }}
-                                                />
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        {/* Delete button */}
-                                        {experiment.isPublished == false && (
-                                          <button
-                                            className="h-8 px-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 text-xs font-medium flex items-center gap-1"
-                                            onClick={() =>
-                                              handleDeleteExperimentLeia(
-                                                experiment.id,
-                                                leiaConfig.id
-                                              )
-                                            }
-                                            title="Delete LEIA from activity"
-                                          >
-                                            <TrashIcon className="w-4 h-4" />
-                                            Delete LEIA
-                                          </button>
+                              return (
+                                <Box key={leiaConfig.id || leiaIndex} sx={{ p: 2.5 }}>
+                                  <Stack spacing={1.5}>
+                                    <Stack direction={{ xs: "column", md: "row" }} alignItems={{ md: "center" }} justifyContent="space-between" spacing={1.5}>
+                                      <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Typography variant="subtitle2">{leia?.metadata?.name || "LEIA " + String(leiaIndex + 1)}</Typography>
+                                        {leia && (
+                                          <Tooltip title="View LEIA content">
+                                            <IconButton
+                                              size="small"
+                                              color="primary"
+                                              onClick={() => viewLeiaContent(leia)}
+                                              onMouseEnter={() => setPreloadModal(true)}
+                                            >
+                                              <VisibilityOutlinedIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>
                                         )}
-                                      </div>
+                                        {leiaConfig.configuration?.mode && (
+                                          experiment.isPublished ? (
+                                            <Chip label={leiaConfig.configuration.mode} size="small" color="primary" variant="outlined" />
+                                          ) : (
+                                            <TextField
+                                              select
+                                              label="Mode"
+                                              size="small"
+                                              value={leiaConfig.configuration.mode}
+                                              onChange={(event) =>
+                                                handleUpdateExperimentLeiaMode(
+                                                  experiment.id,
+                                                  leiaConfig.id,
+                                                  leiaConfig,
+                                                  event.target.value,
+                                                )
+                                              }
+                                              sx={{ minWidth: 150 }}
+                                            >
+                                              <MenuItem value="standard">standard</MenuItem>
+                                              <MenuItem value="transcription">transcription</MenuItem>
+                                            </TextField>
+                                          )
+                                        )}
+                                      </Stack>
+                                      {!experiment.isPublished && (
+                                        <Button
+                                          size="small"
+                                          color="error"
+                                          variant="contained"
+                                          startIcon={<DeleteOutlineIcon />}
+                                          onClick={() => handleDeleteExperimentLeia(experiment.id, leiaConfig.id)}
+                                        >
+                                          Delete LEIA
+                                        </Button>
+                                      )}
+                                    </Stack>
 
-                                      {/* Second row: Transcription section */}
-                                      {leiaConfig.configuration?.mode ===
-                                        "transcription" && (
-                                        <div className="flex items-center justify-between mt-3">
-                                          <div className="flex items-center gap-4">
-                                            {leiaConfig.configuration?.data
-                                              ?.messages ||
-                                            leiaConfig.configuration?.data
-                                              ?.link ? (
-                                              <div className="flex items-center gap-3">
-                                                <div className="flex items-center gap-2 text-sm">
-                                                  <span className="font-medium text-gray-600">
-                                                    Transcription Type:
-                                                  </span>
-                                                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                                    {leiaConfig.configuration
-                                                      ?.data?.link
-                                                      ? "External Link"
-                                                      : "Chat Messages"}
-                                                  </span>
-                                                </div>
-                                                <button
-                                                  onClick={() =>
-                                                    handleViewTranscription(
-                                                      leiaConfig.configuration
-                                                        ?.data
-                                                    )
-                                                  }
-                                                  className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                  title="View transcription content"
+                                    {leiaConfig.configuration?.mode === "transcription" && (
+                                      <>
+                                        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} spacing={1.5}>
+                                          {hasTranscription ? (
+                                            <Stack direction="row" alignItems="center" spacing={1}>
+                                              <Chip
+                                                size="small"
+                                                color="primary"
+                                                label={leiaConfig.configuration?.data?.link ? "External Link" : "Chat Messages"}
+                                              />
+                                              <Tooltip title="View transcription content">
+                                                <IconButton
+                                                  size="small"
+                                                  color="primary"
+                                                  onClick={() => handleViewTranscription(leiaConfig.configuration?.data)}
                                                 >
-                                                  <DocumentIcon className="w-5 h-5" />
-                                                </button>
-                                              </div>
-                                            ) : (
-                                              <div className="flex items-center gap-2 text-amber-700 bg-amber-100 px-3 py-2 rounded-md text-sm font-medium border border-amber-200">
-                                                <ExclamationTriangleIcon className="w-4 h-4" />
-                                                No Transcription Available
-                                              </div>
-                                            )}
-                                          </div>
+                                                  <DescriptionOutlinedIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                            </Stack>
+                                          ) : (
+                                            <Alert severity="warning" icon={<WarningAmberOutlinedIcon fontSize="inherit" />} sx={{ py: 0 }}>
+                                              No transcription available
+                                            </Alert>
+                                          )}
 
                                           {!experiment.isPublished && (
-                                            <div className="flex items-center gap-2 ml-4">
-                                              <button
-                                                onClick={() => {
-                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
-                                                  setShowUrlInput((prev) => {
-                                                    const newSet = new Set(
-                                                      prev
-                                                    );
-                                                    if (newSet.has(leiaKey)) {
-                                                      newSet.delete(leiaKey);
-                                                    } else {
-                                                      newSet.add(leiaKey);
-                                                    }
-                                                    return newSet;
-                                                  });
-                                                }}
-                                                disabled={
-                                                  !!initializingTranscriptionChat
+                                            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                                              <Button
+                                                size="small"
+                                                variant="contained"
+                                                startIcon={<LinkIcon />}
+                                                disabled={Boolean(initializingTranscriptionChat)}
+                                                onClick={() =>
+                                                  setShowUrlInput((previous) => {
+                                                    const next = new Set(previous);
+                                                    if (next.has(leiaKey)) next.delete(leiaKey);
+                                                    else next.add(leiaKey);
+                                                    return next;
+                                                  })
                                                 }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Add transcription link"
                                               >
-                                                <LinkIcon className="w-4 h-4" />
                                                 Add Link
-                                              </button>
-
-                                              <button
+                                              </Button>
+                                              <Button
+                                                size="small"
+                                                color="secondary"
+                                                variant="contained"
+                                                startIcon={
+                                                  initializingTranscriptionChat === leiaKey
+                                                    ? <CircularProgress color="inherit" size={14} />
+                                                    : <EditOutlinedIcon />
+                                                }
+                                                disabled={Boolean(initializingTranscriptionChat)}
                                                 onClick={() =>
                                                   handleCreateTranscriptionManually(
                                                     experiment.id,
                                                     leiaConfig.id,
-                                                    leiaConfig
+                                                    leiaConfig,
                                                   )
                                                 }
-                                                disabled={
-                                                  !!initializingTranscriptionChat
-                                                }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Create transcription manually"
                                               >
-                                                {initializingTranscriptionChat ===
-                                                `${experiment.id}-${leiaConfig.id}` ? (
-                                                  <>
-                                                    <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                                                    Initializing...
-                                                  </>
-                                                ) : (
-                                                  <>
-                                                    <PencilIcon className="w-4 h-4" />
-                                                    Generate
-                                                  </>
-                                                )}
-                                              </button>
-
-                                              <button
+                                                Generate
+                                              </Button>
+                                              <Button
+                                                size="small"
+                                                color="warning"
+                                                variant="contained"
+                                                startIcon={<AutoAwesomeIcon />}
+                                                disabled={Boolean(initializingTranscriptionChat)}
                                                 onClick={() =>
                                                   handleGenerateTranscriptionAutomatically(
                                                     experiment.id,
                                                     leiaConfig.id,
-                                                    leiaConfig
+                                                    leiaConfig,
                                                   )
                                                 }
-                                                disabled={
-                                                  !!initializingTranscriptionChat
-                                                }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:bg-orange-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Generate transcription automatically"
                                               >
-                                                <SparklesIcon className="w-4 h-4" />
                                                 Auto Generate
-                                              </button>
+                                              </Button>
+                                              <Button
+                                                size="small"
+                                                color="success"
+                                                variant="contained"
+                                                startIcon={<DescriptionOutlinedIcon />}
+                                                disabled={Boolean(initializingTranscriptionChat)}
+                                                onClick={() => handleOpenJsonEdit(experiment.id, leiaConfig.id, leiaConfig)}
+                                              >
+                                                JSON Edit
+                                              </Button>
+                                            </Stack>
+                                          )}
+                                        </Stack>
 
-                                              <button
-                                                onClick={() =>
-                                                  handleOpenJsonEdit(
+                                        {showUrlInput.has(leiaKey) && !experiment.isPublished && (
+                                          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                                            <TextField
+                                              type="url"
+                                              label="Transcription URL"
+                                              placeholder="Enter transcription URL..."
+                                              value={urlValue}
+                                              onChange={(event) =>
+                                                setUrlInputValues((previous) => ({
+                                                  ...previous,
+                                                  [leiaKey]: event.target.value,
+                                                }))
+                                              }
+                                              error={!validUrl}
+                                              helperText={!validUrl ? "Please enter a valid URL" : ""}
+                                              fullWidth
+                                            />
+                                            <Stack direction="row" spacing={1} alignItems="flex-start">
+                                              <Button
+                                                variant="contained"
+                                                disabled={Boolean(initializingTranscriptionChat) || !urlValue || !validUrl}
+                                                onClick={() => {
+                                                  handleAddTranscriptionLink(
                                                     experiment.id,
                                                     leiaConfig.id,
-                                                    leiaConfig
-                                                  )
-                                                }
-                                                disabled={
-                                                  !!initializingTranscriptionChat
-                                                }
-                                                className="h-8 px-3 flex items-center gap-2 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                                title="Edit transcription JSON"
-                                              >
-                                                <DocumentIcon className="w-4 h-4" />
-                                                JSON Edit
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-
-                                      {/* URL Input */}
-                                      {showUrlInput.has(
-                                        `${experiment.id}-${leiaConfig.id}`
-                                      ) &&
-                                        !experiment.isPublished && (
-                                          <div className="space-y-2 mt-3">
-                                            <div className="flex gap-3">
-                                              <input
-                                                type="url"
-                                                placeholder="Enter transcription URL..."
-                                                value={
-                                                  urlInputValues[
-                                                    `${experiment.id}-${leiaConfig.id}`
-                                                  ] || ""
-                                                }
-                                                onChange={(e) => {
-                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
-                                                  setUrlInputValues((prev) => ({
-                                                    ...prev,
-                                                    [leiaKey]: e.target.value,
-                                                  }));
-                                                }}
-                                                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
-                                                  urlInputValues[
-                                                    `${experiment.id}-${leiaConfig.id}`
-                                                  ] &&
-                                                  !isValidUrl(
-                                                    urlInputValues[
-                                                      `${experiment.id}-${leiaConfig.id}`
-                                                    ]
-                                                  )
-                                                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                                                    : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                                                }`}
-                                              />
-                                              <button
-                                                onClick={() => {
-                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
-                                                  const url =
-                                                    urlInputValues[leiaKey];
-                                                  if (
-                                                    url &&
-                                                    url.trim() &&
-                                                    isValidUrl(url.trim())
-                                                  ) {
-                                                    handleAddTranscriptionLink(
-                                                      experiment.id,
-                                                      leiaConfig.id,
-                                                      leiaConfig,
-                                                      url.trim()
-                                                    );
-                                                    setUrlInputValues(
-                                                      (prev) => ({
-                                                        ...prev,
-                                                        [leiaKey]: "",
-                                                      })
-                                                    );
-                                                    setShowUrlInput((prev) => {
-                                                      const newSet = new Set(
-                                                        prev
-                                                      );
-                                                      newSet.delete(leiaKey);
-                                                      return newSet;
-                                                    });
-                                                  }
-                                                }}
-                                                disabled={
-                                                  !!initializingTranscriptionChat ||
-                                                  !urlInputValues[
-                                                    `${experiment.id}-${leiaConfig.id}`
-                                                  ] ||
-                                                  !isValidUrl(
-                                                    urlInputValues[
-                                                      `${experiment.id}-${leiaConfig.id}`
-                                                    ] || ""
-                                                  )
-                                                }
-                                                className="h-8 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 text-sm font-medium"
-                                              >
-                                                Add
-                                              </button>
-                                              <button
-                                                onClick={() => {
-                                                  const leiaKey = `${experiment.id}-${leiaConfig.id}`;
-                                                  setUrlInputValues((prev) => ({
-                                                    ...prev,
-                                                    [leiaKey]: "",
-                                                  }));
-                                                  setShowUrlInput((prev) => {
-                                                    const newSet = new Set(
-                                                      prev
-                                                    );
-                                                    newSet.delete(leiaKey);
-                                                    return newSet;
+                                                    leiaConfig,
+                                                    urlValue.trim(),
+                                                  );
+                                                  setUrlInputValues((previous) => ({ ...previous, [leiaKey]: "" }));
+                                                  setShowUrlInput((previous) => {
+                                                    const next = new Set(previous);
+                                                    next.delete(leiaKey);
+                                                    return next;
                                                   });
                                                 }}
-                                                className="h-8 px-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200 text-sm font-medium"
+                                              >
+                                                Add
+                                              </Button>
+                                              <Button
+                                                color="inherit"
+                                                variant="contained"
+                                                onClick={() => {
+                                                  setUrlInputValues((previous) => ({ ...previous, [leiaKey]: "" }));
+                                                  setShowUrlInput((previous) => {
+                                                    const next = new Set(previous);
+                                                    next.delete(leiaKey);
+                                                    return next;
+                                                  });
+                                                }}
                                               >
                                                 Cancel
-                                              </button>
-                                            </div>
-                                            {urlInputValues[
-                                              `${experiment.id}-${leiaConfig.id}`
-                                            ] &&
-                                              !isValidUrl(
-                                                urlInputValues[
-                                                  `${experiment.id}-${leiaConfig.id}`
-                                                ]
-                                              ) && (
-                                                <p className="text-red-500 text-xs">
-                                                  Please enter a valid URL
-                                                </p>
-                                              )}
-                                          </div>
+                                              </Button>
+                                            </Stack>
+                                          </Stack>
                                         )}
 
-                                      {/* Transcription Warning */}
-                                      {leiaConfig.configuration?.mode ===
-                                        "transcription" && (
-                                        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                          <div className="flex items-start gap-2">
-                                            <ExclamationTriangleIcon className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                                            <p className="text-sm text-yellow-800">
-                                              <span className="font-medium">
-                                                Important:
-                                              </span>{" "}
-                                              Any form of transcription update
-                                              will result in overwriting
-                                              previous data.
-                                            </p>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="p-6 text-center text-gray-500">
-                              <img
-                                src="/logo/leia_puzzle_black.png"
-                                alt="LEIA"
-                                className="w-8 h-8 mx-auto opacity-30 mb-2"
-                              />
-                              <p className="text-sm">
-                                No LEIAs in this experiment
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+                                        <Alert severity="warning" icon={<WarningAmberOutlinedIcon fontSize="inherit" />}>
+                                          Any transcription update overwrites previous data.
+                                        </Alert>
+                                      </>
+                                    )}
+                                  </Stack>
+                                </Box>
+                              );
+                            })}
+                          </Stack>
+                        ) : (
+                          <Stack alignItems="center" spacing={1} sx={{ p: 4 }}>
+                            <Box component="img" src="/logo/leia_puzzle_black.png" alt="" sx={{ width: 32, height: 32, opacity: 0.3 }} />
+                            <Typography variant="body2" color="text.secondary">No LEIAs in this experiment</Typography>
+                          </Stack>
+                        )}
+                      </Box>
+                    </Collapse>
+                  </Paper>
+                );
+              })}
+            </Stack>
+          )
         ) : null}
-      </div>
-    </div>
+      </Container>
+    </Box>
   );
 };
 

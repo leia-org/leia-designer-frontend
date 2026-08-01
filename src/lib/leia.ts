@@ -76,6 +76,25 @@ export function checkProcessOthers(leia: Leia) {
   }
 }
 
+/**
+ * A LEIA has one activity process. The problem owns that choice and the
+ * behaviour must expose the exact same process tags so the generated LEIA is
+ * coherent regardless of the order in which its components were created.
+ */
+export function synchronizeProcessTypes(leia: Leia) {
+  if (!leia.problem?.spec || !leia.behaviour?.spec) return leia;
+
+  const sourceProcess = Array.isArray(leia.problem.spec.process)
+    ? [...leia.problem.spec.process]
+    : [];
+  const problemSpec = leia.problem.spec as unknown as { process?: string[] };
+  const behaviourSpec = leia.behaviour.spec as unknown as { process?: string[] };
+
+  problemSpec.process = [...sourceProcess];
+  behaviourSpec.process = [...sourceProcess];
+  return leia;
+}
+
 export function resolveExtensions(leia: Leia) {
   const extensions = leia.problem?.spec?.extends;
   if (!extensions) return leia;
@@ -146,11 +165,14 @@ export function resolvePlaceholders(leia: Leia) {
 export function generateLeia(persona: any, behaviour: any, problem: any) {
   const entities = { persona: structuredClone(persona), behaviour: structuredClone(behaviour), problem: structuredClone(problem) };
 
+  synchronizeProcessTypes(entities);
   checkConstraints(entities);
-  checkProcessOthers(entities);
   const extendedEntities = resolveExtensions(entities);
   const overriddenEntities = resolveOverrides(extendedEntities);
+  synchronizeProcessTypes(overriddenEntities);
   const replacedEntities = resolvePlaceholders(overriddenEntities);
+  synchronizeProcessTypes(replacedEntities);
+  checkProcessOthers(replacedEntities);
 
   const leia = {
     spec: {

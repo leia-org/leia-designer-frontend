@@ -1,18 +1,24 @@
-import React, { useState, useEffect } from "react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Bars3Icon,
-  MagnifyingGlassIcon,
-  PlusIcon,
-  UsersIcon,
-  ArrowRightStartOnRectangleIcon,
-  PuzzlePieceIcon,
-  KeyIcon,
-  TagIcon,
-} from "@heroicons/react/24/outline";
+  Avatar,
+  Box,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
+import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
 import { useAuth } from "../../context/useAuth";
 
-interface MenuItem {
+interface NavigationItem {
   label: string;
   href?: string;
   icon?: React.ReactNode;
@@ -26,9 +32,10 @@ interface HeaderProps {
   description: string;
   rightContent?: React.ReactNode;
   leftContent?: React.ReactNode;
-  menuItems?: MenuItem[];
+  leadingContent?: React.ReactNode;
+  menuItems?: NavigationItem[];
   showNavigation?: boolean;
-  dropdownTour?: boolean; // Para tour
+  dropdownTour?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,169 +43,128 @@ export const Header: React.FC<HeaderProps> = ({
   description,
   rightContent,
   leftContent,
+  leadingContent,
   menuItems,
   showNavigation = true,
-  dropdownTour, // Para tour
+  dropdownTour = false,
 }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [dropdownOpen, setDropdownOpen] = useState(dropdownTour);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
-    setDropdownOpen(dropdownTour);
+    setMenuAnchor(dropdownTour ? menuButtonRef.current : null);
   }, [dropdownTour]);
-  
-  // Default menu items if none provided
-  const defaultMenuItems: MenuItem[] = [
+
+  const defaultMenuItems: NavigationItem[] = [
     {
       label: "Profile",
       href: "/profile",
-      icon: <UsersIcon className="w-4 h-4" />,
+      icon: <PeopleOutlineIcon fontSize="small" />,
       show: true,
-      id: "profile-button"
-    },
-    {
-      label: "Search LEIAs",
-      href: "/",
-      icon: <MagnifyingGlassIcon className="w-4 h-4" />,
-      show: true,
-      id: "searchLeias-button"
-    },
-    {
-      label: "Design a new LEIA",
-      href: "/create",
-      icon: <PlusIcon className="w-4 h-4" />,
-      show: true,
-      id: "designLeia-button"
-    },
-    {
-      label: "My API Keys",
-      href: "/api-keys",
-      icon: <KeyIcon className="w-4 h-4" />,
-      show: true,
-      id: "myApiKeys-button",
-    },
-    {
-      label: "My Activities",
-      href: "/users/me/activities",
-      icon: <PuzzlePieceIcon className="w-4 h-4" />,
-      show: user?.role === "admin" || user?.role === "advanced",
-      id: "myActivities-button"
-    },
-    {
-      label: "Manage users",
-      href: "/administration/users",
-      icon: <UsersIcon className="w-4 h-4" />,
-      show: user?.role === "admin",
-      id: "manageUsers-button"
+      id: "profile-button",
     },
     {
       label: "Manage labels",
       href: "/administration/labels",
-      icon: <TagIcon className="w-4 h-4" />,
+      icon: <LabelOutlinedIcon fontSize="small" />,
       show: user?.role === "admin",
-      id: "manageLabels-button"
+      id: "manageLabels-button",
     },
     {
       label: "Logout",
-      icon: <ArrowRightStartOnRectangleIcon className="w-4 h-4" />,
+      icon: <LogoutOutlinedIcon fontSize="small" />,
       show: true,
       id: "logout-button",
       onClick: logout,
     },
   ];
 
-  // Use provided menuItems or default ones
-  const itemsToUse = menuItems || defaultMenuItems;
-
-  // Filter items that should be shown
   const visibleItems = showNavigation
-    ? itemsToUse.filter((item) => item.show !== false)
+    ? (menuItems ?? defaultMenuItems).filter((item) => item.show !== false)
     : [];
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownOpen &&
-        !(event.target as Element)?.closest(".navigation-dropdown")
-      ) {
-        setDropdownOpen(false);
-      }
-    };
+  const closeMenu = () => setMenuAnchor(null);
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [dropdownOpen]);
+  const handleItemClick = (item: NavigationItem) => {
+    item.onClick?.();
+    if (item.href) navigate(item.href);
+    closeMenu();
+  };
 
   return (
-    <div className="bg-white border-b border-gray-200">
-      <div className="mx-auto px-6 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-4 flex-1">
-          <img
-            src="/logo/leia_puzzle_clear.png"
-            alt="LEIA Logo"
-            className="h-10 w-auto cursor-pointer"
-            onClick={() => navigate("/")}
-          />
-          <div className="flex items-baseline gap-4">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              {title}
-            </h1>
-            <p className="text-gray-600">{description}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 flex-shrink-0 ml-6">
-          {leftContent && <div>{leftContent}</div>}
-          {user?.email && (
-            <span className="text-sm text-gray-500 font-medium">
-              {user.email}
-            </span>
+    <Box
+      component="header"
+      sx={{
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
+        height: 56,
+        minHeight: 56,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        px: { xs: 2, md: 4 },
+        bgcolor: "background.paper",
+        borderBottom: "1px solid",
+        borderColor: "divider",
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0 }}>
+        {leadingContent}
+        <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.1 }}>
+          <Typography variant="h6" noWrap>{title}</Typography>
+          {description && (
+            <Typography noWrap sx={{ display: { xs: "none", sm: "block" }, mt: 0.25, fontSize: 12, color: "text.secondary" }}>
+              {description}
+            </Typography>
           )}
+        </Box>
+      </Box>
 
-          {visibleItems.length > 0 && (
-            <div className="relative navigation-dropdown">
-              <button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center justify-center w-10 h-10 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title="Navigation menu"
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, flexShrink: 0 }}>
+        {leftContent}
+        {rightContent}
+        {visibleItems.length > 0 && (
+          <>
+            <Tooltip title="Account menu">
+              <IconButton
+                ref={menuButtonRef}
                 id="navigation-menu"
+                aria-label="Account menu"
+                aria-controls={menuAnchor ? "designer-navigation-menu" : undefined}
+                aria-haspopup="true"
+                aria-expanded={Boolean(menuAnchor)}
+                onClick={(event) => setMenuAnchor(event.currentTarget)}
+                size="small"
+                sx={{ ml: 0.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, gap: 0.25, px: 0.5 }}
               >
-                <Bars3Icon className="w-5 h-5" />
-              </button>
-
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                  <div className="py-1">
-                    {visibleItems.map((item, index) => (
-                      <button
-                        key={index}
-                        id={item.id}
-                        onClick={() => {
-                          if (item.onClick) {
-                            item.onClick();
-                          }
-                          if (item.href) {
-                            navigate(item.href);
-                          }
-                          setDropdownOpen(false);
-                        }}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        {item.icon}
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {rightContent && <div>{rightContent}</div>}
-        </div>
-      </div>
-    </div>
+                <Avatar sx={{ width: 24, height: 24, bgcolor: "surfaces.accent", color: "primary.dark", fontSize: 11, fontWeight: 700 }}>
+                  {user?.email?.slice(0, 1).toUpperCase() ?? "U"}
+                </Avatar>
+                <KeyboardArrowDownIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              id="designer-navigation-menu"
+              anchorEl={menuAnchor}
+              open={Boolean(menuAnchor)}
+              onClose={closeMenu}
+              MenuListProps={{ "aria-labelledby": "navigation-menu" }}
+              slotProps={{ paper: { sx: { minWidth: 200, mt: 1, border: "1px solid", borderColor: "divider" } } }}
+            >
+              {user?.email && <Typography noWrap sx={{ px: 2, py: 1, fontSize: 12, color: "text.secondary", maxWidth: 240 }}>{user.email}</Typography>}
+              {visibleItems.map((item) => (
+                <MenuItem key={item.label} id={item.id} onClick={() => handleItemClick(item)}>
+                  {item.icon && <ListItemIcon>{item.icon}</ListItemIcon>}
+                  <ListItemText primary={item.label} />
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
+        )}
+      </Box>
+    </Box>
   );
 };

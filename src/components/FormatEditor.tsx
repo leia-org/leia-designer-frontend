@@ -1,5 +1,6 @@
 import React, { useEffect, memo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
+import { Box } from "@mui/material";
 
 interface FormatEditorProps {
   value: string;
@@ -154,7 +155,7 @@ export const FormatEditor: React.FC<FormatEditorProps> = memo(
     const editorConfig = getEditorConfig(format);
 
     return (
-      <div className="h-full relative">
+      <Box sx={{ height: "100%", position: "relative" }}>
         <Editor
           value={value}
           onChange={(nextValue) => onChange(nextValue || "")}
@@ -166,7 +167,7 @@ export const FormatEditor: React.FC<FormatEditorProps> = memo(
             monacoRef.current = monaco;
           }}
         />
-      </div>
+      </Box>
     );
   }
 );

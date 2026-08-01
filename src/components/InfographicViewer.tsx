@@ -1,11 +1,17 @@
-import React, {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from "react";
-import Viewer from "viewerjs";
-import "viewerjs/dist/viewer.css";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import CloseIcon from "@mui/icons-material/Close";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { buildStoredImageCandidateSources } from "../lib/avatar";
 
 export interface InfographicViewerHandle {
@@ -22,140 +28,71 @@ interface InfographicViewerProps {
   hidden?: boolean;
 }
 
-export const InfographicViewer = forwardRef<
-  InfographicViewerHandle,
-  InfographicViewerProps
->(function InfographicViewer(
-  {
-    src,
-    fallbackSrc,
-    candidateSources: candidateSourcesProp,
-    title,
-    className = "",
-    compact = false,
-    hidden = false,
-  },
-  ref,
-) {
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const viewerRef = useRef<Viewer | null>(null);
-  const candidateSources = React.useMemo(
-    () =>
-      buildStoredImageCandidateSources(
-        ...((candidateSourcesProp && candidateSourcesProp.length > 0
-          ? candidateSourcesProp
-          : [src, fallbackSrc]) as Array<string | null | undefined>),
-      ),
-    [candidateSourcesProp, fallbackSrc, src],
-  );
-  const [currentSourceIndex, setCurrentSourceIndex] = React.useState(0);
-  const resolvedSrc = candidateSources[currentSourceIndex] || "";
+export const InfographicViewer = forwardRef<InfographicViewerHandle, InfographicViewerProps>(
+  function InfographicViewer(
+    { src, fallbackSrc, candidateSources: candidateSourcesProp, title, compact = false, hidden = false },
+    ref,
+  ) {
+    const candidateSources = useMemo(
+      () => buildStoredImageCandidateSources(...(candidateSourcesProp?.length ? candidateSourcesProp : [src, fallbackSrc])),
+      [candidateSourcesProp, fallbackSrc, src],
+    );
+    const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
+    const [isOpen, setIsOpen] = useState(false);
+    const resolvedSrc = candidateSources[currentSourceIndex] || "";
 
-  React.useEffect(() => {
-    setCurrentSourceIndex(0);
-  }, [candidateSources]);
+    useEffect(() => {
+      setCurrentSourceIndex(0);
+    }, [candidateSources]);
 
-  useEffect(() => {
-    if (!imageRef.current || !resolvedSrc) return;
-    viewerRef.current?.destroy();
-    viewerRef.current = new Viewer(imageRef.current, {
-      navbar: false,
-      title: false,
-      toolbar: {
-        zoomIn: true,
-        zoomOut: true,
-        oneToOne: true,
-        reset: true,
-        prev: false,
-        play: false,
-        next: false,
-        rotateLeft: true,
-        rotateRight: true,
-        flipHorizontal: true,
-        flipVertical: true,
-      },
-    });
-
-    return () => {
-      viewerRef.current?.destroy();
-      viewerRef.current = null;
+    const loadNextSource = () => {
+      setCurrentSourceIndex((previous) => Math.min(previous + 1, candidateSources.length));
     };
-  }, [resolvedSrc]);
+    const open = () => {
+      if (resolvedSrc) setIsOpen(true);
+    };
 
-  const openViewer = () => viewerRef.current?.show();
+    useImperativeHandle(ref, () => ({ open }), [resolvedSrc]);
 
-  useImperativeHandle(ref, () => ({ open: openViewer }), []);
+    if (hidden) {
+      return resolvedSrc ? <img src={resolvedSrc} alt="" onError={loadNextSource} style={{ display: "none" }} /> : null;
+    }
 
-  if (hidden) {
-    return resolvedSrc ? (
-      <img
-        ref={imageRef}
-        src={resolvedSrc}
-        alt={title}
-        style={{
-          position: "absolute",
-          width: 1,
-          height: 1,
-          opacity: 0,
-          pointerEvents: "none",
-        }}
-        onError={() => {
-          setCurrentSourceIndex((previousIndex) => {
-            const nextIndex = previousIndex + 1;
-            return nextIndex < candidateSources.length
-              ? nextIndex
-              : candidateSources.length;
-          });
-        }}
-      />
-    ) : null;
-  }
+    return (
+      <>
+        <Paper variant="outlined" sx={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2" noWrap>{title}</Typography>
+              {!compact && <Typography variant="caption">Select the image to inspect it in detail</Typography>}
+            </Box>
+            <Button size="small" variant="outlined" startIcon={<OpenInFullIcon />} onClick={open} disabled={!resolvedSrc}>
+              Open
+            </Button>
+          </Stack>
+          <Box sx={{ flex: 1, minHeight: 180, display: "grid", placeItems: "center", p: 2, bgcolor: "surfaces.subtle" }}>
+            {resolvedSrc ? (
+              <Box component="button" type="button" onClick={open} sx={{ display: "block", border: 0, p: 0, bgcolor: "transparent", cursor: "zoom-in", maxWidth: "100%", maxHeight: "100%" }}>
+                <Box component="img" src={resolvedSrc} alt={title} onError={loadNextSource} sx={{ display: "block", maxWidth: "100%", maxHeight: 400, objectFit: "contain" }} />
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">No infographic image is available</Typography>
+            )}
+          </Box>
+        </Paper>
 
-  return (
-    <section
-      className={`flex h-full min-h-0 flex-col border border-gray-200 bg-white text-gray-900 ${className}`}
-    >
-      <div className="flex items-center justify-between gap-3 border-b border-inherit px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold">{title}</h2>
-          {!compact && (
-            <p className="mt-0.5 text-xs text-gray-500">
-              Click the image to zoom and inspect it.
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4">
-        {resolvedSrc ? (
-          <button
-            type="button"
-            onClick={openViewer}
-            className="block h-full w-full rounded-md border border-inherit bg-gray-50"
-            title="Open infographic viewer"
-          >
-            <img
-              ref={imageRef}
-              src={resolvedSrc}
-              alt={title}
-              className="mx-auto h-full max-h-full w-auto max-w-full object-contain"
-              onError={() => {
-                setCurrentSourceIndex((previousIndex) => {
-                  const nextIndex = previousIndex + 1;
-                  return nextIndex < candidateSources.length
-                    ? nextIndex
-                    : candidateSources.length;
-                });
-              }}
-            />
-          </button>
-        ) : (
-          <div className="flex h-full items-center justify-center rounded-md border border-inherit px-4 text-center text-sm text-gray-500">
-            No infographic image is available.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-});
+        <Dialog open={isOpen} onClose={() => setIsOpen(false)} fullWidth maxWidth="xl">
+          <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+            <Typography variant="h6" noWrap>{title}</Typography>
+            <IconButton aria-label="Close" onClick={() => setIsOpen(false)}><CloseIcon /></IconButton>
+          </DialogTitle>
+          <DialogContent dividers sx={{ minHeight: "60vh", display: "grid", placeItems: "center", bgcolor: "surfaces.subtle" }}>
+            {resolvedSrc && <Box component="img" src={resolvedSrc} alt={title} onError={loadNextSource} sx={{ maxWidth: "100%", maxHeight: "72vh", objectFit: "contain" }} />}
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  },
+);
 
 export default InfographicViewer;

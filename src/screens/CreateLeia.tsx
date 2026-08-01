@@ -1,42 +1,71 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
-import { type InputActionMeta, type MultiValue } from "react-select";
-import CreatableSelect from "react-select/creatable";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import {
+  Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Autocomplete,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Menu,
+  Paper,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
-import {
-  LightBulbIcon,
-  CpuChipIcon,
-  InformationCircleIcon,
-  SparklesIcon,
-  ChevronDownIcon,
-  EllipsisHorizontalIcon,
-} from "@heroicons/react/24/outline";
 import { SelectionColumn } from "../components/shared/SelectionColumn";
 import { Header } from "../components/shared/Header";
 import { ResourceEditor } from "../components/ResourceEditor";
 import { DeleteResourceModal } from "../components/DeleteResourceModal";
 import { AddLeiaToAnActivity } from "../components/AddLeiaToAnActivity";
-import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
-import { ProblemChatPanel } from "../components/ProblemChatPanel";
-import { Avatar } from "../components/shared/Avatar";
+import { ProblemChatPanel, type ProblemChatState } from "../components/ProblemChatPanel";
+import { LeiaLivePreview } from "../components/LeiaLivePreview";
+import { ProblemWidgetsEditor } from "../components/ProblemWidgetsEditor";
 import { useAuth } from "../context";
 import type {
   Persona,
   Behaviour,
   Problem,
   ProblemSpec,
+  ProblemWidget,
   Leia as LeiaResource,
 } from "../models/Leia";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import api from "../lib/axios";
+import {
+  createLeiaDraft,
+  deleteLeiaDraft,
+  listLeiaDrafts,
+  type LeiaDraft,
+  updateLeiaDraft,
+} from "../lib/leiaDrafts";
 import { generateLeia } from "../lib/leia";
-import { buildOriginalAvatarPath } from "../lib/avatar";
 
-import { ActivityReplicationModal } from "../components/ActivityReplicationModal";
-import { toast, ToastContainer } from "react-toastify";
 interface Label {
   id?: string;
   _id?: string;
@@ -44,6 +73,7 @@ interface Label {
   color: string;
   secundaryColor: string;
   isGlobal?: boolean;
+  user?: unknown;
 }
 
 interface LabelDraft {
@@ -76,7 +106,27 @@ interface Leia {
   };
 }
 
+type LeiaCustomizations = {
+  persona?: { name: string; version?: string };
+  problem?: { name: string; version?: string };
+  behaviour?: { name: string; version?: string };
+  leia: { name: string; version?: string };
+};
+
+type SupervisorConfig = {
+  enabled: boolean;
+  instructions: string;
+  sensitivity: "low" | "medium" | "high";
+  cadence: "everyN" | "onFinish";
+  everyN: number;
+  intervene: boolean;
+  interveneInstructions: string;
+  apiKeyId: string | null;
+  model: string;
+};
+
 interface NavigationState {
+  draft?: LeiaDraft<CreateLeiaDraftState>;
   preset?: {
     persona: Persona | null;
     problem: Problem | null;
@@ -89,31 +139,39 @@ interface NavigationState {
     leiaConfigSnapShot: LeiaConfig | null;
     labelIds?: string[];
     labelId?: string | null;
-    customizations: {
-      persona?: { name: string; version?: string };
-      problem?: { name: string; version?: string };
-      behaviour?: { name: string; version?: string };
-      leia: { name: string; version?: string };
-    };
+    customizations: LeiaCustomizations;
+    draftId?: string | null;
+    chatState?: ProblemChatState;
+    chatModelName?: string;
+    chatApiKeyId?: string | null;
+    pendingLabelDrafts?: LabelDraft[];
+    supervisorConfig?: SupervisorConfig;
+    leiaNameManuallyEdited?: boolean;
+    leiaPublish?: boolean;
+    behaviourPublish?: boolean;
+    problemPublish?: boolean;
+    personaPublish?: boolean;
   };
 }
 
-type WizardStep = 1 | 2 | 3;
-type AvatarEntityPathSegment = "leias" | "personas" | "problems";
-type InfographicVariant = "infographic" | "infographicSolution";
+type WizardStep = 1 | 2;
 
-interface AvatarGenerationTarget {
-  entity: AvatarEntityPathSegment;
-  id: string;
-}
-
-interface IllustrationsConfig {
-  apiKeyId: string | null;
-  generateLeiaAvatar: boolean;
-  generatePersonaAvatar: boolean;
-  generateProblemAvatar: boolean;
-  generateInfographic: boolean;
-  generateInfographicSolution: boolean;
+interface CreateLeiaDraftState {
+  currentStep: WizardStep;
+  leiaConfig: LeiaConfig;
+  leiaConfigSnapShot: LeiaConfig | null;
+  customizations: LeiaCustomizations;
+  leiaNameManuallyEdited: boolean;
+  selectedLabelIds: string[];
+  pendingLabelDrafts: LabelDraft[];
+  chatState: ProblemChatState;
+  chatModelName: string;
+  chatApiKeyId: string | null;
+  supervisorConfig: SupervisorConfig;
+  leiaPublish: boolean;
+  behaviourPublish: boolean;
+  problemPublish: boolean;
+  personaPublish: boolean;
 }
 
 const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
@@ -125,6 +183,33 @@ const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
   "Mantén un tono profesional y colaborativo. Debe guiar al estudiante con preguntas de aclaración sobre catálogo, préstamos, reservas y multas.";
 
 const PENDING_LABEL_PREFIX = "__pending_label__";
+const EMPTY_CHAT_STATE: ProblemChatState = { messages: [], input: "" };
+const DEFAULT_SUPERVISOR_CONFIG: SupervisorConfig = {
+  enabled: false,
+  instructions: "",
+  sensitivity: "medium",
+  cadence: "everyN",
+  everyN: 4,
+  intervene: false,
+  interveneInstructions: "",
+  apiKeyId: null,
+  model: "",
+};
+
+const createEmptyLeiaConfig = (): LeiaConfig => ({
+  persona: null,
+  problem: null,
+  behaviour: null,
+});
+
+const createEmptyCustomizations = (): LeiaCustomizations => ({
+  leia: { name: "", version: "1.0.0" },
+});
+
+const copyProcess = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((process): process is string => typeof process === "string")
+    : [];
 
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
@@ -134,7 +219,6 @@ export const CreateLeia: React.FC = () => {
   const {
     apiKeys,
     isLoading: isApiKeysLoading,
-    error: apiKeysError,
     getDefaultKey,
   } = useApiKeys();
   const {
@@ -142,25 +226,34 @@ export const CreateLeia: React.FC = () => {
     providerProviderModuleMap,
     defaultModel,
     isLoading: isProvidersLoading,
-    error: providersError,
   } = useProviders();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [tourRequested, setTourRequested] = useState(false);
-  const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>({
-    persona: null,
-    problem: null,
-    behaviour: null,
-  });
+  const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>(createEmptyLeiaConfig);
   const [leiaConfigSnapShot, setLeiaConfigSnapShot] =
     useState<LeiaConfig | null>(null);
   const [generatedLeia, setGeneratedLeia] = useState<Leia | null>(null);
 
-  const [customizations, setCustomizations] = useState<{
-    persona?: { name: string; version?: string };
-    problem?: { name: string; version?: string };
-    behaviour?: { name: string; version?: string };
-    leia: { name: string; version?: string };
-  }>({ leia: { name: "", version: "1.0.0" } });
+  const [customizations, setCustomizations] = useState<LeiaCustomizations>(
+    createEmptyCustomizations,
+  );
+  const [leiaNameManuallyEdited, setLeiaNameManuallyEdited] = useState(false);
+  const [showComponentSelector, setShowComponentSelector] = useState(false);
+  const [chatApiKeyId, setChatApiKeyId] = useState<string | null>(null);
+  const [chatModelName, setChatModelName] = useState("");
+  const [chatSettingsAnchor, setChatSettingsAnchor] = useState<HTMLElement | null>(null);
+  const [chatState, setChatState] = useState<ProblemChatState>(EMPTY_CHAT_STATE);
+  const [chatResetKey, setChatResetKey] = useState(0);
+  const [drafts, setDrafts] = useState<LeiaDraft<CreateLeiaDraftState>[]>([]);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [showDraftsDialog, setShowDraftsDialog] = useState(false);
+  const [isDraftsLoading, setIsDraftsLoading] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [showLeaveDraftDialog, setShowLeaveDraftDialog] = useState(false);
+  const currentDraftIdRef = useRef<string | null>(null);
+  const draftSavePromiseRef = useRef<Promise<LeiaDraft<CreateLeiaDraftState> | null> | null>(null);
+  const pendingLeaveActionRef = useRef<(() => void) | null>(null);
 
   const [validationErrors, setValidationErrors] = useState<
     | {
@@ -178,36 +271,66 @@ export const CreateLeia: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<Error | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
-  const [isTryMenuOpen, setIsTryMenuOpen] = useState(false);
-  const [tryConfig, setTryConfig] = useState<{
-    modelName: string;
-    apiKeyId: string | null;
-  }>({ modelName: "", apiKeyId: null });
   // Per-LEIA background supervisor (instructor-authored). Persisted into
   // spec.supervisorConfig; runs on the LEIA's own key in the workbench.
-  const [supervisorConfig, setSupervisorConfig] = useState<{
-    enabled: boolean;
-    instructions: string;
-    sensitivity: "low" | "medium" | "high";
-    cadence: "everyN" | "onFinish";
-    everyN: number;
-    intervene: boolean;
-    interveneInstructions: string;
-    // The supervisor always runs on OpenAI (independent of the LEIA's own
-    // provider), so it gets its own OpenAI key + model.
-    apiKeyId: string | null;
-    model: string;
-  }>({
-    enabled: false,
-    instructions: "",
-    sensitivity: "medium",
-    cadence: "everyN",
-    everyN: 4,
-    intervene: false,
-    interveneInstructions: "",
-    apiKeyId: null,
-    model: "",
-  });
+  const [supervisorConfig, setSupervisorConfig] = useState<SupervisorConfig>(
+    DEFAULT_SUPERVISOR_CONFIG,
+  );
+  // The New LEIA assistant always uses the OpenAI Responses API, so its
+  // model and key are scoped to OpenAI and configured from the workspace header.
+  const chatOpenaiKeys = useMemo(
+    () => apiKeys.filter((key) => key.provider === "openai"),
+    [apiKeys],
+  );
+  const chatOpenaiModels = useMemo(
+    () => apiKeyProvidersMapped?.openai || [],
+    [apiKeyProvidersMapped],
+  );
+  const chatOptionsLoading = isApiKeysLoading || isProvidersLoading;
+  useEffect(() => {
+    if (chatOptionsLoading) return;
+
+    let nextApiKeyId =
+      chatApiKeyId && chatOpenaiKeys.some((key) => key.id === chatApiKeyId)
+        ? chatApiKeyId
+        : null;
+    if (!nextApiKeyId) {
+      const defaultKey = getDefaultKey();
+      nextApiKeyId =
+        defaultKey?.provider === "openai"
+          ? defaultKey.id
+          : (chatOpenaiKeys[0]?.id ?? null);
+      if (nextApiKeyId !== chatApiKeyId) {
+        setChatApiKeyId(nextApiKeyId);
+      }
+    }
+
+    const keyModel = chatOpenaiKeys.find((key) => key.id === nextApiKeyId)?.model;
+    setChatModelName((previous) => {
+      if (previous && chatOpenaiModels.includes(previous)) return previous;
+      if (keyModel && chatOpenaiModels.includes(keyModel)) return keyModel;
+      if (defaultModel && chatOpenaiModels.includes(defaultModel)) return defaultModel;
+      return chatOpenaiModels[0] ?? "";
+    });
+  }, [
+    chatApiKeyId,
+    chatOpenaiKeys,
+    chatOpenaiModels,
+    chatOptionsLoading,
+    defaultModel,
+    getDefaultKey,
+  ]);
+
+  const handleChatApiKeyChange = useCallback(
+    (apiKeyId: string | null) => {
+      setChatApiKeyId(apiKeyId);
+      const keyModel = chatOpenaiKeys.find((key) => key.id === apiKeyId)?.model;
+      if (keyModel && chatOpenaiModels.includes(keyModel)) {
+        setChatModelName(keyModel);
+      }
+    },
+    [chatOpenaiKeys, chatOpenaiModels],
+  );
   // OpenAI keys/models available to the supervisor (it always runs on OpenAI).
   const supervisorOpenaiKeys = useMemo(
     () => apiKeys.filter((k) => k.provider === "openai"),
@@ -216,10 +339,6 @@ export const CreateLeia: React.FC = () => {
   const supervisorOpenaiModels = useMemo(
     () => apiKeyProvidersMapped?.openai || [],
     [apiKeyProvidersMapped],
-  );
-  const geminiApiKeys = useMemo(
-    () => apiKeys.filter((key) => key.provider === "gemini"),
-    [apiKeys],
   );
   // Seed a sensible default OpenAI key + model once the supervisor is enabled.
   useEffect(() => {
@@ -341,136 +460,305 @@ export const CreateLeia: React.FC = () => {
   // Modal cuando se pulsa Finish
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [createdLeiaName, setCreatedLeiaName] = useState("");
-  const [isFinishingLeia, setIsFinishingLeia] = useState(false);
-  const [illustrationsConfig, setIllustrationsConfig] =
-    useState<IllustrationsConfig>({
-      apiKeyId: null,
-      generateLeiaAvatar: false,
-      generatePersonaAvatar: false,
-      generateProblemAvatar: false,
-      generateInfographic: false,
-      generateInfographicSolution: false,
-    });
-  const [hasChosenIllustrationApiKey, setHasChosenIllustrationApiKey] =
-    useState(false);
-  const previousIllustrationDefaultsRef = useRef<{
-    apiKeyId: string | null;
-    personaAvailable: boolean;
-    problemAvailable: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    setIllustrationsConfig((current) => {
-      if (
-        current.apiKeyId &&
-        geminiApiKeys.some((key) => key.id === current.apiKeyId)
-      ) {
-        return current;
-      }
-      if (hasChosenIllustrationApiKey) {
-        return { ...current, apiKeyId: null };
-      }
-
-      const defaultKey = getDefaultKey?.();
-      if (defaultKey?.provider === "gemini") {
-        return { ...current, apiKeyId: defaultKey.id };
-      }
-
-      return { ...current, apiKeyId: geminiApiKeys[0]?.id ?? null };
-    });
-  }, [geminiApiKeys, getDefaultKey, hasChosenIllustrationApiKey]);
-
-  useEffect(() => {
-    const apiKeyId = illustrationsConfig.apiKeyId;
-    const personaAvailable = Boolean(leiaConfig.persona?.edited);
-    const problemAvailable = Boolean(leiaConfig.problem?.edited);
-    const previous = previousIllustrationDefaultsRef.current;
-
-    setIllustrationsConfig((current) => {
-      let next = current;
-
-      if (!apiKeyId) {
-        next = {
-          ...current,
-          generateLeiaAvatar: false,
-          generatePersonaAvatar: false,
-          generateProblemAvatar: false,
-          generateInfographic: false,
-          generateInfographicSolution: false,
-        };
-      } else if (previous?.apiKeyId !== apiKeyId) {
-        next = {
-          ...current,
-          generateLeiaAvatar: true,
-          generatePersonaAvatar: personaAvailable,
-          generateProblemAvatar: problemAvailable,
-        };
-      } else {
-        next = {
-          ...current,
-          generatePersonaAvatar: personaAvailable
-            ? previous?.personaAvailable
-              ? current.generatePersonaAvatar
-              : true
-            : false,
-          generateProblemAvatar: problemAvailable
-            ? previous?.problemAvailable
-              ? current.generateProblemAvatar
-              : true
-            : false,
-        };
-      }
-
-      return next;
-    });
-
-    previousIllustrationDefaultsRef.current = {
-      apiKeyId,
-      personaAvailable,
-      problemAvailable,
-    };
-  }, [
-    illustrationsConfig.apiKeyId,
-    leiaConfig.persona?.edited,
-    leiaConfig.problem?.edited,
-  ]);
 
   // Estados para opcionalmente añadir la LEIA a una Activity
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
-  const [showFinishActionsMenu, setShowFinishActionsMenu] = useState(false);
-  const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
-  const [nameActivityReplication, setNameActivityReplication] = useState("");
+
+  const hasDraftContent = useMemo(() => {
+    const hasSelectedComponent = Boolean(
+      leiaConfig.persona || leiaConfig.problem || leiaConfig.behaviour,
+    );
+    const hasNamedResource = Object.values(customizations).some(
+      (resource) => Boolean(resource?.name?.trim()),
+    );
+
+    return Boolean(
+      hasSelectedComponent ||
+        hasNamedResource ||
+        selectedLabelIds.length ||
+        pendingLabelDrafts.length ||
+        chatState.messages.length ||
+        chatState.input.trim(),
+    );
+  }, [chatState.input, chatState.messages.length, customizations, leiaConfig, pendingLabelDrafts.length, selectedLabelIds.length]);
+
+  const draftTitle = useMemo(
+    () =>
+      customizations.leia.name.trim() ||
+      leiaConfig.problem?.metadata?.name ||
+      leiaConfig.persona?.metadata?.name ||
+      leiaConfig.behaviour?.metadata?.name ||
+      "Untitled LEIA",
+    [customizations.leia.name, leiaConfig.behaviour?.metadata?.name, leiaConfig.persona?.metadata?.name, leiaConfig.problem?.metadata?.name],
+  );
+
+  const buildCurrentDraftState = useCallback(
+    (): CreateLeiaDraftState => ({
+      currentStep,
+      leiaConfig,
+      leiaConfigSnapShot,
+      customizations,
+      leiaNameManuallyEdited,
+      selectedLabelIds,
+      pendingLabelDrafts,
+      chatState,
+      chatModelName,
+      chatApiKeyId,
+      supervisorConfig,
+      leiaPublish,
+      behaviourPublish,
+      problemPublish,
+      personaPublish,
+    }),
+    [
+      behaviourPublish,
+      chatApiKeyId,
+      chatModelName,
+      chatState,
+      currentStep,
+      customizations,
+      leiaConfig,
+      leiaConfigSnapShot,
+      leiaNameManuallyEdited,
+      leiaPublish,
+      pendingLabelDrafts,
+      personaPublish,
+      problemPublish,
+      selectedLabelIds,
+      supervisorConfig,
+    ],
+  );
+
+  const resetWorkspace = useCallback(() => {
+    currentDraftIdRef.current = null;
+    setCurrentDraftId(null);
+    setCurrentStep(1);
+    setLeiaConfig(createEmptyLeiaConfig());
+    setLeiaConfigSnapShot(null);
+    setGeneratedLeia(null);
+    setCustomizations(createEmptyCustomizations());
+    setLeiaNameManuallyEdited(false);
+    setSelectedLabelIds([]);
+    setPendingLabelDrafts([]);
+    setLabelSearchInput("");
+    setValidationErrors(null);
+    setChatState({ messages: [], input: "" });
+    setChatResetKey((previous) => previous + 1);
+    setChatModelName("");
+    setChatApiKeyId(null);
+    setSupervisorConfig(DEFAULT_SUPERVISOR_CONFIG);
+    setLeiaPublish(true);
+    setBehaviourPublish(true);
+    setProblemPublish(true);
+    setPersonaPublish(true);
+    setEditingResource({ resource: null, content: null, apiVersion: "v1" });
+    setDraftError(null);
+  }, []);
+
+  const restoreDraft = useCallback((draft: LeiaDraft<CreateLeiaDraftState>) => {
+    const state = draft.state as Partial<CreateLeiaDraftState>;
+    const restoredConfig = state.leiaConfig ?? createEmptyLeiaConfig();
+    const restoredCustomizations = state.customizations ?? createEmptyCustomizations();
+
+    currentDraftIdRef.current = draft.id;
+    setCurrentDraftId(draft.id);
+    setCurrentStep(state.currentStep === 2 ? 2 : 1);
+    setLeiaConfig({
+      persona: restoredConfig.persona ?? null,
+      problem: restoredConfig.problem ?? null,
+      behaviour: restoredConfig.behaviour ?? null,
+    });
+    setLeiaConfigSnapShot(state.leiaConfigSnapShot ?? null);
+    setGeneratedLeia(null);
+    setCustomizations({
+      ...restoredCustomizations,
+      leia: {
+        name: restoredCustomizations.leia?.name ?? "",
+        version: restoredCustomizations.leia?.version ?? "1.0.0",
+      },
+    });
+    setLeiaNameManuallyEdited(Boolean(state.leiaNameManuallyEdited));
+    setSelectedLabelIds(state.selectedLabelIds ?? []);
+    setPendingLabelDrafts(state.pendingLabelDrafts ?? []);
+    setChatState({
+      messages: Array.isArray(state.chatState?.messages)
+        ? state.chatState.messages
+        : [],
+      input: typeof state.chatState?.input === "string" ? state.chatState.input : "",
+    });
+    setChatResetKey((previous) => previous + 1);
+    setChatModelName(state.chatModelName ?? "");
+    setChatApiKeyId(state.chatApiKeyId ?? null);
+    setSupervisorConfig({
+      ...DEFAULT_SUPERVISOR_CONFIG,
+      ...(state.supervisorConfig ?? {}),
+    });
+    setLeiaPublish(state.leiaPublish ?? true);
+    setBehaviourPublish(state.behaviourPublish ?? true);
+    setProblemPublish(state.problemPublish ?? true);
+    setPersonaPublish(state.personaPublish ?? true);
+    setValidationErrors(null);
+    setEditingResource({ resource: null, content: null, apiVersion: "v1" });
+    setDraftError(null);
+    setShowDraftsDialog(false);
+  }, []);
+
+  const loadDrafts = useCallback(async () => {
+    setIsDraftsLoading(true);
+    setDraftError(null);
+    try {
+      const savedDrafts = await listLeiaDrafts<CreateLeiaDraftState>();
+      setDrafts(savedDrafts);
+    } catch (draftLoadError) {
+      console.error("Error loading LEIA drafts:", draftLoadError);
+      setDraftError("Could not load your saved drafts.");
+    } finally {
+      setIsDraftsLoading(false);
+    }
+  }, []);
+
+  const saveCurrentDraft = useCallback(async (): Promise<LeiaDraft<CreateLeiaDraftState> | null> => {
+    if (!hasDraftContent) return null;
+
+    const previousSave = draftSavePromiseRef.current;
+    setIsSavingDraft(true);
+    const saveOperation = (async () => {
+      if (previousSave) {
+        await previousSave.catch(() => null);
+      }
+
+      setDraftError(null);
+      const payload = {
+        title: draftTitle,
+        state: buildCurrentDraftState(),
+      };
+      const existingDraftId = currentDraftIdRef.current;
+      const savedDraft = existingDraftId
+        ? await updateLeiaDraft(existingDraftId, payload)
+        : await createLeiaDraft(payload);
+
+      currentDraftIdRef.current = savedDraft.id;
+      setCurrentDraftId(savedDraft.id);
+      setDrafts((previous) =>
+        [savedDraft, ...previous.filter((draft) => draft.id !== savedDraft.id)].sort(
+          (left, right) =>
+            new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+        ),
+      );
+      return savedDraft;
+    })();
+
+    draftSavePromiseRef.current = saveOperation;
+    try {
+      return await saveOperation;
+    } catch (draftSaveError) {
+      console.error("Error saving LEIA draft:", draftSaveError);
+      setDraftError("Could not save this draft. Keep editing and try again.");
+      return null;
+    } finally {
+      if (draftSavePromiseRef.current === saveOperation) {
+        draftSavePromiseRef.current = null;
+        setIsSavingDraft(false);
+      }
+    }
+  }, [buildCurrentDraftState, draftTitle, hasDraftContent]);
+
+  const handleDeleteDraft = useCallback(
+    async (draft: LeiaDraft<CreateLeiaDraftState>) => {
+      try {
+        setDraftError(null);
+        await deleteLeiaDraft(draft.id);
+        setDrafts((previous) => previous.filter((item) => item.id !== draft.id));
+        if (currentDraftIdRef.current === draft.id) {
+          resetWorkspace();
+        }
+      } catch (draftDeleteError) {
+        console.error("Error deleting LEIA draft:", draftDeleteError);
+        setDraftError("Could not delete this draft.");
+      }
+    },
+    [resetWorkspace],
+  );
+
+  const handleOpenDrafts = useCallback(async () => {
+    setShowDraftsDialog(true);
+    if (hasDraftContent) {
+      await saveCurrentDraft();
+    }
+    await loadDrafts();
+  }, [hasDraftContent, loadDrafts, saveCurrentDraft]);
+
+  const requestLeave = useCallback(
+    (action: () => void) => {
+      if (!hasDraftContent) {
+        action();
+        return;
+      }
+
+      pendingLeaveActionRef.current = action;
+      setShowLeaveDraftDialog(true);
+    },
+    [hasDraftContent],
+  );
+
+  const continueEditingDraft = useCallback(() => {
+    pendingLeaveActionRef.current = null;
+    setShowLeaveDraftDialog(false);
+  }, []);
+
+  const saveDraftAndLeave = useCallback(async () => {
+    const action = pendingLeaveActionRef.current;
+    const savedDraft = await saveCurrentDraft();
+    if (hasDraftContent && !savedDraft) return;
+
+    pendingLeaveActionRef.current = null;
+    setShowLeaveDraftDialog(false);
+    action?.();
+  }, [hasDraftContent, saveCurrentDraft]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        showFinishActionsMenu &&
-        !(event.target as Element)?.closest(".finish-actions-menu")
-      ) {
-        setShowFinishActionsMenu(false);
-      }
-    };
+    currentDraftIdRef.current = currentDraftId;
+  }, [currentDraftId]);
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showFinishActionsMenu]);
+  useEffect(() => {
+    void loadDrafts();
+  }, [loadDrafts]);
 
-  const startGuidedTour = useCallback((startStep: WizardStep = 2) => {
+  useEffect(() => {
+    if (!hasDraftContent) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void saveCurrentDraft();
+    }, 900);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [hasDraftContent, saveCurrentDraft]);
+
+  useEffect(() => {
+    if (!hasDraftContent) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasDraftContent]);
+
+  const startGuidedTour = useCallback((startStep: WizardStep = 1) => {
     tourRef.current?.destroy();
-    setIsTryMenuOpen(false);
     setShowGenerateModal(false);
     setShowGenerateBehaviourModal(false);
     setShowCreateLabelModal(false);
     setShowFinishModal(false);
     setShowAddToActivityModal(false);
+    setShowComponentSelector(false);
     setEditingResource({
       resource: null,
       content: null,
-      apiVersion: "v1", 
+      apiVersion: "v1",
     });
     setCurrentStep(startStep);
     setTourRequested(true);
@@ -492,13 +780,6 @@ export const CreateLeia: React.FC = () => {
       progressText: "Paso {{current}} de {{total}}",
       onNextClick: (_element, _step, options) => {
         const activeIndex = options.driver.getActiveIndex();
-        if (activeIndex === 1) {
-          setCurrentStep(1);
-          window.setTimeout(() => {
-            options.driver.moveNext();
-          }, 150);
-          return;
-        }
         if (activeIndex === 3) {
           setCurrentStep(2);
           window.setTimeout(() => {
@@ -506,99 +787,60 @@ export const CreateLeia: React.FC = () => {
           }, 150);
           return;
         }
-
-        if (activeIndex === 4) {
-          setCurrentStep(3);
-          
-          window.setTimeout(() => {
-            options.driver.moveNext();
-          }, 150);
-          return;
-        }
-        
         options.driver.moveNext();
       },
       onPrevClick: (_element, _step, options) => {
         const activeIndex = options.driver.getActiveIndex();
-
-        if (activeIndex === 2) {
-          setCurrentStep(2);
-          window.setTimeout(() => {
-            options.driver.movePrevious();
-          }, 100);
-          return;
-        }
-
         if (activeIndex === 4) {
-          setCurrentStep(2);
+          setCurrentStep(1);
           window.setTimeout(() => {
             options.driver.movePrevious();
           }, 150);
           return;
         }
-
-        if (activeIndex === 5) {
-          setCurrentStep(2);
-          window.setTimeout(() => {
-            options.driver.movePrevious();
-          }, 150);
-          return;
-        }
-
         options.driver.movePrevious();
       },
       steps: [
         {
+          element: "#create-chat-panel",
+          popover: {
+            title: "New LEIA",
+            description:
+              "Describe the learning experience here. The assistant creates the problem, behaviour and persona together.",
+            side: "top",
+          },
+        },
+        {
           element: "#create-preview-panel",
           popover: {
-            title: "Step 2: review",
+            title: "Activity setup",
             description:
-              "Right here you can see the Behaviour, Problem and Persona that compose this LEIA. You can edit them and create new ones",
+              "Configure widgets and the tools LEIA can use for the activity.",
             side: "top",
           },
         },
         {
-          element: "#create-previous-button",
+          element: "#create-live-preview",
           popover: {
-            title: "Previous",
+            title: "Live preview",
             description:
-              "This button takes you back to the previous step.",
+              "The title is suggested by the assistant and remains editable. You can also test the draft from here.",
             side: "top",
           },
         },
-        {
-          element: "#create-selection-grid",
-          popover: {
-            title: "Step 1: selection",
-            description:
-              "You could also select different components for the LEIA by clicking on these cards.",
-            side: "top",
-          },
-        },
-        
         {
           element: "#create-next-button",
           popover: {
-            title: "Next",
+            title: "Review",
             description:
-              "Let's go to the next step.",
-            side: "top",
-          },
-        },
-        
-        {
-          element: "#try-button",
-          popover: {
-            title: "Try",
-            description:
-              "Try chatting with it to see how it behaves",
+              "Continue when the draft is ready to set its final details.",
             side: "top",
           },
         },
         {
           element: "#create-final-form",
           popover: {
-            title: "Step 3: creation",
+            title: "Review",
             description:
               "Here you complete the final name and labels before clicking Finish to save the LEIA.",
             side: "bottom",
@@ -632,7 +874,7 @@ export const CreateLeia: React.FC = () => {
     tourRef.current = tour;
     setTourRequested(false);
     tour.drive();
-  }, [currentStep, loading, tourRequested]);
+  }, [currentStep, loading, navigate, tourRequested]);
 
   useEffect(() => {
     return () => {
@@ -659,10 +901,10 @@ export const CreateLeia: React.FC = () => {
         behaviour: preset.behaviour ?? null,
       });
       setLeiaConfigSnapShot(preset);
-      setCurrentStep(2);
+      setCurrentStep(1);
     }
     if (navigationState?.startTourFromSearch) {
-      startGuidedTour(2);
+      startGuidedTour(1);
       try {
         navigate(location.pathname, { replace: true, state: undefined as unknown as NavigationState });
       } catch (e) {
@@ -673,6 +915,15 @@ export const CreateLeia: React.FC = () => {
   // Restaurar estado cuando se vuelve del chat
   useEffect(() => {
     const navigationState = location.state as NavigationState;
+    const draft = navigationState?.draft;
+    if (draft) {
+      restoreDraft(draft);
+      navigate(location.pathname, {
+        replace: true,
+        state: undefined as unknown as NavigationState,
+      });
+      return;
+    }
     const savedState = navigationState?.save;
     if (savedState) {
       // Restaurar el estado completo
@@ -686,11 +937,24 @@ export const CreateLeia: React.FC = () => {
       );
       setLeiaConfigSnapShot(savedState.leiaConfigSnapShot || null);
       setCustomizations(
-        savedState.customizations || { leia: { name: "", version: "1.0.0" } },
+        savedState.customizations || createEmptyCustomizations(),
       );
       setSelectedLabelIds(
         savedState.labelIds || (savedState.labelId ? [savedState.labelId] : []),
       );
+      currentDraftIdRef.current = savedState.draftId ?? null;
+      setCurrentDraftId(savedState.draftId ?? null);
+      setChatState(savedState.chatState ?? EMPTY_CHAT_STATE);
+      setChatResetKey((previous) => previous + 1);
+      setChatModelName(savedState.chatModelName ?? "");
+      setChatApiKeyId(savedState.chatApiKeyId ?? null);
+      setPendingLabelDrafts(savedState.pendingLabelDrafts ?? []);
+      setSupervisorConfig(savedState.supervisorConfig ?? DEFAULT_SUPERVISOR_CONFIG);
+      setLeiaNameManuallyEdited(Boolean(savedState.leiaNameManuallyEdited));
+      setLeiaPublish(savedState.leiaPublish ?? true);
+      setBehaviourPublish(savedState.behaviourPublish ?? true);
+      setProblemPublish(savedState.problemPublish ?? true);
+      setPersonaPublish(savedState.personaPublish ?? true);
 
       // Limpiar el estado de navegación para evitar cargas repetidas
       navigate(location.pathname, {
@@ -698,11 +962,10 @@ export const CreateLeia: React.FC = () => {
         state: { ...navigationState, save: undefined } as NavigationState,
       });
     }
-  }, [location.state, navigate, location.pathname]);
+  }, [location.state, navigate, location.pathname, restoreDraft]);
 
   useEffect(() => {
     if (
-      currentStep > 1 &&
       leiaConfig.persona &&
       leiaConfig.behaviour &&
       leiaConfig.problem
@@ -785,79 +1048,6 @@ export const CreateLeia: React.FC = () => {
 
   const getLabelIdentifier = (label: Label) => label.id || label._id || null;
 
-  const getResourceIdentifier = (resource: unknown): string | null => {
-    if (!resource || typeof resource !== "object") return null;
-
-    const candidate = resource as { id?: unknown; _id?: unknown };
-    const id = candidate.id || candidate._id;
-    return typeof id === "string" && id.trim() ? id : null;
-  };
-
-  const generateCreatedAvatars = async (
-    targets: AvatarGenerationTarget[],
-    apiKeyId: string,
-  ): Promise<LeiaResource | null> => {
-    const uniqueTargets = Array.from(
-      new Map(
-        targets.map((target) => [`${target.entity}:${target.id}`, target]),
-      ).values(),
-    );
-
-    const avatarResults = await Promise.allSettled(
-      uniqueTargets.map(async (target) => {
-        const response = await api.post(
-          `/api/v1/images/${target.entity}/${target.id}/generate`,
-          { apiKeyId },
-        );
-        return { target, entity: response.data?.entity };
-      }),
-    );
-
-    for (const result of avatarResults) {
-      if (result.status === "rejected") {
-        console.error("Error generating avatar after creation:", result.reason);
-      }
-    }
-
-    const leiaAvatarResult = avatarResults.find(
-      (result) =>
-        result.status === "fulfilled" &&
-        result.value.target.entity === "leias",
-    );
-
-    return leiaAvatarResult?.status === "fulfilled"
-      ? (leiaAvatarResult.value.entity as LeiaResource)
-      : null;
-  };
-
-  const generateCreatedInfographics = async (
-    leiaId: string,
-    variants: InfographicVariant[],
-    apiKeyId: string,
-  ): Promise<LeiaResource | null> => {
-    let updatedLeia: LeiaResource | null = null;
-
-    for (const variant of variants) {
-      try {
-        const path =
-          variant === "infographic"
-            ? "infographic"
-            : "infographic-solution";
-        const response = await api.post(
-          `/api/v1/images/leias/${leiaId}/${path}/generate`,
-          { apiKeyId },
-        );
-        if (response.data?.entity) {
-          updatedLeia = response.data.entity as LeiaResource;
-        }
-      } catch (error) {
-        console.error(`Error generating ${variant} after creation:`, error);
-      }
-    }
-
-    return updatedLeia;
-  };
-
   const getPendingLabelId = (labelName: string) =>
     `${PENDING_LABEL_PREFIX}${labelName.trim().toLowerCase()}`;
 
@@ -901,76 +1091,6 @@ export const CreateLeia: React.FC = () => {
       setCreateLabelError("Failed to prepare label");
     }
   };
-  const closeActivityReplicationModal = useCallback(() => {
-      setShowActivityReplicationModal(false);
-      setNameActivityReplication("");
-      navigate("/leias");
-    }, [navigate]);
-    const handleQuickReplication = useCallback(async (leia?: LeiaResource|null) => {
-  
-    if (!leia) {
-      toast.error("No LEIA selected", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-      return;
-    }
-  
-    try {
-      const leiaName = nameActivityReplication || leia.metadata.name || "";
-      const activityReplication = await api.post(`/api/v1/experiments/leia/`, {
-        leiaName,
-        leiaId: leia.id,
-      });
-      toast.success("LEIA replicated successfully", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-  
-      const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL;
-      const replicationUrl = `${workbenchBaseUrl.replace(
-      /\/$/, "" )}/login?redirect=/replications/${encodeURIComponent(
-      activityReplication.data.replication.id)}`;
-      closeActivityReplicationModal();
-      const newWindow = window.open(replicationUrl);
-  
-      if (!newWindow) {
-        toast.error("Popup blocked or could not open replication", {
-          position: "bottom-right",
-          autoClose: 2000,
-        });
-      }
-    } catch (error) {
-      const axiosError = error as {
-        response?: {
-          status?: number;
-          data?: {
-            error?: string;
-            data?: Array<{ id: string; name: string }>;
-          };
-        };
-      };
-  
-      if (axiosError.response?.status === 409) {
-        toast.info(axiosError.response?.data?.error, {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-  
-        if (!nameActivityReplication) {
-          setNameActivityReplication(leia.metadata.name + "-v2");
-        }
-        setShowActivityReplicationModal(true);
-        return;
-      }
-  
-      toast.error("Error replicating LEIA. Please try again.", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-    }
-  }, [closeActivityReplicationModal, nameActivityReplication]);
-
   const loadData = async () => {
     try {
       setLoading(true);
@@ -1027,51 +1147,6 @@ export const CreateLeia: React.FC = () => {
     setBehaviourProcess(process);
     loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
   };
-
-  // Componente para selector de visibilidad
-  const VisibilitySelector: React.FC<{
-    value: "all" | "private" | "public";
-    onChange: (value: "all" | "private" | "public") => void;
-  }> = ({ value, onChange }) => (
-    <div className="flex flex-col items-center">
-      <label className="text-xs text-gray-600 mb-1">Visibility</label>
-      <select
-        value={value}
-        onChange={(e) =>
-          onChange(e.target.value as "all" | "private" | "public")
-        }
-        className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[70px]"
-      >
-        <option value="all">All</option>
-        <option value="private">Private</option>
-        <option value="public">Public</option>
-      </select>
-    </div>
-  );
-
-  // Componente para selector de process
-  const ProcessSelector: React.FC<{
-    value: "all" | "requirements-elicitation" | "game" | "other";
-    onChange: (value: "all" | "requirements-elicitation" | "game" | "other") => void;
-  }> = ({ value, onChange }) => (
-    <div className="flex flex-col items-center">
-      <label className="text-xs text-gray-600 mb-1">Process</label>
-      <select
-        value={value}
-        onChange={(e) =>
-          onChange(
-            e.target.value as "all" | "requirements-elicitation" | "game" | "other",
-          )
-        }
-        className="px-2 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-in-out w-auto min-w-[60px] max-w-[140px]"
-      >
-        <option value="all">All</option>
-        <option value="requirements-elicitation">Req. Elicitation</option>
-        <option value="game">Game</option>
-        <option value="other">Other</option>
-      </select>
-    </div>
-  );
 
   const handleSelect = (
     type: keyof LeiaConfig,
@@ -1248,10 +1323,22 @@ const openGenerateProblemModal = () => {
       setProblems((prev) => [generatedProblem, ...prev]);
 
       // Seleccionar el problema generado
-      setLeiaConfig((prev) => ({
-        ...prev,
-        problem: generatedProblem,
-      }));
+      setLeiaConfig((prev) => {
+        const process = copyProcess(generatedProblem.spec?.process);
+
+        return {
+          ...prev,
+          problem: generatedProblem,
+          behaviour:
+            prev.behaviour?.edited
+              ? ({
+                  ...prev.behaviour,
+                  spec: { ...prev.behaviour.spec, process },
+                  updatedAt: new Date().toISOString(),
+                } as unknown as Behaviour)
+              : prev.behaviour,
+        };
+      });
 
       // Cerrar modal y limpiar
       closeGenerateProblemModal();
@@ -1288,6 +1375,9 @@ const openGenerateProblemModal = () => {
       const generatedBehaviourSpec = (response.data?.spec ||
         response.data) as Behaviour["spec"];
 
+      const process = copyProcess(
+        leiaConfig.problem?.spec?.process ?? generatedBehaviourSpec.process,
+      );
       const generatedBehaviour: Behaviour = {
         apiVersion: leiaConfig.behaviour.apiVersion || "v1",
         metadata: {
@@ -1297,7 +1387,7 @@ const openGenerateProblemModal = () => {
             .replace(/\s+/g, "-"),
           version: "1.0.0",
         },
-        spec: generatedBehaviourSpec,
+        spec: { ...generatedBehaviourSpec, process } as unknown as Behaviour["spec"],
         id: `generated-behaviour-${Date.now()}`,
         edited: true,
         createdAt: new Date().toISOString(),
@@ -1339,130 +1429,65 @@ const openGenerateProblemModal = () => {
     delete cleaned.edited;
     delete cleaned.user;
     delete cleaned.isPublished;
-    if (currentStep === 2) {
+    if (currentStep === 1) {
       delete cleaned.metadata;
     }
-    if (currentStep === 3 && resource && leiaConfig[resource]?.edited) {
+    const selectedResource = resource ? leiaConfig[resource] : null;
+    const customName = resource ? customizations[resource]?.name?.trim() : "";
+    if (
+      currentStep === 2 &&
+      resource &&
+      customName &&
+      (selectedResource?.edited || customName !== selectedResource?.metadata?.name)
+    ) {
       const metadata = cleaned.metadata as Record<string, unknown>;
       if (metadata) {
-        metadata.name = customizations[resource]?.name || "";
+        metadata.name = customName;
         metadata.version = "1.0.0";
       }
     }
     return cleaned;
   };
 
-  const getValidModels = useCallback(
-    (apiKeyId: string | null | undefined) => {
-      const models = Object.values(apiKeyProvidersMapped || {}).flat();
-      if (!apiKeyId) return models;
-
-      const apiKey = apiKeys.find((key) => key.id === apiKeyId);
-      if (!apiKey || !apiKey.provider) return models;
-
-      return apiKeyProvidersMapped[apiKey.provider] || [];
-    },
-    [apiKeyProvidersMapped, apiKeys]
-  );
-
-  const getValidApiKeys = useCallback(
-    (modelName: string | null | undefined) => {
-      const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
-      if (!modelName) return activeApiKeys;
-
-      const validProviders = Object.entries(apiKeyProvidersMapped || {})
-        .filter(([, models]) => models.includes(modelName))
-        .map(([provider]) => provider);
-
-      return activeApiKeys.filter((key) =>
-        validProviders.includes(key.provider)
-      );
-    },
-    [apiKeyProvidersMapped, apiKeys]
-  );
-
-  const ensureTryConfig = useCallback(() => {
-    // When the problem declares widgets, tools only run on a tool-capable
-    // provider (openai-responses), so the Try must seed an OpenAI model/key —
-    // even if the user's DEFAULT key belongs to another provider.
+  const resolveTestRunnerConfiguration = useCallback(() => {
+    // Use the model and provider already selected for the design assistant.
+    // A manual-only LEIA can still fall back to the user's default key. Widgets
+    // require a tool-capable provider, so that restriction remains automatic.
     const problemWidgets = leiaConfig.problem?.spec?.widgets;
     const requiresTools = Array.isArray(problemWidgets) && problemWidgets.length > 0;
     const toolCapableProviders = Object.entries(providerProviderModuleMap || {})
       .filter(([, moduleName]) => moduleName === "openai-responses")
       .map(([provider]) => provider);
-    const toolCapableModels = toolCapableProviders.flatMap(
-      (provider) => apiKeyProvidersMapped[provider] || []
-    );
-    const activeApiKeys = apiKeys.filter((key) => key.isActive !== false);
     const candidateKeys = requiresTools
-      ? activeApiKeys.filter((key) =>
-          toolCapableProviders.includes(key.provider)
-        )
-      : activeApiKeys;
+      ? apiKeys.filter((key) => toolCapableProviders.includes(key.provider))
+      : apiKeys;
+    const activeAssistantKey = chatApiKeyId
+      ? candidateKeys.find((key) => key.id === chatApiKeyId) ?? null
+      : null;
+    const defaultKey = getDefaultKey();
+    const key = activeAssistantKey ?? (
+      defaultKey && candidateKeys.some((candidate) => candidate.id === defaultKey.id)
+        ? defaultKey
+        : candidateKeys[0] ?? null
+    );
+    if (!key) return null;
 
-    setTryConfig((prev) => {
-      const prevKeyValid = Boolean(prev.apiKeyId && candidateKeys.some((k) => k.id === prev.apiKeyId));
-      const prevModelValid = Boolean(
-        prev.modelName && (!requiresTools || toolCapableModels.includes(prev.modelName))
-      );
-      // Keep a still-valid selection; otherwise (re)seed from the candidates.
-      if ((prev.modelName || prev.apiKeyId) && prevKeyValid && prevModelValid) {
-        return prev;
-      }
+    const providerModels = apiKeyProvidersMapped[key.provider] || [];
+    const modelName = [chatModelName, key.model, defaultModel, ...providerModels].find(
+      (model): model is string => Boolean(model && providerModels.includes(model)),
+    );
 
-      const defaultKey = getDefaultKey();
-      const key =
-        defaultKey && candidateKeys.some((k) => k.id === defaultKey.id)
-          ? defaultKey
-          : candidateKeys[0] ?? null;
-      const validModels = requiresTools ? toolCapableModels : getValidModels(key?.id);
-      // Preselect the chosen key's default model, then fall back.
-      const model =
-        key?.model && validModels.includes(key.model)
-          ? key.model
-          : defaultModel && validModels.includes(defaultModel)
-            ? defaultModel
-            : validModels[0] ?? "";
-
-      return { modelName: model, apiKeyId: key?.id ?? null };
-    });
+    return modelName ? { modelName, apiKeyId: key.id } : null;
   }, [
-    leiaConfig.problem,
-    providerProviderModuleMap,
     apiKeyProvidersMapped,
     apiKeys,
+    chatApiKeyId,
+    chatModelName,
     defaultModel,
     getDefaultKey,
-    getValidModels,
+    leiaConfig.problem,
+    providerProviderModuleMap,
   ]);
-
-  const handleTryMenuToggle = useCallback(() => {
-    if (testingLeia) return;
-    setIsTryMenuOpen((prev) => !prev);
-    ensureTryConfig();
-  }, [ensureTryConfig, testingLeia]);
-
-  const handleTryModelChange = useCallback(
-    (modelName: string) => {
-      setTryConfig((prev) => {
-        const validApiKeys = getValidApiKeys(modelName);
-        const apiKeyId = validApiKeys.some((key) => key.id === prev.apiKeyId)
-          ? prev.apiKeyId
-          : (validApiKeys.find((key) => key.isDefault) || validApiKeys[0])?.id ?? null;
-
-        return {
-          ...prev,
-          modelName,
-          apiKeyId,
-        };
-      });
-    },
-    [getValidApiKeys]
-  );
-
-  const handleTryApiKeyChange = useCallback((apiKeyId: string) => {
-    setTryConfig((prev) => ({ ...prev, apiKeyId: apiKeyId || null }));
-  }, []);
 
   const handleTestLeia = async () => {
     if (!generatedLeia) {
@@ -1470,15 +1495,18 @@ const openGenerateProblemModal = () => {
       return;
     }
 
-    if (!tryConfig.modelName || !tryConfig.apiKeyId) {
+    const runnerConfiguration = resolveTestRunnerConfiguration();
+    if (!runnerConfiguration) {
+      console.error("No valid model and API key available for testing");
       return;
     }
 
     try {
       setTestingLeia(true);
+      const savedDraft = await saveCurrentDraft();
       const response = await api.post("/api/v1/runner/initialize", {
         spec: generatedLeia.spec,
-        runnerConfiguration: tryConfig,
+        runnerConfiguration,
       });
       const { sessionId } = response.data;
       navigate(`/chat/${sessionId}`, {
@@ -1490,9 +1518,19 @@ const openGenerateProblemModal = () => {
             labelIds: selectedLabelIds,
             labelId: selectedLabelIds[0] || null,
             customizations,
+            draftId: savedDraft?.id ?? currentDraftIdRef.current,
+            chatState,
+            chatModelName,
+            chatApiKeyId,
+            pendingLabelDrafts,
+            supervisorConfig,
+            leiaNameManuallyEdited,
+            leiaPublish,
+            behaviourPublish,
+            problemPublish,
+            personaPublish,
           },
           problemDescription: generatedLeia.spec.problem.spec.description,
-          personaAvatar: generatedLeia.spec.persona.spec.avatar || "",
         },
       });
     } catch (error) {
@@ -1503,55 +1541,45 @@ const openGenerateProblemModal = () => {
     }
   };
 
-  const handleStartTry = async () => {
-    if (!tryConfig.modelName || !tryConfig.apiKeyId) {
-      return;
-    }
-    setIsTryMenuOpen(false);
-    await handleTestLeia();
-  };
-
-  useEffect(() => {
-    if (generatedLeia && !isApiKeysLoading && !isProvidersLoading) {
-      ensureTryConfig();
-    }
-  }, [generatedLeia, isApiKeysLoading, isProvidersLoading, ensureTryConfig]);
-
   const handleNextStep = async () => {
-    if (currentStep === 3 && isStep3Complete) {
-      if (isFinishingLeia) {
-        return;
-      }
+    if (currentStep === 2 && isStep2Complete) {
+      const errors = {} as Record<string, string>;
 
-      setIsFinishingLeia(true);
+      for (const [key, value] of Object.entries(customizations)) {
+        if (value) {
+          const isComponent = key === "persona" || key === "problem" || key === "behaviour";
+          const selectedResource = isComponent
+            ? leiaConfig[key as keyof LeiaConfig]
+            : null;
+          const name = value.name?.trim() || selectedResource?.metadata?.name?.trim() || "";
+          if (!name) {
+            errors[key] = "Name is required";
+            continue;
+          }
+          const needsNewResource =
+            key === "leia" ||
+            Boolean(selectedResource?.edited) ||
+            name !== selectedResource?.metadata?.name;
 
-      try {
-        const errors = {} as Record<string, string>;
+          if (!needsNewResource) continue;
 
-        for (const [key, value] of Object.entries(customizations)) {
-          if (value) {
-            if (!value.name?.trim()) {
-              errors[key] = "Name is required";
-              continue;
+          try {
+            const response = await api.get(
+              `/api/v1/${key}s/exists/${name}`,
+            );
+            if (response.data.exists) {
+              errors[key] = "Name already exists";
             }
-
-            try {
-              const response = await api.get(
-                `/api/v1/${key}s/exists/${value.name}`,
-              );
-              if (response.data.exists) {
-                errors[key] = "Name already exists";
-              }
-            } catch {
-              errors[key] = "Failed to check name existence";
-            }
+          } catch {
+            errors[key] = "Failed to check name existence";
           }
         }
+      }
 
-        if (Object.keys(errors).length > 0) {
-          setValidationErrors(errors);
-          return;
-        }
+      if (Object.keys(errors).length > 0) {
+        setValidationErrors(errors);
+        return;
+      }
 
       let finalLabelIds = [...selectedLabelIds];
       if (pendingLabelDrafts.length > 0) {
@@ -1565,218 +1593,183 @@ const openGenerateProblemModal = () => {
                 secundaryColor: draft.secundaryColor,
                 isGlobal:
                   currentUser?.role === "admin" ? draft.isGlobal : false,
-
+                user: currentUser?.id,
               });
 
-                return {
-                  pendingId: draft.id,
-                  createdId: getLabelIdentifier(response.data),
-                };
-              }),
-            );
-
-            const pendingToCreated = new Map(
-              createdLabels
-                .filter((entry) => Boolean(entry.createdId))
-                .map((entry) => [entry.pendingId, entry.createdId as string]),
-            );
-
-            finalLabelIds = finalLabelIds
-              .map((labelId) => pendingToCreated.get(labelId) || labelId)
-              .filter(Boolean);
-
-            setSelectedLabelIds(finalLabelIds);
-            setPendingLabelDrafts([]);
-            await loadLabels();
-          } catch (error) {
-            console.error("Error creating label on finish:", error);
-            setError("Failed to create label");
-            return;
-          } finally {
-            setCreatingLabel(false);
-          }
-        }
-
-        const leia = {
-          apiVersion: "v1",
-          metadata: {
-            name: customizations.leia.name,
-            version: "1.0.0",
-            labels: finalLabelIds.length > 0 ? finalLabelIds : undefined,
-          },
-          spec: {} as Record<string, any>,
-        };
-        const avatarGenerationTargets: AvatarGenerationTarget[] = [];
-
-        for (const [key, value] of Object.entries(leiaConfig)) {
-          if (value && value.edited) {
-            const newResource = structuredClone(value) as any;
-            delete newResource.edited;
-            delete newResource.id;
-            delete newResource.createdAt;
-            delete newResource.updatedAt;
-            delete newResource.user;
-            delete newResource.metadata.version;
-            delete newResource.isPublished;
-            if (key === "persona" || key === "problem") {
-              delete newResource.spec?.avatar;
-            }
-            newResource.metadata.name =
-              customizations[key as keyof LeiaConfig]?.name;
-            try {
-              // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
-              let publishParam = "";
-              if (currentUser?.role === "admin") {
-                const resourcePublishState = leiaPublish
-                  ? leiaPublish
-                  : key === "behaviour"
-                    ? behaviourPublish
-                    : key === "problem"
-                      ? problemPublish
-                      : key === "persona"
-                        ? personaPublish
-                        : false;
-                publishParam = `?publish=${resourcePublishState}`;
-              }
-              const response = await api.post(
-                `/api/v1/${key}s${publishParam}`,
-                newResource,
-              );
-              leia.spec[key] = response.data.id;
-              const createdResourceId = getResourceIdentifier(response.data);
-              if (
-                createdResourceId &&
-                key === "persona" &&
-                illustrationsConfig.generatePersonaAvatar
-              ) {
-                avatarGenerationTargets.push({
-                  entity: "personas",
-                  id: createdResourceId,
-                });
-              }
-              if (
-                createdResourceId &&
-                key === "problem" &&
-                illustrationsConfig.generateProblemAvatar
-              ) {
-                avatarGenerationTargets.push({
-                  entity: "problems",
-                  id: createdResourceId,
-                });
-              }
-              leiaConfig[key as keyof LeiaConfig] = response.data;
-              if (leiaConfigSnapShot) {
-                leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
-              }
-              delete customizations[key as keyof LeiaConfig];
-            } catch (error) {
-              console.error("Error creating resource:", error);
-              setError(`Failed to create ${key} resource`);
-              return;
-            }
-          } else {
-            leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
-          }
-        }
-
-        // Attach the per-LEIA supervisor config only when enabled.
-        if (supervisorConfig.enabled) {
-          leia.spec.supervisorConfig = {
-            enabled: true,
-            instructions: supervisorConfig.instructions.trim(),
-            sensitivity: supervisorConfig.sensitivity,
-            cadence: supervisorConfig.cadence,
-            everyN: supervisorConfig.everyN,
-            intervene: supervisorConfig.intervene,
-            interveneInstructions: supervisorConfig.intervene
-              ? supervisorConfig.interveneInstructions.trim()
-              : "",
-            apiKeyId: supervisorConfig.apiKeyId || undefined,
-            apiKeyRequesterId: supervisorConfig.apiKeyId
-              ? currentUser?.id
-              : undefined,
-            model: supervisorConfig.model || undefined,
-          };
-        }
-
-        try {
-          // Construir la URL con el query parameter publish
-          const publishParam =
-            currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
-          const response = await api.post(`/api/v1/leias${publishParam}`, leia);
-          console.log("LEIA created successfully:", response.data);
-          const createdLeiaId = getResourceIdentifier(response.data);
-          if (createdLeiaId && illustrationsConfig.generateLeiaAvatar) {
-            avatarGenerationTargets.push({
-              entity: "leias",
-              id: createdLeiaId,
-            });
-          }
-          const imageKeyId = illustrationsConfig.apiKeyId;
-          const leiaWithGeneratedAvatar = imageKeyId
-            ? await generateCreatedAvatars(avatarGenerationTargets, imageKeyId)
-            : null;
-          const infographicVariants: InfographicVariant[] = [];
-          if (illustrationsConfig.generateInfographic) {
-            infographicVariants.push("infographic");
-          }
-          if (illustrationsConfig.generateInfographicSolution) {
-            infographicVariants.push("infographicSolution");
-          }
-          const leiaWithGeneratedInfographics =
-            createdLeiaId && imageKeyId && infographicVariants.length > 0
-              ? await generateCreatedInfographics(
-                  createdLeiaId,
-                  infographicVariants,
-                  imageKeyId,
-                )
-              : null;
-          setCreatedLeiaName(
-            response.data?.metadata?.name || customizations.leia.name || "LEIA",
+              return {
+                pendingId: draft.id,
+                createdId: getLabelIdentifier(response.data),
+              };
+            }),
           );
-          setCreatedLeiaResource(
-            leiaWithGeneratedInfographics ||
-              leiaWithGeneratedAvatar ||
-              (response.data as LeiaResource),
+
+          const pendingToCreated = new Map(
+            createdLabels
+              .filter((entry) => Boolean(entry.createdId))
+              .map((entry) => [entry.pendingId, entry.createdId as string]),
           );
-          setShowFinishModal(true);
+
+          finalLabelIds = finalLabelIds
+            .map((labelId) => pendingToCreated.get(labelId) || labelId)
+            .filter(Boolean);
+
+          setSelectedLabelIds(finalLabelIds);
+          setPendingLabelDrafts([]);
+          await loadLabels();
         } catch (error) {
-          console.error("Error creating LEIA:", error);
-          setError("Failed to create LEIA");
+          console.error("Error creating label on finish:", error);
+          setError("Failed to create label");
+          return;
+        } finally {
+          setCreatingLabel(false);
         }
-      } finally {
-        setIsFinishingLeia(false);
+      }
+
+      const leia: {
+        apiVersion: string;
+        metadata: {
+          name: string;
+          version: string;
+          labels?: string[];
+        };
+        spec: Record<string, unknown>;
+      } = {
+        apiVersion: "v1",
+        metadata: {
+          name: customizations.leia.name,
+          version: "1.0.0",
+          labels: finalLabelIds.length > 0 ? finalLabelIds : undefined,
+        },
+        spec: {},
+      };
+
+      for (const [key, value] of Object.entries(leiaConfig)) {
+        const resourceKey = key as keyof LeiaConfig;
+        const customization = customizations[resourceKey];
+        const resourceName = customization?.name?.trim() || value?.metadata?.name || "";
+        const isRenamed = Boolean(
+          resourceName && resourceName !== value?.metadata?.name,
+        );
+
+        if (value && (value.edited || isRenamed)) {
+          const newResource: {
+            apiVersion: string;
+            metadata: { name: string; version?: string };
+            spec: Persona["spec"] | Problem["spec"] | Behaviour["spec"];
+            id?: string;
+            createdAt?: string;
+            updatedAt?: string;
+            user?: unknown;
+            isPublished?: boolean;
+            edited?: boolean;
+          } = structuredClone(value);
+          delete newResource.edited;
+          delete newResource.id;
+          delete newResource.createdAt;
+          delete newResource.updatedAt;
+          delete newResource.user;
+          delete newResource.metadata.version;
+          delete newResource.isPublished;
+          if (resourceName) {
+            newResource.metadata.name = resourceName;
+          }
+          try {
+            // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
+            let publishParam = "";
+            if (currentUser?.role === "admin") {
+              const resourcePublishState = leiaPublish
+                ? leiaPublish
+                : key === "behaviour"
+                  ? behaviourPublish
+                  : key === "problem"
+                    ? problemPublish
+                    : key === "persona"
+                      ? personaPublish
+                      : false;
+              publishParam = `?publish=${resourcePublishState}`;
+            }
+            const response = await api.post(
+              `/api/v1/${key}s${publishParam}`,
+              newResource,
+            );
+            leia.spec[key] = response.data.id;
+            leiaConfig[key as keyof LeiaConfig] = response.data;
+            if (leiaConfigSnapShot) {
+              leiaConfigSnapShot[key as keyof LeiaConfig] = response.data;
+            }
+            delete customizations[key as keyof LeiaConfig];
+          } catch (error) {
+            console.error("Error creating resource:", error);
+            setError(`Failed to create ${key} resource`);
+            return;
+          }
+        } else {
+          leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
+        }
+      }
+      // Attach the per-LEIA supervisor config (only when enabled). The
+      // supervisor runs on OpenAI with its own key — stored together with the
+      // owning user id so the workbench can resolve it at runtime (BYOK).
+      if (supervisorConfig.enabled) {
+        leia.spec.supervisorConfig = {
+          enabled: true,
+          instructions: supervisorConfig.instructions.trim(),
+          sensitivity: supervisorConfig.sensitivity,
+          cadence: supervisorConfig.cadence,
+          everyN: supervisorConfig.everyN,
+          intervene: supervisorConfig.intervene,
+          interveneInstructions: supervisorConfig.intervene
+            ? supervisorConfig.interveneInstructions.trim()
+            : "",
+          apiKeyId: supervisorConfig.apiKeyId || undefined,
+          apiKeyRequesterId: supervisorConfig.apiKeyId ? currentUser?.id : undefined,
+          model: supervisorConfig.model || undefined,
+        };
+      }
+      try {
+        // Construir la URL con el query parameter publish
+        const publishParam =
+          currentUser?.role === "admin" ? `?publish=${leiaPublish}` : "";
+        const response = await api.post(`/api/v1/leias${publishParam}`, leia);
+        console.log("LEIA created successfully:", response.data);
+        setCreatedLeiaName(
+          response.data?.metadata?.name || customizations.leia.name || "LEIA",
+        );
+        setCreatedLeiaResource(response.data as LeiaResource);
+        setShowFinishModal(true);
+      } catch (error) {
+        console.error("Error creating LEIA:", error);
+        setError("Failed to create LEIA");
       }
     }
-    if (currentStep < 3) {
-      if (currentStep === 1) {
-        setLeiaConfigSnapShot({
-          persona: leiaConfig.persona?.edited
-            ? leiaConfigSnapShot?.persona || null
-            : leiaConfig.persona,
-          problem: leiaConfig.problem?.edited
-            ? leiaConfigSnapShot?.problem || null
-            : leiaConfig.problem,
-          behaviour: leiaConfig.behaviour?.edited
-            ? leiaConfigSnapShot?.behaviour || null
-            : leiaConfig.behaviour,
-        });
-      }
-      if (currentStep === 2) {
-        setCustomizations({
-          persona: leiaConfig.persona?.edited
-            ? { name: "", version: "1.0.0" }
-            : undefined,
-          problem: leiaConfig.problem?.edited
-            ? { name: "", version: "1.0.0" }
-            : undefined,
-          behaviour: leiaConfig.behaviour?.edited
-            ? { name: "", version: "1.0.0" }
-            : undefined,
-          leia: { name: "", version: "1.0.0" },
-        });
-      }
-      setCurrentStep((currentStep + 1) as WizardStep);
+    if (currentStep === 1 && isStep1Complete) {
+      setLeiaConfigSnapShot({
+        persona: leiaConfig.persona?.edited
+          ? leiaConfigSnapShot?.persona || null
+          : leiaConfig.persona,
+        problem: leiaConfig.problem?.edited
+          ? leiaConfigSnapShot?.problem || null
+          : leiaConfig.problem,
+        behaviour: leiaConfig.behaviour?.edited
+          ? leiaConfigSnapShot?.behaviour || null
+          : leiaConfig.behaviour,
+      });
+      setCustomizations((previous) => ({
+          persona: {
+            name: previous.persona?.name?.trim() || leiaConfig.persona?.metadata?.name || "",
+            version: previous.persona?.version || "1.0.0",
+          },
+          problem: {
+            name: previous.problem?.name?.trim() || leiaConfig.problem?.metadata?.name || "",
+            version: previous.problem?.version || "1.0.0",
+          },
+          behaviour: {
+            name: previous.behaviour?.name?.trim() || leiaConfig.behaviour?.metadata?.name || "",
+            version: previous.behaviour?.version || "1.0.0",
+          },
+          leia: { name: previous.leia.name, version: "1.0.0" },
+        }));
+      setCurrentStep(2);
     }
   };
 
@@ -1786,16 +1779,15 @@ const openGenerateProblemModal = () => {
     }
   };
 
-  const isStep1Complete =
-    leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour;
-  const isStep2Complete = !generationError && generatedLeia;
-  const isStep3Complete = (() => {
-    const customizationsValid = Object.values(customizations).every(
-      (resource) => {
-        if (!resource) return true;
-        return resource.name && resource.name.trim() !== "";
-      },
-    );
+  const isStep1Complete = Boolean(
+    leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour && !generationError && generatedLeia,
+  );
+  const isStep2Complete = (() => {
+    const customizationsValid =
+      Boolean(customizations.leia.name?.trim()) &&
+      (["persona", "problem", "behaviour"] as const).every((resource) =>
+        Boolean(customizations[resource]?.name?.trim() || leiaConfig[resource]?.metadata?.name?.trim()),
+      );
 
     const noValidationErrors = validationErrors
       ? Object.values(validationErrors).every((error) => !error)
@@ -1804,81 +1796,68 @@ const openGenerateProblemModal = () => {
     return customizationsValid && noValidationErrors;
   })();
 
-  const renderStepIndicator = () => (
-    <div className="flex items-center justify-center space-x-8 mb-8">
-      <div className="flex items-center space-x-2">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            currentStep >= 1
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-600"
-          }`}
-        >
-          1
-        </div>
-        <span
-          className={`text-sm font-medium ${
-            currentStep >= 1 ? "text-blue-600" : "text-gray-600"
-          }`}
-        >
-          Selection
-        </span>
-      </div>
-      <div
-        className={`h-px w-12 ${
-          currentStep >= 2 ? "bg-blue-300" : "bg-gray-300"
-        }`}
-      />
-      <div className="flex items-center space-x-2">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            currentStep >= 2
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-600"
-          }`}
-        >
-          2
-        </div>
-        <span
-          className={`text-sm font-medium ${
-            currentStep >= 2 ? "text-blue-600" : "text-gray-600"
-          }`}
-        >
-          Edit
-        </span>
-      </div>
-      <div
-        className={`h-px w-12 ${
-          currentStep >= 3 ? "bg-blue-300" : "bg-gray-300"
-        }`}
-      />
-      <div className="flex items-center space-x-2">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            currentStep >= 3
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-600"
-          }`}
-        >
-          3
-        </div>
-        <span
-          className={`text-sm font-medium ${
-            currentStep >= 3 ? "text-blue-600" : "text-gray-600"
-          }`}
-        >
-          Create
-        </span>
-      </div>
-    </div>
-  );
+  const renderStepIndicator = () => {
+    const steps = ["New LEIA", "Review"];
 
-  // Applies a problem produced by the AI assistant's apply_problem tool: wraps
-  // the returned spec into a Problem and selects it (full replace), mirroring
-  // the one-shot generate flow.
+    return (
+      <Stack
+        id="create-step-indicator"
+        direction="row"
+        alignItems="center"
+        justifyContent="center"
+        spacing={1}
+      >
+        {steps.map((label, index) => {
+          const complete = currentStep >= index + 1;
+          return (
+            <React.Fragment key={label}>
+              <Stack direction="row" alignItems="center" spacing={0.65}>
+                <Box
+                  sx={{
+                    width: 22,
+                    height: 22,
+                    display: "grid",
+                    placeItems: "center",
+                    borderRadius: "50%",
+                    bgcolor: complete ? "primary.main" : "surfaces.subtle",
+                    color: complete ? "primary.contrastText" : "text.secondary",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  {index + 1}
+                </Box>
+                <Typography
+                  variant="caption"
+                  fontWeight={600}
+                  sx={{
+                    color: complete ? "primary.main" : "text.secondary",
+                    display: { xs: "none", lg: "block" },
+                  }}
+                >
+                  {label}
+                </Typography>
+              </Stack>
+              {index < steps.length - 1 && (
+                <Box
+                  sx={{
+                    width: { xs: 14, lg: 22 },
+                    height: 1,
+                    bgcolor: currentStep > index + 1 ? "primary.light" : "divider",
+                  }}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </Stack>
+    );
+  };
+
   const applyChatProblem = useCallback(
     (spec: ProblemSpec, name?: string) => {
       const incomingSpec = spec as unknown as Record<string, unknown>;
+      const process = copyProcess(incomingSpec.process);
       setLeiaConfig((prev) => ({
         ...prev,
         problem: {
@@ -1887,50 +1866,71 @@ const openGenerateProblemModal = () => {
             name: name || prev.problem?.metadata?.name || "ai-generated-problem",
             version: "1.0.0",
           },
-          // Preserve extends/overrides/constrainedTo and widgets the model set;
-          // default the composition objects to {} only when absent.
           spec: {
             ...incomingSpec,
+            process,
             extends: incomingSpec.extends ?? {},
             overrides: incomingSpec.overrides ?? {},
             constrainedTo: incomingSpec.constrainedTo ?? {},
           },
-          id: `generated-${Date.now()}`,
+          id: "generated-" + Date.now(),
           edited: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           isPublished: false,
           user: currentUser!,
         } as unknown as Problem,
-        // A matching process or programming language does not make an old
-        // exercise-specific behaviour valid for this new problem.
+        // A previous behaviour may be tied to a different exercise even if
+        // its broad process tag matches. The assistant must now apply a new
+        // behaviour specifically written for this problem.
         behaviour: null,
       }));
     },
     [currentUser],
   );
 
-  // The chat can author the whole LEIA: behaviour + persona too (each written
-  // into its editor with a name, marked edited so it's created on save).
+  const handleProblemWidgetsChange = useCallback((widgets: ProblemWidget[]) => {
+    setLeiaConfig((previous) => {
+      if (!previous.problem) return previous;
+
+      return {
+        ...previous,
+        problem: {
+          ...previous.problem,
+          spec: {
+            ...previous.problem.spec,
+            widgets: widgets.length > 0 ? widgets : undefined,
+          },
+          edited: true,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
+  }, []);
+
   const applyChatBehaviour = useCallback(
     (spec: Record<string, unknown>, name?: string) => {
-      setLeiaConfig((prev) => ({
-        ...prev,
-        behaviour: {
-          apiVersion: "v1",
-          metadata: {
-            name: name || prev.behaviour?.metadata?.name || "ai-generated-behaviour",
-            version: "1.0.0",
-          },
-          spec: { ...spec },
-          id: `generated-${Date.now()}`,
-          edited: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isPublished: false,
-          user: currentUser!,
-        } as unknown as Behaviour,
-      }));
+      setLeiaConfig((prev) => {
+        const process = copyProcess(prev.problem?.spec?.process ?? spec.process);
+
+        return {
+          ...prev,
+          behaviour: {
+            apiVersion: "v1",
+            metadata: {
+              name: name || prev.behaviour?.metadata?.name || "ai-generated-behaviour",
+              version: "1.0.0",
+            },
+            spec: { ...spec, process },
+            id: "generated-" + Date.now(),
+            edited: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            isPublished: false,
+            user: currentUser!,
+          } as unknown as Behaviour,
+        };
+      });
     },
     [currentUser],
   );
@@ -1946,7 +1946,7 @@ const openGenerateProblemModal = () => {
             version: "1.0.0",
           },
           spec: { ...spec },
-          id: `generated-${Date.now()}`,
+          id: "generated-" + Date.now(),
           edited: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -1958,820 +1958,373 @@ const openGenerateProblemModal = () => {
     [currentUser],
   );
 
-  // The chat may reuse an existing persona by id. Behaviours are always
-  // generated for the exact new problem.
   const handleUseExistingPersona = useCallback(
     (id: string): { ok: boolean; name?: string } => {
-      const item = personas.find((p) => p.id === id);
-      if (!item) return { ok: false };
-      setLeiaConfig((prev) => ({ ...prev, persona: item }));
-      return { ok: true, name: item.metadata?.name };
+      const persona = personas.find((item) => item.id === id);
+      if (!persona) return { ok: false };
+      setLeiaConfig((previous) => ({ ...previous, persona }));
+      return { ok: true, name: persona.metadata?.name };
     },
     [personas],
   );
 
-  const renderStep1 = () => (
-    <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Step 1: Select Components
-        </h2>
-        <p className="text-gray-600">
-          Choose a persona, problem, and behaviour for your LEIA
-        </p>
-      </div>
-
-      {/* Show loading state for individual columns if data is still loading */}
-      {loading && (
-        <div className="grid grid-cols-3">
-          {[1, 2, 3].map((index) => (
-            <div
-              key={index}
-              className="bg-white rounded-lg border border-gray-200 p-6"
-            >
-              <div className="animate-pulse">
-                <div className="h-6 bg-gray-200 rounded mb-4"></div>
-                <div className="space-y-3">
-                  <div className="h-4 bg-gray-200 rounded"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Show actual content when not loading */}
-      {!loading && (
-        <div id="create-selection-grid" className="grid grid-cols-3">
-          {/* Columna 1: Behaviour */}
-          <div className="h-full">
-            <SelectionColumn
-              title="Behaviour"
-              items={behaviours}
-              selectedItem={leiaConfig.behaviour}
-              onSelect={(item) => handleSelect("behaviour", item)}
-              placeholder="Search behaviours..."
-              onDelete={handleDeleteResource}
-              rightHeaderElement={
-                <div className="flex gap-3 items-start">
-                  <button
-                    onClick={openGenerateBehaviourModal}
-                    disabled={!leiaConfig.behaviour}
-                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    title="Generate similar behaviour with AI"
-                  >
-                    <SparklesIcon className="w-5 h-5" />
-                  </button>
-                  <VisibilitySelector
-                    value={behaviourVisibility}
-                    onChange={handleBehaviourVisibilityChange}
-                  />
-                  <ProcessSelector
-                    value={behaviourProcess}
-                    onChange={handleBehaviourProcessChange}
-                  />
-                </div>
-              }
-            />
-          </div>
-
-          {/* Columna 2: Problem */}
-          <div className="h-full">
-            <SelectionColumn
-              title="Problem"
-              items={problems}
-              selectedItem={leiaConfig.problem}
-              onSelect={(item) => handleSelect("problem", item)}
-              placeholder="Search problems..."
-              onDelete={handleDeleteResource}
-              rightHeaderElement={
-                <div className="flex gap-3 items-start">
-                  <button
-                    onClick={openGenerateProblemModal}
-                    disabled={!leiaConfig.problem}
-                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    title="Generate similar problem with AI"
-                  >
-                    <SparklesIcon className="w-5 h-5" />
-                  </button>
-                  <VisibilitySelector
-                    value={problemVisibility}
-                    onChange={handleProblemVisibilityChange}
-                  />
-                  <ProcessSelector
-                    value={problemProcess}
-                    onChange={handleProblemProcessChange}
-                  />
-                </div>
-              }
-            />
-          </div>
-
-          {/* Columna 3: Persona */}
-          <div className="h-full">
-            <SelectionColumn
-              title="Persona"
-              items={personas}
-              selectedItem={leiaConfig.persona}
-              onSelect={(item) => handleSelect("persona", item)}
-              placeholder="Search personas..."
-              onDelete={handleDeleteResource}
-              rightHeaderElement={
-                <VisibilitySelector
-                  value={personaVisibility}
-                  onChange={handlePersonaVisibilityChange}
-                />
-              }
-            />
-          </div>
-        </div>
-      )}
-    </div>
+  const handleAssistantLeiaName = useCallback(
+    (name: string) => {
+      const suggestion = name.trim();
+      if (!suggestion || leiaNameManuallyEdited) return;
+      setCustomizations((previous) => ({
+        ...previous,
+        leia: { ...previous.leia, name: suggestion },
+      }));
+    },
+    [leiaNameManuallyEdited],
   );
 
-  const isCurrentUserInstructor = currentUser?.role === "instructor";
+  const handleLeiaNameChange = useCallback((name: string) => {
+    setLeiaNameManuallyEdited(true);
+    setCustomizations((previous) => ({
+      ...previous,
+      leia: { ...previous.leia, name },
+    }));
+  }, []);
 
-  const renderStep2 = () => {
-    const isTryLoading = isApiKeysLoading || isProvidersLoading;
-    // Widgets / tool-functions only work through a tool-capable runner provider
-    // (the openai-responses module). When the problem declares widgets, the Try
-    // is restricted to those models/keys — today that means OpenAI.
-    const problemHasWidgets =
-      Array.isArray(leiaConfig.problem?.spec?.widgets) &&
-      (leiaConfig.problem?.spec?.widgets?.length ?? 0) > 0;
-    const toolCapableProviders = Object.entries(providerProviderModuleMap || {})
-      .filter(([, moduleName]) => moduleName === "openai-responses")
-      .map(([provider]) => provider);
-    const toolCapableModels = toolCapableProviders.flatMap(
-      (provider) => apiKeyProvidersMapped[provider] || []
-    );
-    // Show every available model in the Try menu. Selecting one will choose a
-    // compatible API key in handleTryModelChange; filtering by the currently
-    // selected (usually default) key would hide the rest of the catalog.
-    let validTryModels = getValidModels(null);
-    let validTryApiKeys = getValidApiKeys(tryConfig.modelName);
-    if (problemHasWidgets) {
-      validTryModels = validTryModels.filter((m) => toolCapableModels.includes(m));
-      validTryApiKeys = validTryApiKeys.filter((k) =>
-        toolCapableProviders.includes(k.provider)
-      );
-    }
-    const canStartTry =
-      Boolean(tryConfig.modelName && tryConfig.apiKeyId) &&
-      !isTryLoading &&
-      (!problemHasWidgets || toolCapableModels.includes(tryConfig.modelName));
-    const showNoApiKeys =
-      !isTryLoading &&
-      !providersError &&
-      !apiKeysError &&
-      apiKeys.every((key) => key.isActive === false);
-    const showNoMatchingKeys =
-      !isTryLoading &&
-      Boolean(tryConfig.modelName) &&
-      validTryApiKeys.length === 0 &&
-      apiKeys.some((key) => key.isActive !== false);
+  useEffect(() => {
+    if (leiaNameManuallyEdited || customizations.leia.name.trim()) return;
 
-    return (
-      <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Step 2: Edit</h2>
-        <p className="text-gray-600">
-          Modify any of the resources, see changes in real-time and test your
-          creation
-        </p>
-      </div>
+    const sourceName =
+      leiaConfig.problem?.metadata?.name ||
+      leiaConfig.persona?.metadata?.name ||
+      "";
+    if (!sourceName || sourceName.startsWith("ai-generated-")) return;
 
-      {/* AI Assistant: chat + PDF attachments → writes the problem into the editor */}
-      <div className="h-[440px]">
-        <ProblemChatPanel
-          currentProblem={leiaConfig.problem}
-          currentBehaviour={leiaConfig.behaviour}
-          currentPersona={leiaConfig.persona}
-          personas={personas}
-          onApplyProblem={applyChatProblem}
-          onApplyBehaviour={applyChatBehaviour}
-          onApplyPersona={applyChatPersona}
-          onUsePersona={handleUseExistingPersona}
-        />
-      </div>
+    const readableName = sourceName
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    setCustomizations((previous) => ({
+      ...previous,
+      leia: { ...previous.leia, name: readableName },
+    }));
+  }, [customizations.leia.name, leiaConfig.persona?.metadata?.name, leiaConfig.problem?.metadata?.name, leiaNameManuallyEdited]);
 
-      <div id="create-preview-panel" className="grid grid-cols-3 gap-6 h-full">
-        {/* Columna 1: Behaviour */}
-        <div className="space-y-4 flex flex-col">
-          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="font-semibold text-gray-900">
-                  Behaviour
-                  {leiaConfig.behaviour?.edited ? (
-                    <span className="text-xs text-gray-500 font-normal ml-2">
-                      (edited)
-                    </span>
-                  ) : (
-                    leiaConfig.behaviour?.user && (
-                      <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
-                        <span>by {leiaConfig.behaviour.user.email}</span>
-                        <span className="flex items-center gap-1">
-                          <span
-                            className={`inline-block w-2 h-2 rounded-full ${
-                              leiaConfig.behaviour.user.role === "admin"
-                                ? "bg-purple-500"
-                                : "bg-green-500"
-                            }`}
-                          ></span>
-                          {leiaConfig.behaviour.user.role === "admin"
-                            ? "Administrator"
-                            : "Instructor"}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </h3>
-              </div>
-              {leiaConfig.behaviour && (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-medium text-gray-900">
-                    {leiaConfig.behaviour.metadata.name}
-                  </span>
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                    v{leiaConfig.behaviour.metadata.version}
-                  </span>
-                </div>
-              )}
-            </div>
-            {leiaConfig.behaviour ? (
-              <div className="space-y-3 flex-1 flex flex-col">
-                {!isCurrentUserInstructor ? (
-                  <>
-                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1">
-                      <p className="text-xs text-gray-600 mt-1 line-clamp-3">
-                        {leiaConfig.behaviour.spec.description}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      {leiaConfig.behaviour?.edited && (
-                        <button
-                          onClick={() =>
-                            setLeiaConfig((prev) => ({
-                              ...prev,
-                              behaviour:
-                                structuredClone(
-                                  leiaConfigSnapShot?.behaviour,
-                                ) || null,
-                            }))
-                          }
-                          className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
-                        >
-                          Reset
-                        </button>
-                      )}
-                      <button
-                        onClick={openGenerateBehaviourModal}
-                        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
-                        title="Generate similar with AI"
-                      >
-                        <SparklesIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() =>
-                          setEditingResource({
-                            resource: "behaviour",
-                            content: JSON.stringify(
-                              leiaConfig.behaviour?.spec,
-                              null,
-                              2,
-                            ),
-                            apiVersion:
-                              leiaConfig.behaviour?.apiVersion || "v1",
-                          })
-                        }
-                        className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                          leiaConfig.behaviour?.edited ? "flex-1" : "w-full"
-                        }`}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex-1 flex items-center justify-center">
-                    <CpuChipIcon className="w-10 h-10 text-gray-400 mx-auto" />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">Not selected</p>
-            )}
-          </div>
-        </div>
+  const MuiVisibilitySelector: React.FC<{
+    value: "all" | "private" | "public";
+    onChange: (value: "all" | "private" | "public") => void;
+  }> = ({ value, onChange }) => (
+    <TextField
+      select
+      label="Visibility"
+      size="small"
+      value={value}
+      onChange={(event) => onChange(event.target.value as "all" | "private" | "public")}
+      sx={{ minWidth: 104 }}
+    >
+      <MenuItem value="all">All</MenuItem>
+      <MenuItem value="private">Private</MenuItem>
+      <MenuItem value="public">Public</MenuItem>
+    </TextField>
+  );
 
-        {/* Columna 2: Problem */}
-        <div className="space-y-4 flex flex-col">
-          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="font-semibold text-gray-900">
-                  Problem
-                  {leiaConfig.problem?.edited ? (
-                    <span className="text-xs text-gray-500 font-normal ml-2">
-                      (edited)
-                    </span>
-                  ) : (
-                    leiaConfig.problem?.user && (
-                      <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
-                        <span>by {leiaConfig.problem.user.email}</span>
-                        <span className="flex items-center gap-1">
-                          <span
-                            className={`inline-block w-2 h-2 rounded-full ${
-                              leiaConfig.problem.user.role === "admin"
-                                ? "bg-purple-500"
-                                : "bg-green-500"
-                            }`}
-                          ></span>
-                          {leiaConfig.problem.user.role === "admin"
-                            ? "Administrator"
-                            : "Instructor"}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </h3>
-              </div>
-              {leiaConfig.problem && (
-                <div className="flex items-center gap-2 mb-2">
-                  <Avatar
-                    src={leiaConfig.problem.spec.avatar}
-                    fallbackSrc={buildOriginalAvatarPath(
-                      "problems",
-                      leiaConfig.problem.id,
-                    )}
-                    alt={`${leiaConfig.problem.metadata.name} avatar`}
-                    label={leiaConfig.problem.metadata.name}
-                    size="sm"
-                  />
-                  <div className="min-w-0 flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {leiaConfig.problem.metadata.name}
-                    </span>
-                    <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                      v{leiaConfig.problem.metadata.version}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-            {leiaConfig.problem ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                  <p className="text-xs text-gray-600 mt-1 line-clamp-3">
-                    {leiaConfig.problem.spec.description}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  {leiaConfig.problem?.edited && (
-                    <button
-                      onClick={() =>
-                        setLeiaConfig((prev) => ({
-                          ...prev,
-                          problem:
-                            structuredClone(leiaConfigSnapShot?.problem) ||
-                            null,
-                        }))
-                      }
-                      className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+  const MuiProcessSelector: React.FC<{
+    value: "all" | "requirements-elicitation" | "game" | "other";
+    onChange: (value: "all" | "requirements-elicitation" | "game" | "other") => void;
+  }> = ({ value, onChange }) => (
+    <TextField
+      select
+      label="Process"
+      size="small"
+      value={value}
+      onChange={(event) =>
+        onChange(
+          event.target.value as "all" | "requirements-elicitation" | "game" | "other",
+        )
+      }
+      sx={{ minWidth: 132 }}
+    >
+      <MenuItem value="all">All</MenuItem>
+      <MenuItem value="requirements-elicitation">Req. elicitation</MenuItem>
+      <MenuItem value="game">Game</MenuItem>
+      <MenuItem value="other">Other</MenuItem>
+    </TextField>
+  );
+
+  const renderComponentSelector = () => (
+    <Stack spacing={3}>
+      <Box sx={{ textAlign: "center" }}>
+        <Typography variant="h5" gutterBottom>Select components</Typography>
+        <Typography color="text.secondary">
+          Choose a persona, problem, and behaviour for this LEIA.
+        </Typography>
+      </Box>
+      <Box
+        id="create-selection-grid"
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" },
+          minHeight: { lg: 550 },
+        }}
+      >
+        <Box sx={{ minHeight: 440 }}>
+          <SelectionColumn
+            title="Behaviour"
+            items={behaviours}
+            selectedItem={leiaConfig.behaviour}
+            onSelect={(item) => handleSelect("behaviour", item)}
+            placeholder="Search behaviours..."
+            onDelete={handleDeleteResource}
+            rightHeaderElement={
+              <Stack direction="row" spacing={0.75} alignItems="flex-start">
+                <Tooltip title="Generate similar behaviour with AI">
+                  <span>
+                    <IconButton
+                      color="secondary"
+                      size="small"
+                      onClick={openGenerateBehaviourModal}
+                      disabled={!leiaConfig.behaviour}
                     >
-                      Reset
-                    </button>
-                  )}
-                  <button
-                    onClick={openGenerateProblemModal}
-                    className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
-                    title="Generate similar with AI"
-                  >
-                    <SparklesIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() =>
-                      setEditingResource({
-                        resource: "problem",
-                        content: null,
-                        apiVersion: leiaConfig.problem?.apiVersion || "v1",
-                      })
-                    }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                      leiaConfig.problem?.edited ? "flex-1" : "flex-1"
-                    }`}
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">Not selected</p>
-            )}
-          </div>
-        </div>
-
-        {/* Columna 3: Persona */}
-        <div className="space-y-4 flex flex-col">
-          <div className="bg-white rounded-lg border border-gray-200 p-4 flex-1 flex flex-col">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="font-semibold text-gray-900">
-                  Persona
-                  {leiaConfig.persona?.edited ? (
-                    <span className="text-xs text-gray-500 font-normal ml-2">
-                      (edited)
-                    </span>
-                  ) : (
-                    leiaConfig.persona?.user && (
-                      <div className="flex items-center gap-2 text-xs text-gray-500 font-normal ml-2 inline-flex">
-                        <span>by {leiaConfig.persona.user.email}</span>
-                        <span className="flex items-center gap-1">
-                          <span
-                            className={`inline-block w-2 h-2 rounded-full ${
-                              leiaConfig.persona.user.role === "admin"
-                                ? "bg-purple-500"
-                                : "bg-green-500"
-                            }`}
-                          ></span>
-                          {leiaConfig.persona.user.role === "admin"
-                            ? "Administrator"
-                            : "Instructor"}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </h3>
-              </div>
-              {leiaConfig.persona && (
-                <div className="flex items-center gap-2 mb-2">
-                  <Avatar
-                    src={leiaConfig.persona.spec.avatar}
-                    fallbackSrc={buildOriginalAvatarPath(
-                      "personas",
-                      leiaConfig.persona.id,
-                    )}
-                    alt={`${leiaConfig.persona.metadata.name} avatar`}
-                    label={leiaConfig.persona.metadata.name}
-                    size="sm"
-                  />
-                  <div className="min-w-0 flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {leiaConfig.persona.metadata.name}
-                    </span>
-                    <span className="px-1.5 py-0.5 bg-gray-100 text-xs font-medium text-gray-600 rounded-full">
-                      v{leiaConfig.persona.metadata.version}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-            {leiaConfig.persona ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                  <p className="text-xs text-gray-600 mt-1 line-clamp-3">
-                    {leiaConfig.persona.spec.description}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  {leiaConfig.persona?.edited && (
-                    <button
-                      onClick={() =>
-                        setLeiaConfig((prev) => ({
-                          ...prev,
-                          persona:
-                            structuredClone(leiaConfigSnapShot?.persona) ||
-                            null,
-                        }))
-                      }
-                      className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
-                    >
-                      Reset
-                    </button>
-                  )}
-                  <button
-                    onClick={() =>
-                      setEditingResource({
-                        resource: "persona",
-                        content: null,
-                        apiVersion: leiaConfig.persona?.apiVersion || "v1",
-                      })
-                    }
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm ${
-                      leiaConfig.persona?.edited ? "flex-1" : "w-full"
-                    }`}
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">Not selected</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Resource Editor */}
-      {editingResource.resource && (
-        <div className="overflow-hidden transition-all duration-500 ease-in-out animate-in slide-in-from-top-5">
-          <ResourceEditor
-            resourceType={editingResource.resource}
-            initialData={leiaConfig[editingResource.resource] || undefined}
-            apiVersion={editingResource.apiVersion}
-            onSave={(data, apiVersion) => {
-              setLeiaConfig((prev) => ({
-                ...prev,
-                [editingResource.resource!]: {
-                  ...prev[editingResource.resource!],
-                  spec: data,
-                  apiVersion: apiVersion,
-                  edited: true,
-                },
-              }));
-              setEditingResource({
-                resource: null,
-                content: null,
-                apiVersion: "v1",
-              });
-            }}
-            onCancel={() =>
-              setEditingResource({
-                resource: null,
-                content: null,
-                apiVersion: "v1",
-              })
+                      <AutoAwesomeIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <MuiVisibilitySelector value={behaviourVisibility} onChange={handleBehaviourVisibilityChange} />
+                <MuiProcessSelector value={behaviourProcess} onChange={handleBehaviourProcessChange} />
+              </Stack>
             }
           />
-        </div>
-      )}
-
-      {/* Vista previa en tiempo real */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Real-time Preview</h3>
-          {(() => {
-            if (!generatedLeia) {
-              return (
-                <button
-                  disabled
-                  className="px-2.5 py-2 rounded-lg bg-gray-300 text-gray-500 cursor-not-allowed transition-all duration-300 flex items-center gap-2"
-                >
-                  <LightBulbIcon className="w-5 h-5" />
-                </button>
-              );
+        </Box>
+        <Box sx={{ minHeight: 440 }}>
+          <SelectionColumn
+            title="Problem"
+            items={problems}
+            selectedItem={leiaConfig.problem}
+            onSelect={(item) => handleSelect("problem", item)}
+            placeholder="Search problems..."
+            onDelete={handleDeleteResource}
+            rightHeaderElement={
+              <Stack direction="row" spacing={0.75} alignItems="flex-start">
+                <Tooltip title="Generate similar problem with AI">
+                  <span>
+                    <IconButton
+                      color="secondary"
+                      size="small"
+                      onClick={openGenerateProblemModal}
+                      disabled={!leiaConfig.problem}
+                    >
+                      <AutoAwesomeIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <MuiVisibilitySelector value={problemVisibility} onChange={handleProblemVisibilityChange} />
+                <MuiProcessSelector value={problemProcess} onChange={handleProblemProcessChange} />
+              </Stack>
             }
-
-            if (testingLeia) {
-              return (
-                <button
-                  disabled
-                  className="px-4 py-2 rounded-lg bg-blue-500 text-white cursor-wait transition-all duration-300 flex items-center gap-2"
-                >
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Starting...</span>
-                </button>
-              );
+          />
+        </Box>
+        <Box sx={{ minHeight: 440 }}>
+          <SelectionColumn
+            title="Persona"
+            items={personas}
+            selectedItem={leiaConfig.persona}
+            onSelect={(item) => handleSelect("persona", item)}
+            placeholder="Search personas..."
+            onDelete={handleDeleteResource}
+            rightHeaderElement={
+              <MuiVisibilitySelector value={personaVisibility} onChange={handlePersonaVisibilityChange} />
             }
+          />
+        </Box>
+      </Box>
+    </Stack>
+  );
 
-            return (
-              <div className="relative flex">
-                <button
-                  onClick={showNoApiKeys ? handleTryMenuToggle : handleStartTry}
-                  disabled={!showNoApiKeys && !canStartTry}
-                  className={`bg-green-600 px-3 py-2 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300 flex items-center gap-2 ${
-                    showNoApiKeys ? "rounded-lg" : "rounded-l-lg"
-                  }`}
-                  id= "try-button"
-                >
-                  <LightBulbIcon className="w-5 h-5 flex-shrink-0" />
-                  <span>Try</span>
-                </button>
-                {!showNoApiKeys && (
-                  <button
-                    onClick={handleTryMenuToggle}
-                    className="rounded-r-lg border-l border-green-700 bg-green-600 px-2 text-white transition-colors hover:bg-green-700"
-                    aria-label="Choose Try settings"
-                    aria-expanded={isTryMenuOpen}
-                    aria-haspopup="dialog"
-                  >
-                    <ChevronDownIcon className="h-4 w-4" />
-                  </button>
-                )}
-                <LeiaTryDropdown
-                  isOpen={isTryMenuOpen}
-                  onClose={() => setIsTryMenuOpen(false)}
-                  isLoading={isTryLoading}
-                  providersError={providersError}
-                  apiKeysError={apiKeysError}
-                  modelValue={tryConfig.modelName}
-                  models={validTryModels}
-                  apiKeys={validTryApiKeys}
-                  apiKeyValue={tryConfig.apiKeyId}
-                  apiKeyProvidersMapped={apiKeyProvidersMapped}
-                  toolsRestricted={problemHasWidgets}
-                  onModelChange={handleTryModelChange}
-                  onApiKeyChange={handleTryApiKeyChange}
-                  canStart={canStartTry}
-                  onStart={handleStartTry}
-                  isStarting={testingLeia}
-                  showNoApiKeys={showNoApiKeys}
-                  showNoMatchingKeys={showNoMatchingKeys}
-                />
-              </div>
-            );
-          })()}
-        </div>
-        {generatedLeia && !generationError ? (
-          <div
-            className={`grid ${
-              isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-            } gap-4`}
+  const renderNewStep = () => {
+    const canTest = Boolean(resolveTestRunnerConfiguration()) && !chatOptionsLoading;
+
+    const editResource = (resource: "persona" | "problem" | "behaviour") => {
+      const current = leiaConfig[resource];
+      if (!current) return;
+      setEditingResource({
+        resource,
+        content: resource === "behaviour" ? JSON.stringify(current.spec, null, 2) : null,
+        apiVersion: current.apiVersion || "v1",
+      });
+    };
+    const testAction = !generatedLeia ? (
+      <Button fullWidth variant="contained" disabled startIcon={<PlayArrowIcon />}>
+        Test LEIA
+      </Button>
+    ) : testingLeia ? (
+      <Button fullWidth variant="contained" disabled startIcon={<CircularProgress size={16} color="inherit" />}>
+        Starting test...
+      </Button>
+    ) : (
+      <Button
+        id="try-button"
+        fullWidth
+        color="success"
+        variant="contained"
+        startIcon={<PlayArrowIcon />}
+        onClick={() => void handleTestLeia()}
+        disabled={!canTest}
+        title={canTest ? undefined : "Configure a valid model and API key in the Design menu first."}
+      >
+        Test LEIA
+      </Button>
+    );
+
+    return (
+      <Box sx={{ minWidth: 0 }}>
+        {generationError && <Alert severity="error" sx={{ mb: 1.5 }}>{generationError.message}</Alert>}
+
+        <Box
+          id="create-workspace"
+          sx={{
+            display: "grid",
+            gridTemplateAreas: { xs: '"chat" "components" "preview"', lg: '"components chat preview"' },
+            gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "272px minmax(0, 1fr) 370px" },
+            gridTemplateRows: { lg: "minmax(0, 1fr)" },
+            gap: { xs: 2, lg: 1.5 },
+            alignItems: "stretch",
+            minHeight: { lg: 620 },
+            height: { lg: "calc(100dvh - 248px)" },
+          }}
+        >
+          <Paper
+            id="create-preview-panel"
+            variant="outlined"
+            sx={{
+              gridArea: "components",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              overflow: "hidden",
+              bgcolor: "background.paper",
+            }}
           >
-            {!isCurrentUserInstructor && (
-              <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-                <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
-                {leiaConfig.behaviour ? (
-                  <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                    <Editor
-                      height="150px"
-                      language="json"
-                      theme="vs-light"
-                      value={JSON.stringify(
-                        cleanObjectForPreview(generatedLeia?.spec.behaviour),
-                        null,
-                        2,
-                      )}
-                      options={{
-                        readOnly: true,
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                        fontSize: 11,
-                        lineNumbers: "off",
-                        glyphMargin: false,
-                        folding: false,
-                        lineDecorationsWidth: 0,
-                        lineNumbersMinChars: 0,
-                        automaticLayout: true,
-                        contextmenu: false,
-                        scrollbar: {
-                          vertical: "auto",
-                          horizontal: "auto",
-                          handleMouseWheel: true,
-                        },
-                        overviewRulerLanes: 0,
-                        hideCursorInOverviewRuler: true,
-                        overviewRulerBorder: false,
-                        wordWrap: "on",
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                    No behaviour selected
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
+            <Box sx={{ p: 1.5, borderBottom: 1, borderColor: "divider" }}>
+              <Typography variant="subtitle2">Activity setup</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Configure widgets and tool access. Click a component in the preview to edit it.
+              </Typography>
+            </Box>
+            <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflowY: "auto" }}>
               {leiaConfig.problem ? (
-                <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                  <Editor
-                    height="150px"
-                    language="json"
-                    theme="vs-light"
-                    value={JSON.stringify(
-                      cleanObjectForPreview(generatedLeia?.spec.problem),
-                      null,
-                      2,
-                    )}
-                    options={{
-                      readOnly: true,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      fontSize: 11,
-                      lineNumbers: "off",
-                      glyphMargin: false,
-                      folding: false,
-                      lineDecorationsWidth: 0,
-                      lineNumbersMinChars: 0,
-                      automaticLayout: true,
-                      contextmenu: false,
-                      scrollbar: {
-                        vertical: "auto",
-                        horizontal: "auto",
-                        handleMouseWheel: true,
-                      },
-                      overviewRulerLanes: 0,
-                      hideCursorInOverviewRuler: true,
-                      overviewRulerBorder: false,
-                      wordWrap: "on",
-                    }}
-                  />
-                </div>
+                <ProblemWidgetsEditor
+                  widgets={leiaConfig.problem.spec.widgets ?? []}
+                  onChange={handleProblemWidgetsChange}
+                />
               ) : (
-                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                  No problem selected
-                </div>
+                <Stack spacing={1} sx={{ pt: 1 }}>
+                  <Typography variant="body2" fontWeight={600}>
+                    Widgets appear with the problem
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Ask the assistant to create a problem first, then configure the widgets and tool access here.
+                  </Typography>
+                </Stack>
               )}
-            </div>
-            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
-              {leiaConfig.persona ? (
-                <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                  <Editor
-                    height="150px"
-                    language="json"
-                    theme="vs-light"
-                    value={JSON.stringify(
-                      cleanObjectForPreview(generatedLeia?.spec.persona),
-                      null,
-                      2,
-                    )}
-                    options={{
-                      readOnly: true,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      fontSize: 11,
-                      lineNumbers: "off",
-                      glyphMargin: false,
-                      folding: false,
-                      lineDecorationsWidth: 0,
-                      lineNumbersMinChars: 0,
-                      automaticLayout: true,
-                      contextmenu: false,
-                      scrollbar: {
-                        vertical: "auto",
-                        horizontal: "auto",
-                        handleMouseWheel: true,
+            </Box>
+          </Paper>
+
+          <Box
+            id="create-chat-panel"
+            sx={{
+              gridArea: "chat",
+              minWidth: 0,
+              minHeight: { xs: 560, lg: 0 },
+              height: { lg: "100%" },
+            }}
+          >
+            <ProblemChatPanel
+              currentProblem={leiaConfig.problem}
+              currentBehaviour={leiaConfig.behaviour}
+              currentPersona={leiaConfig.persona}
+              personas={personas}
+              onApplyProblem={applyChatProblem}
+              onApplyBehaviour={applyChatBehaviour}
+              onApplyPersona={applyChatPersona}
+              onUsePersona={handleUseExistingPersona}
+              onSetLeiaName={handleAssistantLeiaName}
+              modelName={chatModelName}
+              apiKeyId={chatApiKeyId}
+              key={chatResetKey}
+              initialChatState={chatState}
+              onChatStateChange={setChatState}
+            />
+          </Box>
+
+          <Box
+            id="create-live-preview"
+            sx={{
+              gridArea: "preview",
+              minWidth: 0,
+              minHeight: { xs: 560, lg: 0 },
+              height: { lg: "100%" },
+            }}
+          >
+            <LeiaLivePreview
+              leia={generatedLeia}
+              title={customizations.leia.name}
+              onTitleChange={handleLeiaNameChange}
+              titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}
+              testAction={testAction}
+              onComponentClick={editResource}
+            />
+          </Box>
+        </Box>
+
+        {editingResource.resource && (
+          <Dialog
+            open
+            onClose={() => setEditingResource({ resource: null, content: null, apiVersion: "v1" })}
+            fullWidth
+            maxWidth="lg"
+          >
+            <DialogContent dividers sx={{ p: { xs: 1, md: 2 }, bgcolor: "background.default" }}>
+              <ResourceEditor
+                resourceType={editingResource.resource}
+                initialData={leiaConfig[editingResource.resource] || undefined}
+                apiVersion={editingResource.apiVersion}
+                onSave={(data, apiVersion, resourceName) => {
+                  const resource = editingResource.resource;
+                  if (!resource) return;
+
+                  setLeiaConfig((previous) => {
+                    const current = previous[resource];
+                    if (!current) return previous;
+
+                    return {
+                      ...previous,
+                      [resource]: {
+                        ...current,
+                        metadata: {
+                          ...current.metadata,
+                          name: resourceName,
+                        },
+                        spec: data,
+                        apiVersion,
+                        edited: true,
                       },
-                      overviewRulerLanes: 0,
-                      hideCursorInOverviewRuler: true,
-                      overviewRulerBorder: false,
-                      wordWrap: "on",
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                  No persona selected
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="p-6 rounded-lg bg-red-50 border border-red-200">
-            <div className="flex items-center mb-3">
-              <h4 className="text-lg font-medium text-red-800">
-                LEIA Generation Error
-              </h4>
-            </div>
-            <div className="text-red-700">
-              <p className="mb-3">
-                {generationError ? (
-                  <>
-                    <strong>Error:</strong> {generationError.message}
-                  </>
-                ) : (
-                  "Unable to generate LEIA preview. Please ensure all components are properly selected and configured."
-                )}
-              </p>
-              <p className="text-sm">
-                Please review the affected components content.
-              </p>
-              <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-                {!leiaConfig.behaviour && (
-                  <li className="flex items-center">
-                    <span className="text-red-500 mr-2">✗</span>
-                    Behaviour component is missing
-                  </li>
-                )}
-                {!leiaConfig.problem && (
-                  <li className="flex items-center">
-                    <span className="text-red-500 mr-2">✗</span>
-                    Problem component is missing
-                  </li>
-                )}
-                {!leiaConfig.persona && (
-                  <li className="flex items-center">
-                    <span className="text-red-500 mr-2">✗</span>
-                    Persona component is missing
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
+                    };
+                  });
+                  setCustomizations((previous) => ({
+                    ...previous,
+                    [resource]: {
+                      ...(previous[resource] || { name: "", version: "1.0.0" }),
+                      name: resourceName,
+                    },
+                  }));
+                  setEditingResource({ resource: null, content: null, apiVersion: "v1" });
+                }}
+                onCancel={() => setEditingResource({ resource: null, content: null, apiVersion: "v1" })}
+              />
+            </DialogContent>
+          </Dialog>
         )}
-      </div>
-    </div>
+      </Box>
     );
   };
 
-  const renderStep3 = () => {
+  const renderReviewStep = () => {
     const labelOptions: LabelOption[] = [
       ...labels.map((label) => ({
         value: getLabelIdentifier(label) || label.name,
@@ -2788,1215 +2341,645 @@ const openGenerateProblemModal = () => {
         isGlobal: draft.isGlobal,
       })),
     ];
-
-    const selectedLabelOptions: LabelOption[] = labelOptions.filter((option) =>
-      selectedLabelIds.includes(option.value),
-    );
-    const personaIllustrationAvailable = Boolean(leiaConfig.persona?.edited);
-    const problemIllustrationAvailable = Boolean(leiaConfig.problem?.edited);
-    const illustrationsDisabled = !illustrationsConfig.apiKeyId;
-    const updateIllustrationsConfig = (
-      patch: Partial<IllustrationsConfig>,
+    const selectedOptions = labelOptions.filter((option) => selectedLabelIds.includes(option.value));
+    const updateName = (
+      resource: "leia" | "persona" | "problem" | "behaviour",
+      value: string,
     ) => {
-      setIllustrationsConfig((current) => ({ ...current, ...patch }));
+      if (resource === "leia") setLeiaNameManuallyEdited(true);
+      setCustomizations((previous) => ({
+        ...previous,
+        [resource]: { ...(previous[resource] || { name: "", version: "1.0.0" }), name: value },
+      }));
+      if (validationErrors?.[resource]) {
+        setValidationErrors((previous) => (previous ? { ...previous, [resource]: undefined } : previous));
+      }
     };
 
-    return (
-      <div className="space-y-6">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Step 3: Create your LEIA
-          </h2>
-          <p className="text-gray-600">
-            Update the fields of the required resources and complete the process
-          </p>
-        </div>
-      <div id="create-final-form" className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">LEIA</h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              A new LEIA will be created with the following name:
-            </label>
-            <input
-              type="text"
-              value={customizations.leia.name}
-              onChange={(e) => {
-                setCustomizations((prev) => ({
-                  ...prev,
-                  leia: { ...prev.leia, name: e.target.value },
-                }));
-                // Limpiar error cuando el usuario escriba
-                if (validationErrors?.leia) {
-                  setValidationErrors((prev) => ({
-                    ...prev,
-                    leia: undefined,
-                  }));
-                }
-              }}
-              placeholder="Enter LEIA name"
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                validationErrors?.leia
-                  ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                  : "border-gray-300"
-              }`}
+    const resourceName = (
+      resource: "persona" | "problem" | "behaviour",
+      title: string,
+      published: boolean,
+      setPublished: React.Dispatch<React.SetStateAction<boolean>>,
+    ) => {
+      const selectedResource = leiaConfig[resource];
+      if (!selectedResource) return null;
+      const name = customizations[resource]?.name?.trim() || selectedResource.metadata.name;
+
+      return (
+        <Paper variant="outlined" sx={{ p: 2.5 }}>
+          <Stack spacing={2}>
+            <Typography variant="subtitle2">{title}</Typography>
+            <TextField
+              label={title + " name"}
+              value={name}
+              onChange={(event) => updateName(resource, event.target.value)}
+              placeholder={"Enter " + title.toLowerCase() + " name"}
+              error={Boolean(validationErrors?.[resource])}
+              helperText={validationErrors?.[resource]}
+              fullWidth
             />
-            {validationErrors?.leia && (
-              <p className="mt-1 text-sm text-red-600">
-                {validationErrors.leia}
-              </p>
+            {currentUser?.role === "admin" && (
+              <TextField
+                select
+                label="Visibility"
+                value={published ? "public" : "private"}
+                onChange={(event) => setPublished(event.target.value === "public")}
+                disabled={leiaPublish}
+                fullWidth
+                helperText={
+                  leiaPublish
+                    ? "Locked to public because the LEIA is public."
+                    : published ? "Visible to all users." : "Private to you."
+                }
+              >
+                <MenuItem value="public">Public</MenuItem>
+                <MenuItem value="private">Private</MenuItem>
+              </TextField>
             )}
+          </Stack>
+        </Paper>
+      );
+    };
 
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Labels
-              </label>
-              <CreatableSelect<LabelOption, true>
-                isMulti
-                closeMenuOnSelect={false}
-                isSearchable
-                isDisabled={loading || !!labelsError}
-                isLoading={loading}
-                inputValue={labelSearchInput}
-                placeholder="Select one or more labels..."
-                value={selectedLabelOptions}
-                options={labelOptions}
-                onChange={(options: MultiValue<LabelOption>) => {
-                  const nextSelectedLabelIds = options.map(
-                    (option) => option.value,
-                  );
-
-                  setSelectedLabelIds(nextSelectedLabelIds);
-                  setPendingLabelDrafts((prev) =>
-                    prev.filter((draft) =>
-                      nextSelectedLabelIds.includes(draft.id),
-                    ),
-                  );
-                  setLabelSearchInput("");
+    const preview = (
+      title: string,
+      resource: Persona | Problem | Behaviour | undefined,
+      type: "persona" | "problem" | "behaviour",
+    ) => (
+      <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "surfaces.subtle" }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+          <Typography variant="subtitle2">{title}</Typography>
+          <Typography variant="caption" color="text.secondary">JSON</Typography>
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1 }} noWrap>
+          {customizations[type]?.name || resource?.metadata.name || "Not selected"}
+        </Typography>
+        {resource ? (
+          <Accordion
+            disableGutters
+            elevation={0}
+            sx={{ border: 1, borderColor: "divider", borderRadius: "6px !important", overflow: "hidden", bgcolor: "background.paper" }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon fontSize="small" />}
+              sx={{ minHeight: 38, "& .MuiAccordionSummary-content": { my: 0.75 } }}
+            >
+              <Typography variant="caption" fontWeight={700}>Code preview</Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ p: 0, borderTop: 1, borderColor: "divider" }}>
+              <Editor
+                height="132px"
+                language="json"
+                theme="vs-light"
+                value={JSON.stringify(cleanObjectForPreview(resource, type), null, 2)}
+                options={{
+                  readOnly: true,
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  fontSize: 11,
+                  lineNumbers: "off",
+                  glyphMargin: false,
+                  folding: false,
+                  lineDecorationsWidth: 0,
+                  lineNumbersMinChars: 0,
+                  automaticLayout: true,
+                  contextmenu: false,
+                  wordWrap: "on",
                 }}
-                onInputChange={(inputValue: string, meta: InputActionMeta) => {
-                  if (meta.action === "input-change") {
-                    setLabelSearchInput(inputValue);
-                  }
-
-                  return inputValue;
-                }}
-                onCreateOption={(inputValue: string) => {
-                  const candidate = inputValue.trim();
-                  if (!candidate) return;
-                  setShowCreateLabelModal(true);
-                  setCreateLabelError(null);
-                  setNewLabelName(candidate);
-                }}
-                formatCreateLabel={(inputValue) =>
-                  `Create label "${inputValue}"`
-                }
-                noOptionsMessage={({ inputValue }) =>
-                  inputValue?.trim()
-                    ? `No labels found. Create "${inputValue.trim()}"`
-                    : "No labels available"
-                }
-                isValidNewOption={(inputValue) => {
-                  const candidate = inputValue.trim();
-                  if (!candidate) return false;
-                  const isExistingLabel = labels.some(
-                    (label) =>
-                      label.name.trim().toLowerCase() ===
-                      candidate.toLowerCase(),
-                  );
-
-                  const isPendingLabel = pendingLabelDrafts.some(
-                    (draft) =>
-                      draft.name.trim().toLowerCase() ===
-                      candidate.toLowerCase(),
-                  );
-
-                  return !isExistingLabel && !isPendingLabel;
-                }}
-                formatOptionLabel={(option) => (
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-3 w-3 rounded-full border border-black/10"
-                      style={{ backgroundColor: option.color }}
-                    />
-                    <span className="truncate">{option.label}</span>
-                    {option.isGlobal && (
-                      <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
-                        Global
-                      </span>
-                    )}
-                  </div>
-                )}
-                styles={{
-                  control: (base, state) => ({
-                    ...base,
-                    minHeight: "42px",
-                    borderColor: labelsError
-                      ? "#fca5a5"
-                      : state.isFocused
-                        ? "#3b82f6"
-                        : "#d1d5db",
-                    boxShadow: state.isFocused
-                      ? "0 0 0 1px #3b82f6"
-                      : "none",
-                    "&:hover": {
-                      borderColor: labelsError ? "#fca5a5" : "#9ca3af",
-                    },
-                  }),
-                  option: (base, state) => ({
-                    ...base,
-                    backgroundColor: state.isFocused
-                      ? "#eff6ff"
-                      : state.isSelected
-                        ? "#dbeafe"
-                        : "white",
-                    color: "#111827",
-                  }),
-                }}
-                className="react-select-container"
-                classNamePrefix="react-select"
               />
-              {pendingLabelDrafts.length > 0 && (
-                <p className="mt-1 text-xs text-blue-700">
-                  {pendingLabelDrafts.length} new label
-                  {pendingLabelDrafts.length === 1 ? "" : "s"} will be created when you click Finish.
-                </p>
-              )}
-              {labelsError && (
-                <div className="mt-1 flex items-center gap-2">
-                  <p className="text-sm text-red-600">{labelsError}</p>
-                  <button
-                    type="button"
-                    onClick={loadLabels}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+            </AccordionDetails>
+          </Accordion>
+        ) : (
+          <Typography variant="body2" color="text.secondary">Not selected</Typography>
+        )}
+      </Paper>
+    );
 
-          {/* Selector de visibilidad - solo para usuarios admin */}
-          {currentUser?.role === "admin" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Visibility:
-              </label>
-              <select
+    return (
+      <Stack spacing={3}>
+        <Box sx={{ textAlign: "center" }}>
+          <Typography variant="h5" gutterBottom>Review your LEIA</Typography>
+          <Typography color="text.secondary">Confirm the names and inspect each component before you finish.</Typography>
+        </Box>
+        <Paper id="create-final-form" variant="outlined" sx={{ p: 2.5 }}>
+          <Stack spacing={2}>
+            <Typography variant="subtitle2">LEIA</Typography>
+            <TextField
+              label="New LEIA name"
+              value={customizations.leia.name}
+              onChange={(event) => updateName("leia", event.target.value)}
+              placeholder="Enter LEIA name"
+              error={Boolean(validationErrors?.leia)}
+              helperText={validationErrors?.leia}
+              fullWidth
+            />
+            <Autocomplete
+              multiple
+              freeSolo
+              options={labelOptions}
+              value={selectedOptions}
+              inputValue={labelSearchInput}
+              disabled={loading || Boolean(labelsError)}
+              onInputChange={(_, value) => setLabelSearchInput(value)}
+              onChange={(_, nextValues) => {
+                const values = nextValues as Array<LabelOption | string>;
+                const newLabel = values.find((value) => typeof value === "string");
+                if (typeof newLabel === "string") {
+                  const candidate = newLabel.trim();
+                  if (
+                    candidate &&
+                    !labelOptions.some((option) => option.label.toLowerCase() === candidate.toLowerCase())
+                  ) {
+                    setNewLabelName(candidate);
+                    setCreateLabelError(null);
+                    setShowCreateLabelModal(true);
+                  }
+                  return;
+                }
+                const options = values as LabelOption[];
+                const ids = options.map((option) => option.value);
+                setSelectedLabelIds(ids);
+                setPendingLabelDrafts((previous) => previous.filter((draft) => ids.includes(draft.id)));
+                setLabelSearchInput("");
+              }}
+              getOptionLabel={(option) => typeof option === "string" ? option : option.label}
+              isOptionEqualToValue={(option, value) =>
+                typeof value !== "string" && option.value === value.value
+              }
+              renderOption={(props, option) => (
+                <Box component="li" {...props}>
+                  <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: option.color, mr: 1 }} />
+                  <Typography variant="body2">{option.label}</Typography>
+                  {option.isGlobal && <Chip label="Global" size="small" sx={{ ml: "auto" }} />}
+                </Box>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Labels"
+                  placeholder="Select or create labels..."
+                  error={Boolean(labelsError)}
+                  helperText={
+                    labelsError ||
+                    (pendingLabelDrafts.length
+                      ? String(pendingLabelDrafts.length) + " new label(s) will be created on Finish."
+                      : "Type a new label and press Enter to create it.")
+                  }
+                />
+              )}
+            />
+            {labelsError && <Button size="small" sx={{ alignSelf: "flex-start" }} onClick={loadLabels}>Retry labels</Button>}
+            {currentUser?.role === "admin" && (
+              <TextField
+                select
+                label="LEIA visibility"
                 value={leiaPublish ? "public" : "private"}
-                onChange={(e) => {
-                  const isPublic = e.target.value === "public";
+                onChange={(event) => {
+                  const isPublic = event.target.value === "public";
                   setLeiaPublish(isPublic);
-                  // Si se selecciona public para la LEIA, forzar todos los recursos a public
                   if (isPublic) {
                     setBehaviourPublish(true);
                     setProblemPublish(true);
                     setPersonaPublish(true);
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
+                fullWidth
               >
-                <option value="public">Public</option>
-                <option value="private">Private</option>
-              </select>
-              <p className="mt-1 text-xs text-gray-500">
-                {leiaPublish
-                  ? "This LEIA will be published and visible to all users. All resources will also be public."
-                  : "This LEIA will remain private and only visible to you"}
-              </p>
-            </div>
-          )}
-
-          {/* Alerta de recursos que se van a publicar */}
-          {currentUser?.role === "admin" && leiaPublish && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <InformationCircleIcon className="h-5 w-5 text-blue-400" />
-                </div>
-                <div className="ml-3">
-                  <h4 className="text-sm font-medium text-blue-800">
-                    The state of the following resources will change from
-                    private to public:
-                  </h4>
-                  <div className="mt-1 text-sm text-blue-700">
-                    <ul className="list-disc list-inside space-y-1">
-                      {customizations.behaviour && (
-                        <li>
-                          <strong>Behaviour:</strong>{" "}
-                          {customizations.behaviour.name || "New behaviour"}
-                        </li>
-                      )}
-                      {customizations.problem && (
-                        <li>
-                          <strong>Problem:</strong>{" "}
-                          {customizations.problem.name || "New problem"}
-                        </li>
-                      )}
-                      {customizations.persona && (
-                        <li>
-                          <strong>Persona:</strong>{" "}
-                          {customizations.persona.name || "New persona"}
-                        </li>
-                      )}
-                      <li>
-                        <strong>LEIA:</strong>{" "}
-                        {customizations.leia.name || "New LEIA"}
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="font-semibold text-gray-900">Illustrations</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Choose which avatars and infographics to generate when this LEIA
-              is created.
-            </p>
-          </div>
-          <SparklesIcon className="mt-1 h-5 w-5 flex-shrink-0 text-blue-500" />
-        </div>
-
-        <div className="mt-5 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Gemini API key
-            </label>
-            <select
-              value={illustrationsConfig.apiKeyId ?? ""}
-              onChange={(e) => {
-                setHasChosenIllustrationApiKey(true);
-                updateIllustrationsConfig({ apiKeyId: e.target.value || null });
-              }}
-              disabled={isApiKeysLoading || geminiApiKeys.length === 0}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] disabled:bg-gray-100 disabled:text-gray-500"
-            >
-              <option value="">
-                {isApiKeysLoading
-                  ? "Loading API keys..."
-                  : "Select Gemini API key"}
-              </option>
-              {geminiApiKeys.map((key) => (
-                <option key={key.id} value={key.id}>
-                  {key.description}
-                  {key.isDefault ? " (default)" : ""}
-                </option>
-              ))}
-            </select>
-            {apiKeysError ? (
-              <p className="mt-1 text-xs text-red-600">{apiKeysError}</p>
-            ) : geminiApiKeys.length === 0 && !isApiKeysLoading ? (
-              <p className="mt-1 text-xs text-gray-500">
-                Add a Gemini API key to generate illustrations.
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-gray-500">
-                This key is used only for the illustrations selected below.
-              </p>
+                <MenuItem value="public">Public</MenuItem>
+                <MenuItem value="private">Private</MenuItem>
+              </TextField>
             )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
-              <input
-                type="checkbox"
-                checked={illustrationsConfig.generateLeiaAvatar}
-                onChange={(e) =>
-                  updateIllustrationsConfig({
-                    generateLeiaAvatar: e.target.checked,
-                  })
-                }
-                disabled={illustrationsDisabled}
-                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span>
-                <span className="block text-sm font-medium text-gray-700">
-                  Generate LEIA avatar
-                </span>
-                <span className="block text-xs text-gray-500">
-                  Creates the avatar for the new LEIA.
-                </span>
-              </span>
-            </label>
-
-            {personaIllustrationAvailable && (
-              <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
-                <input
-                  type="checkbox"
-                  checked={illustrationsConfig.generatePersonaAvatar}
-                  onChange={(e) =>
-                    updateIllustrationsConfig({
-                      generatePersonaAvatar: e.target.checked,
-                    })
-                  }
-                  disabled={illustrationsDisabled}
-                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-gray-700">
-                    Generate persona avatar
-                  </span>
-                  <span className="block text-xs text-gray-500">
-                    Available because this flow creates a new persona.
-                  </span>
-                </span>
-              </label>
+            {currentUser?.role === "admin" && leiaPublish && (
+              <Alert severity="info" icon={<InfoOutlinedIcon />}>
+                This LEIA and its selected resources will be public.
+              </Alert>
             )}
+          </Stack>
+        </Paper>
 
-            {problemIllustrationAvailable && (
-              <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
-                <input
-                  type="checkbox"
-                  checked={illustrationsConfig.generateProblemAvatar}
-                  onChange={(e) =>
-                    updateIllustrationsConfig({
-                      generateProblemAvatar: e.target.checked,
-                    })
-                  }
-                  disabled={illustrationsDisabled}
-                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-gray-700">
-                    Generate problem avatar
-                  </span>
-                  <span className="block text-xs text-gray-500">
-                    Available because this flow creates a new problem.
-                  </span>
-                </span>
-              </label>
-            )}
-
-            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
-              <input
-                type="checkbox"
-                checked={illustrationsConfig.generateInfographic}
-                onChange={(e) =>
-                  updateIllustrationsConfig({
-                    generateInfographic: e.target.checked,
-                  })
-                }
-                disabled={illustrationsDisabled}
-                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span>
-                <span className="block text-sm font-medium text-gray-700">
-                  Generate infographic
-                </span>
-                <span className="block text-xs text-gray-500">
-                  Creates the student-facing infographic for this LEIA.
-                </span>
-              </span>
-            </label>
-
-            <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
-              <input
-                type="checkbox"
-                checked={illustrationsConfig.generateInfographicSolution}
-                onChange={(e) =>
-                  updateIllustrationsConfig({
-                    generateInfographicSolution: e.target.checked,
-                  })
-                }
-                disabled={illustrationsDisabled}
-                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span>
-                <span className="block text-sm font-medium text-gray-700">
-                  Generate infographic with solution
-                </span>
-                <span className="block text-xs text-gray-500">
-                  Creates the instructor version including solution guidance.
-                </span>
-              </span>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* Supervisor: una IA en segundo plano que observa la actividad del
-          alumno (texto y audio) para marcar comportamientos al instructor. */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="font-semibold text-gray-900">Supervisor (AI background monitor)</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              A background AI that reads what the student does during the activity
-              (both text chat and Luke audio) and flags behaviours for you — e.g.
-              a student trying to get the AI to write the code for them, or
-              behavioural patterns in a research setting. Flags are private to the
-              instructor; the student never sees them.
-            </p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={supervisorConfig.enabled}
-              onChange={(e) =>
-                setSupervisorConfig((prev) => ({ ...prev, enabled: e.target.checked }))
-              }
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
-
-        {supervisorConfig.enabled && (
-          <div className="mt-5 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                OpenAI key &amp; model for the supervisor
-              </label>
-              {supervisorOpenaiKeys.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <select
-                    value={supervisorConfig.apiKeyId ?? ""}
-                    onChange={(e) =>
-                      setSupervisorConfig((prev) => ({ ...prev, apiKeyId: e.target.value || null }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
-                  >
-                    <option value="">-- API key --</option>
-                    {supervisorOpenaiKeys.map((k) => (
-                      <option key={k.id} value={k.id}>
-                        {k.description}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={supervisorConfig.model}
-                    onChange={(e) =>
-                      setSupervisorConfig((prev) => ({ ...prev, model: e.target.value }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
-                  >
-                    <option value="">-- model --</option>
-                    {supervisorOpenaiModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <p className="text-sm text-amber-700">
-                  No OpenAI API key available.{" "}
-                  <Link to="/administration/api-keys" className="text-blue-600 underline">
-                    Create one
-                  </Link>{" "}
-                  — the supervisor runs on OpenAI even if this LEIA uses another provider.
-                </p>
-              )}
-              <p className="mt-1 text-xs text-gray-500">
-                The supervisor always uses OpenAI, independent of the LEIA's own model.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                What should the supervisor watch for?
-              </label>
-              <textarea
-                value={supervisorConfig.instructions}
-                onChange={(e) =>
-                  setSupervisorConfig((prev) => ({ ...prev, instructions: e.target.value }))
-                }
-                rows={4}
-                placeholder="e.g. Flag whenever the student asks the AI to write or complete the code for them instead of guiding them. Note signs of off-task conversation or frustration."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sensitivity
-                </label>
-                <select
-                  value={supervisorConfig.sensitivity}
-                  onChange={(e) =>
-                    setSupervisorConfig((prev) => ({
-                      ...prev,
-                      sensitivity: e.target.value as "low" | "medium" | "high",
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
-                >
-                  <option value="low">Low (only clear cases)</option>
-                  <option value="medium">Medium (balanced)</option>
-                  <option value="high">High (even borderline)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  When it runs
-                </label>
-                <select
-                  value={supervisorConfig.cadence}
-                  onChange={(e) =>
-                    setSupervisorConfig((prev) => ({
-                      ...prev,
-                      cadence: e.target.value as "everyN" | "onFinish",
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
-                >
-                  <option value="everyN">Every N messages (live)</option>
-                  <option value="onFinish">Only at the end</option>
-                </select>
-              </div>
-              {supervisorConfig.cadence === "everyN" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Every how many messages
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={supervisorConfig.everyN}
-                    onChange={(e) =>
-                      setSupervisorConfig((prev) => ({
-                        ...prev,
-                        everyN: Math.max(1, Math.min(50, Number(e.target.value) || 1)),
+        <Paper variant="outlined" sx={{ p: 2.5 }}>
+          <Stack spacing={2}>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+              <Box>
+                <Typography variant="subtitle2">Supervisor (AI background monitor)</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  A private background AI can flag behaviours during text and Luke audio sessions.
+                </Typography>
+              </Box>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={supervisorConfig.enabled}
+                    onChange={(event) =>
+                      setSupervisorConfig((previous) => ({
+                        ...previous,
+                        enabled: event.target.checked,
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px]"
                   />
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-100 pt-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={supervisorConfig.intervene}
-                  onChange={(e) =>
-                    setSupervisorConfig((prev) => ({ ...prev, intervene: e.target.checked }))
-                  }
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Let the supervisor nudge the student
-                </span>
-              </label>
-              <p className="mt-1 text-xs text-gray-500">
-                When enabled, the supervisor can send the student a short, gentle
-                coaching message (delivered on their next turn) in addition to
-                flagging you.
-              </p>
-              {supervisorConfig.intervene && (
-                <textarea
-                  value={supervisorConfig.interveneInstructions}
-                  onChange={(e) =>
-                    setSupervisorConfig((prev) => ({
-                      ...prev,
-                      interveneInstructions: e.target.value,
+                }
+                label="Enabled"
+                sx={{ m: 0 }}
+              />
+            </Stack>
+            {supervisorConfig.enabled && (
+              <Stack spacing={2}>
+                {supervisorOpenaiKeys.length > 0 ? (
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+                    <TextField
+                      select
+                      label="OpenAI API key"
+                      value={supervisorConfig.apiKeyId ?? ""}
+                      onChange={(event) =>
+                        setSupervisorConfig((previous) => ({
+                          ...previous,
+                          apiKeyId: event.target.value || null,
+                        }))
+                      }
+                      fullWidth
+                    >
+                      <MenuItem value="">-- API key --</MenuItem>
+                      {supervisorOpenaiKeys.map((key) => <MenuItem key={key.id} value={key.id}>{key.description}</MenuItem>)}
+                    </TextField>
+                    <TextField
+                      select
+                      label="Model"
+                      value={supervisorConfig.model}
+                      onChange={(event) =>
+                        setSupervisorConfig((previous) => ({ ...previous, model: event.target.value }))
+                      }
+                      fullWidth
+                    >
+                      <MenuItem value="">-- model --</MenuItem>
+                      {supervisorOpenaiModels.map((model) => <MenuItem key={model} value={model}>{model}</MenuItem>)}
+                    </TextField>
+                  </Box>
+                ) : (
+                  <Alert severity="warning">
+                    No OpenAI API key is available. <Link to="/administration/api-keys">Create one</Link> to enable the supervisor.
+                  </Alert>
+                )}
+                <TextField
+                  label="What should the supervisor watch for?"
+                  value={supervisorConfig.instructions}
+                  onChange={(event) =>
+                    setSupervisorConfig((previous) => ({
+                      ...previous,
+                      instructions: event.target.value,
                     }))
                   }
-                  rows={2}
-                  placeholder="e.g. If the student keeps asking for the full solution, encourage them to try writing it themselves first."
-                  className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  multiline
+                  rows={4}
+                  placeholder="Describe the patterns or behaviours to flag."
+                  fullWidth
                 />
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div
-        className={`grid gap-6 ${
-          isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-        }`}
-      >
-        {/* Comportamiento */}
-        {customizations.behaviour && !isCurrentUserInstructor && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Behaviour</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  A new behaviour will be created with the following name:
-                </label>
-                <input
-                  type="text"
-                  value={customizations.behaviour.name}
-                  onChange={(e) => {
-                    setCustomizations((prev) => ({
-                      ...prev,
-                      behaviour: { ...prev.behaviour, name: e.target.value },
-                    }));
-                    // Limpiar error cuando el usuario escriba
-                    if (validationErrors?.behaviour) {
-                      setValidationErrors((prev) => ({
-                        ...prev,
-                        behaviour: undefined,
-                      }));
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 2 }}>
+                  <TextField
+                    select
+                    label="Sensitivity"
+                    value={supervisorConfig.sensitivity}
+                    onChange={(event) =>
+                      setSupervisorConfig((previous) => ({
+                        ...previous,
+                        sensitivity: event.target.value as "low" | "medium" | "high",
+                      }))
                     }
-                  }}
-                  placeholder="Enter behaviour name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                    validationErrors?.behaviour
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {validationErrors?.behaviour && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {validationErrors.behaviour}
-                  </p>
-                )}
-              </div>
-
-              {/* Selector de visibilidad - solo para usuarios admin */}
-              {currentUser?.role === "admin" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Visibility:
-                  </label>
-                  <select
-                    value={behaviourPublish ? "public" : "private"}
-                    onChange={(e) =>
-                      setBehaviourPublish(e.target.value === "public")
-                    }
-                    disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
+                    fullWidth
                   >
-                    <option value="public">Public</option>
-                    <option value="private">Private</option>
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {leiaPublish
-                      ? "Visibility is locked to public because the LEIA is public"
-                      : behaviourPublish
-                        ? "This behaviour will be published and visible to all users"
-                        : "This behaviour will remain private and only visible to you"}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Problema */}
-        {customizations.problem && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Problem</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  A new problem will be created with the following name:
-                </label>
-                <input
-                  type="text"
-                  value={customizations.problem.name}
-                  onChange={(e) => {
-                    setCustomizations((prev) => ({
-                      ...prev,
-                      problem: { ...prev.problem, name: e.target.value },
-                    }));
-                    // Limpiar error cuando el usuario escriba
-                    if (validationErrors?.problem) {
-                      setValidationErrors((prev) => ({
-                        ...prev,
-                        problem: undefined,
-                      }));
+                    <MenuItem value="low">Low</MenuItem>
+                    <MenuItem value="medium">Medium</MenuItem>
+                    <MenuItem value="high">High</MenuItem>
+                  </TextField>
+                  <TextField
+                    select
+                    label="When it runs"
+                    value={supervisorConfig.cadence}
+                    onChange={(event) =>
+                      setSupervisorConfig((previous) => ({
+                        ...previous,
+                        cadence: event.target.value as "everyN" | "onFinish",
+                      }))
                     }
-                  }}
-                  placeholder="Enter problem name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                    validationErrors?.problem
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {validationErrors?.problem && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {validationErrors.problem}
-                  </p>
-                )}
-              </div>
-
-              {/* Selector de visibilidad - solo para usuarios admin */}
-              {currentUser?.role === "admin" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Visibility:
-                  </label>
-                  <select
-                    value={problemPublish ? "public" : "private"}
-                    onChange={(e) =>
-                      setProblemPublish(e.target.value === "public")
-                    }
-                    disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
+                    fullWidth
                   >
-                    <option value="public">Public</option>
-                    <option value="private">Private</option>
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {leiaPublish
-                      ? "Visibility is locked to public because the LEIA is public"
-                      : problemPublish
-                        ? "This problem will be published and visible to all users"
-                        : "This problem will remain private and only visible to you"}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Persona */}
-        {customizations.persona && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Persona</h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  A new persona will be created with the following name:
-                </label>
-                <input
-                  type="text"
-                  value={customizations.persona.name}
-                  onChange={(e) => {
-                    setCustomizations((prev) => ({
-                      ...prev,
-                      persona: { ...prev.persona, name: e.target.value },
-                    }));
-                    // Limpiar error cuando el usuario escriba
-                    if (validationErrors?.persona) {
-                      setValidationErrors((prev) => ({
-                        ...prev,
-                        persona: undefined,
-                      }));
+                    <MenuItem value="everyN">Every N messages</MenuItem>
+                    <MenuItem value="onFinish">Only at the end</MenuItem>
+                  </TextField>
+                  {supervisorConfig.cadence === "everyN" && (
+                    <TextField
+                      type="number"
+                      label="Every N messages"
+                      inputProps={{ min: 1, max: 50 }}
+                      value={supervisorConfig.everyN}
+                      onChange={(event) =>
+                        setSupervisorConfig((previous) => ({
+                          ...previous,
+                          everyN: Math.max(1, Math.min(50, Number(event.target.value) || 1)),
+                        }))
+                      }
+                      fullWidth
+                    />
+                  )}
+                </Box>
+                <Box sx={{ pt: 2, borderTop: 1, borderColor: "divider" }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={supervisorConfig.intervene}
+                        onChange={(event) =>
+                          setSupervisorConfig((previous) => ({
+                            ...previous,
+                            intervene: event.target.checked,
+                          }))
+                        }
+                      />
                     }
-                  }}
-                  placeholder="Enter persona name"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                    validationErrors?.persona
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {validationErrors?.persona && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {validationErrors.persona}
-                  </p>
-                )}
-              </div>
-
-              {/* Selector de visibilidad - solo para usuarios admin */}
-              {currentUser?.role === "admin" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Visibility:
-                  </label>
-                  <select
-                    value={personaPublish ? "public" : "private"}
-                    onChange={(e) =>
-                      setPersonaPublish(e.target.value === "public")
-                    }
-                    disabled={leiaPublish}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-[42px] ${
-                      leiaPublish ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    <option value="public">Public</option>
-                    <option value="private">Private</option>
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {leiaPublish
-                      ? "Visibility is locked to public because the LEIA is public"
-                      : personaPublish
-                        ? "This persona will be published and visible to all users"
-                        : "This persona will remain private and only visible to you"}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Vista final */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex flex-row w-full mb-4">
-          <h3 className="text-lg w-full font-semibold">Final LEIA Preview</h3>
-        </div>
-        <div
-          className={`grid gap-4 ${
-            isCurrentUserInstructor ? "grid-cols-2" : "grid-cols-3"
-          }`}
-        >
-          {!isCurrentUserInstructor && (
-            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-2">Behaviour</h4>
-              <p className="text-sm text-gray-600 mb-3">
-                {customizations.behaviour?.name ||
-                  generatedLeia?.spec.behaviour?.metadata.name ||
-                  "Not selected"}
-              </p>
-              {generatedLeia?.spec.behaviour ? (
-                <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                  <Editor
-                    height="150px"
-                    language="json"
-                    theme="vs-light"
-                    value={JSON.stringify(
-                      cleanObjectForPreview(
-                        generatedLeia?.spec.behaviour,
-                        "behaviour",
-                      ),
-                      null,
-                      2,
-                    )}
-                    options={{
-                      readOnly: true,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      fontSize: 11,
-                      lineNumbers: "off",
-                      glyphMargin: false,
-                      folding: false,
-                      lineDecorationsWidth: 0,
-                      lineNumbersMinChars: 0,
-                      automaticLayout: true,
-                      contextmenu: false,
-                      scrollbar: {
-                        vertical: "auto",
-                        horizontal: "auto",
-                        handleMouseWheel: true,
-                      },
-                      overviewRulerLanes: 0,
-                      hideCursorInOverviewRuler: true,
-                      overviewRulerBorder: false,
-                      wordWrap: "on",
-                    }}
+                    label="Let the supervisor nudge the student"
+                    sx={{ m: 0 }}
                   />
-                </div>
-              ) : (
-                <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                  No behaviour selected
-                </div>
-              )}
-            </div>
-          )}
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Problem</h4>
-            <p className="text-sm text-gray-600 mb-3">
-              {customizations.problem?.name ||
-                generatedLeia?.spec.problem?.metadata.name ||
-                "Not selected"}
-            </p>
-            {generatedLeia?.spec.problem ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(
-                      generatedLeia?.spec.problem,
-                      "problem",
-                    ),
-                    null,
-                    2,
+                  {supervisorConfig.intervene && (
+                    <TextField
+                      value={supervisorConfig.interveneInstructions}
+                      onChange={(event) =>
+                        setSupervisorConfig((previous) => ({
+                          ...previous,
+                          interveneInstructions: event.target.value,
+                        }))
+                      }
+                      placeholder="Describe the coaching response."
+                      multiline
+                      rows={2}
+                      fullWidth
+                      sx={{ mt: 1 }}
+                    />
                   )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No problem selected
-              </div>
+                </Box>
+              </Stack>
             )}
-          </div>
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2">Persona</h4>
-            <p className="text-sm text-gray-600 mb-3">
-              {customizations.persona?.name ||
-                generatedLeia?.spec.persona?.metadata.name ||
-                "Not selected"}
-            </p>
-            {generatedLeia?.spec.persona ? (
-              <div className="bg-white rounded border border-gray-300 overflow-hidden">
-                <Editor
-                  height="150px"
-                  language="json"
-                  theme="vs-light"
-                  value={JSON.stringify(
-                    cleanObjectForPreview(
-                      generatedLeia?.spec.persona,
-                      "persona",
-                    ),
-                    null,
-                    2,
-                  )}
-                  options={{
-                    readOnly: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    fontSize: 11,
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    automaticLayout: true,
-                    contextmenu: false,
-                    scrollbar: {
-                      vertical: "auto",
-                      horizontal: "auto",
-                      handleMouseWheel: true,
-                    },
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    overviewRulerBorder: false,
-                    wordWrap: "on",
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-100 rounded p-4 text-center text-gray-500 text-sm">
-                No persona selected
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+          </Stack>
+        </Paper>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "repeat(3, minmax(0, 1fr))",
+            },
+            gap: 2,
+          }}
+        >
+          {resourceName("behaviour", "Behaviour", behaviourPublish, setBehaviourPublish)}
+          {resourceName("problem", "Problem", problemPublish, setProblemPublish)}
+          {resourceName("persona", "Persona", personaPublish, setPersonaPublish)}
+        </Box>
+
+        <Paper variant="outlined" sx={{ p: 2.5 }}>
+          <Typography variant="subtitle2">Component code</Typography>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(3, minmax(0, 1fr))",
+              },
+              gap: 2,
+            }}
+          >
+            {preview("Behaviour", generatedLeia?.spec.behaviour, "behaviour")}
+            {preview("Problem", generatedLeia?.spec.problem, "problem")}
+            {preview("Persona", generatedLeia?.spec.persona, "persona")}
+          </Box>
+        </Paper>
+      </Stack>
     );
   };
 
-  // Loading state
+  const designBackButton = (
+    <Button
+      size="small"
+      color="inherit"
+      variant="outlined"
+      startIcon={<ArrowBackOutlinedIcon />}
+      onClick={() => requestLeave(() => navigate("/"))}
+      sx={{ flexShrink: 0, textTransform: "none" }}
+    >
+      Go back
+    </Button>
+  );
+
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Header
-          title="Design"
-          description="Create your own LEIAs and test them!"
-        />
-
-        {/* Loading Content */}
-        <div className="flex-1 container mx-auto px-6 py-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Loading resources...
-              </h3>
-              <p className="text-gray-600 text-center">
-                Loading personas, problems, and behaviours from the API...
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
+        <Header title="Design" description="Create your own LEIAs and test them!" leadingContent={designBackButton} />
+        <Container maxWidth="lg" sx={{ flex: 1, display: "flex", alignItems: "center", py: 4 }}>
+          <Paper variant="outlined" sx={{ width: "100%", p: 5 }}>
+            <Stack alignItems="center" spacing={2}>
+              <CircularProgress />
+              <Typography variant="h6">Loading resources...</Typography>
+              <Typography color="text.secondary">Loading personas, problems, and behaviours from the API...</Typography>
+            </Stack>
+          </Paper>
+        </Container>
+      </Box>
     );
   }
 
-  // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Header
-          title="Design"
-          description="Create your own LEIAs and test them!"
-        />
-
-        {/* Error Content */}
-        <div className="flex-1 container mx-auto px-6 py-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="bg-red-100 rounded-full p-3 mb-4">
-                <svg
-                  className="w-8 h-8 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Error Loading Data
-              </h3>
-              <p className="text-gray-600 text-center mb-6">{error}</p>
-              <button
-                onClick={loadData}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                Try Again
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
+        <Header title="Design" description="Create your own LEIAs and test them!" leadingContent={designBackButton} />
+        <Container maxWidth="lg" sx={{ flex: 1, display: "flex", alignItems: "center", py: 4 }}>
+          <Paper variant="outlined" sx={{ width: "100%", p: 5 }}>
+            <Stack alignItems="center" spacing={2}>
+              <ErrorOutlineIcon color="error" sx={{ fontSize: 48 }} />
+              <Typography variant="h6">Error Loading Data</Typography>
+              <Typography color="text.secondary">{error}</Typography>
+              <Button variant="contained" startIcon={<RefreshIcon />} onClick={loadData}>Try Again</Button>
+            </Stack>
+          </Paper>
+        </Container>
+      </Box>
     );
   }
 
+  const cannotContinue =
+    (currentStep === 1 && !isStep1Complete) ||
+    (currentStep === 2 && !isStep2Complete);
+  const status =
+    currentStep === 1
+      ? isStep1Complete ? "LEIA draft ready for review" : "Create or select a persona, problem, and behaviour"
+      : isStep2Complete ? "Ready to finish" : "Complete the required names before finishing";
+  const designHeaderRightContent = (
+    <Stack direction="row" alignItems="center" spacing={{ xs: 1, lg: 1.5 }}>
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={() => void handleOpenDrafts()}
+        sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+      >
+        {isSavingDraft
+          ? "Saving draft..."
+          : `Drafts${drafts.length ? ` (${drafts.length})` : ""}`}
+      </Button>
+      {currentStep === 1 && (
+        <>
+        <IconButton
+          id="create-assistant-settings"
+          aria-label="Design menu"
+          aria-controls={chatSettingsAnchor ? "create-assistant-settings-menu" : undefined}
+          aria-haspopup="true"
+          aria-expanded={Boolean(chatSettingsAnchor)}
+          onClick={(event) => setChatSettingsAnchor(event.currentTarget)}
+          size="small"
+          sx={{ border: 1, borderColor: "divider", borderRadius: 1.5 }}
+        >
+          <MoreVertIcon fontSize="small" />
+        </IconButton>
+        <Menu
+          id="create-assistant-settings-menu"
+          anchorEl={chatSettingsAnchor}
+          open={Boolean(chatSettingsAnchor)}
+          onClose={() => setChatSettingsAnchor(null)}
+          MenuListProps={{ "aria-labelledby": "create-assistant-settings" }}
+          slotProps={{ paper: { sx: { minWidth: 320, mt: 1, border: 1, borderColor: "divider" } } }}
+        >
+          <Box sx={{ p: 1.5 }}>
+            <Typography variant="subtitle2">Assistant settings</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, mb: 1.5 }}>
+              Choose the model and key used to create this LEIA.
+            </Typography>
+                {chatOpenaiKeys.length > 0 ? (
+                  <Stack spacing={1.25}>
+                    <TextField
+                      select
+                      label="Model"
+                      size="small"
+                      value={chatModelName}
+                      onChange={(event) => setChatModelName(event.target.value)}
+                      disabled={chatOptionsLoading}
+                      fullWidth
+                    >
+                      <MenuItem value="">
+                        {chatOptionsLoading ? "Loading…" : "-- model --"}
+                      </MenuItem>
+                      {chatOpenaiModels.map((model) => (
+                        <MenuItem key={model} value={model}>{model}</MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      label="API Key"
+                      size="small"
+                      value={chatApiKeyId ?? ""}
+                      onChange={(event) => handleChatApiKeyChange(event.target.value || null)}
+                      disabled={chatOptionsLoading}
+                      fullWidth
+                    >
+                      <MenuItem value="">
+                        {chatOptionsLoading ? "Loading…" : "-- key --"}
+                      </MenuItem>
+                      {chatOpenaiKeys.map((key) => (
+                        <MenuItem key={key.id} value={key.id}>{key.description}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Stack>
+                ) : (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    fullWidth
+                    disabled={chatOptionsLoading}
+                    onClick={() => {
+                      setChatSettingsAnchor(null);
+                      navigate("/administration/api-keys");
+                    }}
+                  >
+                    {chatOptionsLoading ? "Loading keys" : "Add OpenAI key"}
+                  </Button>
+                )}
+            {currentUser?.role === "admin" && (
+              <Button
+                size="small"
+                variant="outlined"
+                fullWidth
+                sx={{ mt: 1.25 }}
+                onClick={() => {
+                  setChatSettingsAnchor(null);
+                  setShowComponentSelector(true);
+                }}
+              >
+                Components
+              </Button>
+            )}
+          </Box>
+        </Menu>
+        </>
+      )}
+      {renderStepIndicator()}
+    </Stack>
+  );
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
       <Header
         title="Design"
         description="Create your own LEIAs and test them!"
-        
+        dropdownTour={tourRequested}
+        leadingContent={designBackButton}
+        rightContent={designHeaderRightContent}
       />
-
-      {/* Main Content */}
-      <ToastContainer />
-      <div className="flex-1 container mx-auto px-6 py-8">
-        <div id="create-step-indicator">{renderStepIndicator()}</div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-          {currentStep === 1 && renderStep1()}
-          {currentStep === 2 && renderStep2()}
-          {currentStep === 3 && renderStep3()}
-        </div>
-
-        {/* Navigation */}
-        <div className="flex justify-between items-center mt-8">
-          <button
+      <Container maxWidth={false} sx={{ flex: 1, py: { xs: 2, md: 4 }, px: { xs: 2, md: 3 } }}>
+        <Box
+          sx={{
+            p: currentStep === 1 ? 0 : { xs: 2, md: 3 },
+            overflow: currentStep === 1 ? "visible" : "hidden",
+          }}
+        >
+          <Box sx={{ display: currentStep === 1 ? "block" : "none" }}>
+            {renderNewStep()}
+          </Box>
+          <Box sx={{ display: currentStep === 2 ? "block" : "none" }}>
+            {renderReviewStep()}
+          </Box>
+        </Box>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ mt: 3 }}>
+          <Button
+            id="create-previous-button"
+            color="inherit"
+            variant="contained"
             onClick={handlePrevStep}
             disabled={currentStep === 1}
-            id= "create-previous-button"
-            className={`px-6 py-2 rounded-lg transition-colors ${
-              currentStep === 1
-                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-gray-600 text-white hover:bg-gray-700"
-            }`}
           >
             Previous
-          </button>
+          </Button>
+          <Typography variant="body2" color="text.secondary" align="center">{status}</Typography>
+          <Button id="create-next-button" variant="contained" onClick={handleNextStep} disabled={cannotContinue}>
+            {currentStep === 2 ? "Finish LEIA" : "Review LEIA"}
+          </Button>
+        </Stack>
+      </Container>
 
-          <div className="flex items-center space-x-4">
-            {currentStep === 1 && (
-              <div className="text-sm text-gray-500">
-                {isStep1Complete
-                  ? "✓ All elements selected"
-                  : "Missing elements to select"}
-              </div>
-            )}
-            {currentStep === 2 && (
-              <div className="text-sm text-gray-500">
-                ✓ You can edit resources or continue
-              </div>
-            )}
-            {currentStep === 3 && (
-              <div className="text-sm text-gray-500">
-                {isStep3Complete
-                  ? "✓ Customization complete"
-                  : "Customize names for edited resources"}
-              </div>
-            )}
-          </div>
+      <Dialog
+        open={showComponentSelector}
+        onClose={() => setShowComponentSelector(false)}
+        fullWidth
+        maxWidth="xl"
+        PaperProps={{ sx: { height: { xs: "94vh", md: "88vh" } } }}
+      >
+        <DialogTitle>Select components</DialogTitle>
+        <DialogContent dividers sx={{ py: 3 }}>
+          {renderComponentSelector()}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button color="inherit" onClick={() => setShowComponentSelector(false)}>Cancel</Button>
+          <Button variant="contained" onClick={() => setShowComponentSelector(false)} disabled={!isStep1Complete}>
+            Use selected components
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-          <button
-            id="create-next-button"
-            onClick={handleNextStep}
-            aria-busy={currentStep === 3 && isFinishingLeia}
-            disabled={
-              (currentStep === 1 && !isStep1Complete) ||
-              (currentStep === 2 && !isStep2Complete) ||
-              (currentStep === 3 && (!isStep3Complete || isFinishingLeia))
-            }
-            className={`px-6 py-2 rounded-lg transition-colors inline-flex items-center justify-center gap-2 min-w-[96px] ${
-              (currentStep === 1 && !isStep1Complete) ||
-              (currentStep === 2 && !isStep2Complete) ||
-              (currentStep === 3 && (!isStep3Complete || isFinishingLeia))
-                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
-          >
-            {currentStep === 3 && isFinishingLeia ? (
-              <>
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                  />
-                </svg>
-                Finish
-              </>
-            ) : currentStep === 3 ? (
-              "Finish"
-            ) : (
-              "Next"
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Modal de eliminación de recursos */}
       <DeleteResourceModal
         isOpen={deleteModal.isOpen}
         resource={deleteModal.resource}
@@ -4005,525 +2988,262 @@ const openGenerateProblemModal = () => {
         onConfirm={confirmDeleteResource}
         isDeleting={isDeleting}
         error={deleteError}
-      />  
-      {showCreateLabelModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowCreateLabelModal(false);
-              setCreateLabelError(null);
-            }
-          }}
-        >
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Create New Label
-              </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Add a label and reuse it in your LEIAs.
-              </p>
+      />
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newLabelName}
-                    onChange={(e) => setNewLabelName(e.target.value)}
-                    placeholder=""
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+      <Dialog
+        open={showDraftsDialog}
+        onClose={() => setShowDraftsDialog(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>LEIA drafts</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.25}>
+            {draftError && <Alert severity="error">{draftError}</Alert>}
+            {isDraftsLoading ? (
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 2 }}>
+                <CircularProgress size={18} />
+                <Typography variant="body2" color="text.secondary">Loading drafts...</Typography>
+              </Stack>
+            ) : drafts.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                Your saved LEIA drafts will appear here.
+              </Typography>
+            ) : (
+              drafts.map((draft) => (
+                <Paper key={draft.id} variant="outlined" sx={{ p: 1.5 }}>
+                  <Stack spacing={1.25}>
+                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" noWrap>{draft.title || "Untitled LEIA"}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Updated {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updatedAt))}
+                        </Typography>
+                      </Box>
+                      {currentDraftId === draft.id && <Chip label="Current" size="small" color="primary" />}
+                    </Stack>
+                    <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                      <Button size="small" color="error" onClick={() => void handleDeleteDraft(draft)} disabled={isSavingDraft}>
+                        Delete
+                      </Button>
+                      <Button size="small" variant="contained" onClick={() => restoreDraft(draft)} disabled={isSavingDraft}>
+                        Continue
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Paper>
+              ))
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button color="inherit" onClick={() => setShowDraftsDialog(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Background colour
-                    </label>
-                    <input
-                      type="color"
-                      value={newLabelColor}
-                      onChange={(e) => setNewLabelColor(e.target.value)}
-                      className="h-10 w-full border border-gray-300 rounded-lg bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Text colour
-                    </label>
-                    <input
-                      type="color"
-                      value={newLabelSecondaryColor}
-                      onChange={(e) => setNewLabelSecondaryColor(e.target.value)}
-                      className="h-10 w-full border border-gray-300 rounded-lg bg-white"
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col items-center">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 ">
-                    Preview
-                  </label>
-                  <span
-                                className="px-2 py-0.5 text-xs font-medium rounded-full border border-gray-200 "
-                                style={{
-                                  backgroundColor: newLabelColor || "#2563eb",
-                                  color: newLabelSecondaryColor || "#bfdbfe",
-                                }}
-                                title={`Label: ${newLabelName}`}
-                              >
-                                {newLabelName || "Preview"}
-                              </span>
-                </div>
-                {currentUser?.role === "admin" && (
-                  <div>
-                    <p className="block text-sm font-medium text-gray-700 mb-2">
-                      Visibility
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setIsLabelGlobal((prev) => !prev)}
-                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
-                        isLabelGlobal
-                          ? "border-blue-600 bg-blue-50 text-blue-700"
-                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      <span>{isLabelGlobal ? "Global" : "Private"}</span>
-                      <span
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          isLabelGlobal ? "bg-blue-600" : "bg-gray-300"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                            isLabelGlobal ? "translate-x-5" : "translate-x-1"
-                          }`}
-                        />
-                      </span>
-                    </button>
-                  </div>
-                )}
+      <Dialog
+        open={showLeaveDraftDialog}
+        onClose={continueEditingDraft}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Keep this LEIA draft?</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5}>
+            <Typography color="text.secondary">
+              Continue editing here, or save your work as a draft and come back to it later.
+            </Typography>
+            {draftError && <Alert severity="error">{draftError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button color="inherit" onClick={continueEditingDraft} disabled={isSavingDraft}>
+            Continue editing
+          </Button>
+          <Button variant="contained" onClick={() => void saveDraftAndLeave()} disabled={isSavingDraft}>
+            {isSavingDraft ? "Saving draft..." : "Save draft and leave"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-                {createLabelError && (
-                  <p className="text-sm text-red-600">{createLabelError}</p>
-                )}
-              </div>
-            </div>
+      <Dialog
+        open={showCreateLabelModal}
+        onClose={() => {
+          setShowCreateLabelModal(false);
+          setCreateLabelError(null);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Create New Label</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <TextField label="Name" value={newLabelName} onChange={(event) => setNewLabelName(event.target.value)} fullWidth />
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <TextField
+                label="Background colour"
+                type="color"
+                value={newLabelColor}
+                onChange={(event) => setNewLabelColor(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+                fullWidth
+              />
+              <TextField
+                label="Text colour"
+                type="color"
+                value={newLabelSecondaryColor}
+                onChange={(event) => setNewLabelSecondaryColor(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+                fullWidth
+              />
+            </Box>
+            <Chip
+              label={newLabelName || "Preview"}
+              sx={{ alignSelf: "center", bgcolor: newLabelColor, color: newLabelSecondaryColor }}
+            />
+            {currentUser?.role === "admin" && (
+              <FormControlLabel
+                control={<Switch checked={isLabelGlobal} onChange={(event) => setIsLabelGlobal(event.target.checked)} />}
+                label="Make this label global"
+                sx={{ m: 0 }}
+              />
+            )}
+            {createLabelError && <Alert severity="error">{createLabelError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button color="inherit" onClick={() => setShowCreateLabelModal(false)}>Cancel</Button>
+          <Button
+            color="success"
+            variant="contained"
+            onClick={handleCreateLabel}
+            disabled={creatingLabel}
+            startIcon={creatingLabel ? <CircularProgress color="inherit" size={16} /> : undefined}
+          >
+            Save label for Finish
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreateLabelModal(false);
-                  setCreateLabelError(null);
-                }}
-                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateLabel}
-                disabled={creatingLabel}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-              >
-                Save label for Finish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={showGenerateBehaviourModal} onClose={closeGenerateBehaviourModal} fullWidth maxWidth="sm">
+        <DialogTitle>Generate Similar Behaviour</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Using "{leiaConfig.behaviour?.metadata.name}" as the template.
+            </Typography>
+            <TextField
+              label="New Behaviour Subject"
+              value={generateBehaviourSubject}
+              onChange={(event) => setGenerateBehaviourSubject(event.target.value)}
+              required
+              fullWidth
+            />
+            <TextField
+              label="Additional Details"
+              value={generateBehaviourDetails}
+              onChange={(event) => setGenerateBehaviourDetails(event.target.value)}
+              multiline
+              rows={3}
+              fullWidth
+            />
+            {generateBehaviourError && <Alert severity="error">{generateBehaviourError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button color="inherit" onClick={closeGenerateBehaviourModal}>Cancel</Button>
+          <Button
+            color="secondary"
+            variant="contained"
+            onClick={handleGenerateBehaviour}
+            disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
+            startIcon={isGeneratingBehaviour ? <CircularProgress color="inherit" size={16} /> : <AutoAwesomeIcon />}
+          >
+            {isGeneratingBehaviour ? "Generating..." : "Generate"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-      {/* Modal de generación de behaviours con IA */}
-      {showGenerateBehaviourModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <SparklesIcon className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Generate Similar Behaviour
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    Using "{leiaConfig.behaviour?.metadata.name}" as template
-                  </p>
-                </div>
-              </div>
+      <Dialog open={showGenerateModal} onClose={closeGenerateProblemModal} fullWidth maxWidth="sm">
+        <DialogTitle>Generate Similar Problem</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="info">The generator adapts relevant settings from the selected problem template.</Alert>
+            <TextField
+              label="New Subject"
+              value={generateSubject}
+              onChange={(event) => setGenerateSubject(event.target.value)}
+              required
+              fullWidth
+            />
+            <TextField
+              label="Additional Details"
+              value={generateDetails}
+              onChange={(event) => setGenerateDetails(event.target.value)}
+              multiline
+              rows={3}
+              fullWidth
+            />
+            {generateError && <Alert severity="error">{generateError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button color="inherit" onClick={closeGenerateProblemModal}>Cancel</Button>
+          <Button
+            color="secondary"
+            variant="contained"
+            onClick={handleGenerateProblem}
+            disabled={!generateSubject.trim() || isGenerating}
+            startIcon={isGenerating ? <CircularProgress color="inherit" size={16} /> : <AutoAwesomeIcon />}
+          >
+            {isGenerating ? "Generating..." : "Generate"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Behaviour Subject *
-                  </label>
-                  <input
-                    type="text"
-                    value={generateBehaviourSubject}
-                    onChange={(e) => setGenerateBehaviourSubject(e.target.value)}
-                    placeholder="e.g., Senior Librarian"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Additional Details (optional)
-                  </label>
-                  <textarea
-                    value={generateBehaviourDetails}
-                    onChange={(e) => setGenerateBehaviourDetails(e.target.value)}
-                    placeholder="e.g., Ask clarifying questions and keep a constructive interview tone."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
-                  />
-                </div>
-
-                {generateBehaviourError && (
-                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
-                    {generateBehaviourError}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
-              <button
-                onClick={closeGenerateBehaviourModal}
-                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateBehaviour}
-                disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {isGeneratingBehaviour ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Generating...
-                  </>
-                ) : (
-                  "Generate"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-        
       {(currentUser?.role === "admin" || currentUser?.role === "advanced") && (
         <AddLeiaToAnActivity
           isOpen={showAddToActivityModal}
           selectedLeia={createdLeiaResource}
-          onClose={() => {setShowAddToActivityModal(false); navigate("/leias")}}
+          onClose={() => {
+            setShowAddToActivityModal(false);
+            navigate("/leias");
+          }}
           onSuccess={() => {
             setShowAddToActivityModal(false);
             navigate("/users/me/activities");
           }}
         />
       )}
-      {(currentUser?.role === "admin" || currentUser?.role === "advanced") && (
-        <ActivityReplicationModal
-          isOpen={showActivityReplicationModal}
-          name={nameActivityReplication}
-          onNameChange={setNameActivityReplication}
-          onConfirm={() => handleQuickReplication(createdLeiaResource)}
-          onClose={closeActivityReplicationModal}
-            />
-      )}
-      {/* Modal mostrado despues de crear la LEIA*/}
-      {showFinishModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl mx-4">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                LEIA created successfully
-              </h3>
-              <p className="text-sm text-gray-600">
-                "{createdLeiaName}" was created successfully.
-              </p>
-              <p className="text-sm text-gray-600 mt-2">
-                You have created a LEIA. Now you can create the activity and its
-            replication directly, add it to an existing activity, or return to
-            the home page.
-              </p>
-            </div>
 
-            <div className="px-6 py-4 bg-gray-50 rounded-b-xl">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowFinishModal(false);
-                    setShowFinishActionsMenu(false);
-                    navigate("/leias");
-                  }}
-                  className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Go to Home Page
-                </button>
-                <button
-                  onClick={() => {
-                    setShowFinishModal(false);
-                    setShowFinishActionsMenu(false);
-                    handleQuickReplication(createdLeiaResource);
-                  }}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Quick Replication
-                </button>
-                <div className="relative finish-actions-menu">
-                  <button
-                    type="button"
-                    onClick={() => setShowFinishActionsMenu((open) => !open)}
-                    className="h-full px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center"
-                    title="More actions"
-                    aria-label="More actions"
-                    aria-expanded={showFinishActionsMenu}
-                    aria-haspopup="menu"
-                  >
-                    <EllipsisHorizontalIcon className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-              {showFinishActionsMenu && (
-                <div className="finish-actions-menu mt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowFinishActionsMenu(false);
-                      setShowFinishModal(false);
-                      setShowAddToActivityModal(true);
-                    }}
-                    className="w-full rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 transition-colors"
-                    role="menuitem"
-                  >
-                    Add to Activity
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de generación de behaviours con IA */}
-      {showGenerateBehaviourModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <SparklesIcon className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Generate Similar Behaviour
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    Using "{leiaConfig.behaviour?.metadata.name}" as template
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Behaviour Subject *
-                  </label>
-                  <input
-                    type="text"
-                    value={generateBehaviourSubject}
-                    onChange={(e) => setGenerateBehaviourSubject(e.target.value)}
-                    placeholder="e.g., Senior Librarian"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Additional Details (optional)
-                  </label>
-                  <textarea
-                    value={generateBehaviourDetails}
-                    onChange={(e) => setGenerateBehaviourDetails(e.target.value)}
-                    placeholder="e.g., Ask clarifying questions and keep a constructive interview tone."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
-                  />
-                </div>
-
-                {generateBehaviourError && (
-                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
-                    {generateBehaviourError}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
-              <button
-                onClick={closeGenerateBehaviourModal}
-                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateBehaviour}
-                disabled={!generateBehaviourSubject.trim() || isGeneratingBehaviour}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {isGeneratingBehaviour ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Generating...
-                  </>
-                ) : (
-                  "Generate"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de generación de problemas con IA */}
-      {showGenerateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <SparklesIcon className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Generate Similar Problem
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    Using "{leiaConfig.problem?.metadata.name}" as template
-                  </p>
-                </div>
-              </div>
-              <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
-                <p className="text-xs text-purple-800 leading-relaxed">
-                  If present in the base template, the generator will also adapt{" "}
-                  <code>evaluationPrompt</code>, <code>extends</code>, and{" "}
-                  <code>overrides</code>.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Subject *
-                  </label>
-                  <input
-                    type="text"
-                    value={generateSubject}
-                    onChange={(e) => setGenerateSubject(e.target.value)}
-                    placeholder="p. ej., Sistema de biblioteca"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Additional Details (optional)
-                  </label>
-                  <textarea
-                    value={generateDetails}
-                    onChange={(e) => setGenerateDetails(e.target.value)}
-                    placeholder="p. ej., catálogo, préstamos, reservas, cuentas de socios y notificaciones de vencimiento."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
-                  />
-                </div>
-
-                {generateError && (
-                  <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">
-                    {generateError}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 bg-gray-50 rounded-b-xl">
-              <button
-                onClick={closeGenerateProblemModal}
-                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateProblem}
-                disabled={!generateSubject.trim() || isGenerating}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {isGenerating ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Generating...
-                  </>
-                ) : (
-                  "Generate"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      <Dialog open={showFinishModal} onClose={() => setShowFinishModal(false)} fullWidth maxWidth="sm">
+        <DialogTitle>LEIA created successfully</DialogTitle>
+        <DialogContent dividers>
+          <Typography color="text.secondary">
+            "{createdLeiaName}" was created successfully. Do you want to add it directly to an activity?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            color="inherit"
+            onClick={() => {
+              setShowFinishModal(false);
+              navigate("/leias");
+            }}
+          >
+            No, go to LEIAs
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setShowFinishModal(false);
+              setShowAddToActivityModal(true);
+            }}
+          >
+            Yes, add now
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };

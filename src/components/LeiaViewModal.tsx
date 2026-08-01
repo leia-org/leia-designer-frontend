@@ -1,69 +1,64 @@
 import type React from "react";
-import { useState, useEffect, lazy, Suspense, memo, useRef, useMemo } from "react";
+import { lazy, memo, Suspense, useEffect, useState } from "react";
+import {
+  Box,
+  CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
-import {
-  ArrowPathIcon,
-  ChevronDownIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import { Avatar } from "./shared/Avatar";
-import {
-  buildLeiaInfographicPaths,
-  buildOriginalAvatarPath,
-  buildStoredImageCandidateSources,
-} from "../lib/avatar";
-import InfographicViewer, {
-  type InfographicViewerHandle,
-} from "./InfographicViewer";
-import api from "../lib/axios";
-import { toast } from "react-toastify";
-import { useApiKeys } from "../hooks/useApiKeys";
 
-// Lazy load SyntaxHighlighter with Prism
 const SyntaxHighlighter = lazy(() =>
-  import("react-syntax-highlighter").then((module) => ({
-    default: module.Prism,
-  })),
+  import("react-syntax-highlighter").then((module) => ({ default: module.Prism })),
 );
 
-const LazyCodeBlock: React.FC<{ code: string; language: string }> = ({
-  code,
-  language,
-}) => {
+const LoadingCode = ({ label = "Loading..." }: { label?: string }) => (
+  <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ py: 3 }}>
+    <CircularProgress size={18} />
+    <Typography variant="body2" color="text.secondary">{label}</Typography>
+  </Stack>
+);
+
+const LazyCodeBlock: React.FC<{ code: string; language: string }> = ({ code, language }) => {
   const [prismStyle, setPrismStyle] = useState<object | null>(null);
 
   useEffect(() => {
-    import("react-syntax-highlighter/dist/esm/styles/prism").then((styles) => {
+    void import("react-syntax-highlighter/dist/esm/styles/prism").then((styles) => {
       setPrismStyle(styles.oneLight);
     });
   }, []);
 
-  if (!prismStyle) {
-    return (
-      <div className="flex items-center justify-center py-4">
-        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-sm text-gray-500">Loading...</span>
-      </div>
-    );
-  }
+  if (!prismStyle) return <LoadingCode />;
 
   return (
     <SyntaxHighlighter
       language={language}
       style={prismStyle}
-      showLineNumbers={true}
-      wrapLines={true}
-      customStyle={{
-        borderRadius: "8px",
-        fontSize: "14px",
-        lineHeight: "1.5",
-      }}
+      showLineNumbers
+      wrapLines
+      customStyle={{ borderRadius: "8px", fontSize: "14px", lineHeight: "1.5", margin: 0 }}
     >
       {code}
     </SyntaxHighlighter>
   );
 };
+
+const ContentSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <Stack spacing={1}>
+    <Typography variant="subtitle2" fontWeight={700}>{title}</Typography>
+    <Box sx={{ p: 2, borderRadius: 1.5, bgcolor: "surfaces.subtle", border: "1px solid", borderColor: "divider" }}>
+      {children}
+    </Box>
+  </Stack>
+);
 
 interface LeiaViewModalProps {
   leia: Leia | null;
@@ -71,839 +66,126 @@ interface LeiaViewModalProps {
   onClose: () => void;
 }
 
-type AvatarRegenerationTarget = "leias" | "problems" | "personas";
-type InfographicRegenerationTarget = "infographic" | "infographicSolution";
-type RegenerationTarget =
-  | AvatarRegenerationTarget
-  | InfographicRegenerationTarget;
-type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
+export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen, onClose }) => {
+  const [viewMode, setViewMode] = useState<"problem" | "persona" | "behaviour">("problem");
+  const { user } = useAuth();
 
-function getUserId(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object") {
-    const user = value as { id?: unknown; _id?: unknown };
-    if (typeof user.id === "string") return user.id;
-    if (typeof user._id === "string") return user._id;
-  }
-  return null;
-}
+  useEffect(() => {
+    if (leia?.id) setViewMode("problem");
+  }, [leia?.id]);
 
-const InfographicImage: React.FC<{
-  title: string;
-  description: string;
-  src?: string | null;
-  candidateSources: string[];
-}> = ({ title, description, src, candidateSources }) => {
-  const viewerRef = useRef<InfographicViewerHandle | null>(null);
-  const sources = buildStoredImageCandidateSources(src, ...candidateSources);
-  const hasSource = sources.length > 0;
-  const [thumbnailIndex, setThumbnailIndex] = useState(0);
+  if (!isOpen || !leia) return null;
 
-  if (!hasSource) {
-    return null;
-  }
-
-  const thumbnailSrc = sources[thumbnailIndex] || sources[0];
+  const problem = leia.spec?.problem?.spec;
+  const persona = leia.spec?.persona?.spec;
+  const behaviour = leia.spec?.behaviour?.spec;
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4">
-      <button
-        type="button"
-        onClick={() => viewerRef.current?.open()}
-        className="flex h-24 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-50"
-        title={`Open ${title}`}
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      fullWidth
+      maxWidth="lg"
+      sx={{ "& .MuiDialog-paper": { height: { xs: "92vh", md: "80vh" }, maxHeight: "none" } }}
+    >
+      <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h6" noWrap>{leia.metadata?.name || `LEIA ${leia.id}`}</Typography>
+          <Typography variant="body2" color="text.secondary">View LEIA content</Typography>
+        </Box>
+        <IconButton onClick={onClose} aria-label="Close"><CloseIcon /></IconButton>
+      </DialogTitle>
+      <Tabs
+        value={viewMode}
+        onChange={(_, value: "problem" | "persona" | "behaviour") => setViewMode(value)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ px: 2, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}
       >
-        <img
-          src={thumbnailSrc}
-          alt={title}
-          className="h-full w-full object-contain"
-          onError={() => {
-            setThumbnailIndex((previousIndex) => {
-              const nextIndex = previousIndex + 1;
-              return nextIndex < sources.length ? nextIndex : previousIndex;
-            });
-          }}
-        />
-      </button>
-      <div className="min-w-0 flex-1">
-        <h4 className="text-md font-medium text-gray-900">{title}</h4>
-        <p className="mt-1 text-sm text-gray-500">{description}</p>
-      </div>
-      <button
-        type="button"
-        onClick={() => viewerRef.current?.open()}
-        className="inline-flex flex-shrink-0 items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-      >
-        Open viewer
-      </button>
-      <InfographicViewer
-        ref={viewerRef}
-        candidateSources={sources}
-        title={title}
-        hidden
-      />
-    </div>
+        <Tab value="problem" label="Problem" />
+        <Tab value="persona" label="Persona" />
+        {user?.role === "admin" && <Tab value="behaviour" label="Behaviour" />}
+      </Tabs>
+      <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
+        {viewMode === "problem" && (
+          <Stack spacing={2.5}>
+            <ContentSection title="Problem Description">
+              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                {problem?.description || "No description available"}
+              </Typography>
+            </ContentSection>
+            {problem?.details && (
+              <ContentSection title="Details">
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{problem.details}</Typography>
+              </ContentSection>
+            )}
+            {problem?.solution && (
+              <ContentSection title="Solution">
+                <Suspense fallback={<LoadingCode label="Loading syntax highlighter..." />}>
+                  <LazyCodeBlock code={problem.solution} language={problem.solutionFormat} />
+                </Suspense>
+              </ContentSection>
+            )}
+            {problem?.initialSolution && (
+              <ContentSection title="Initial Solution">
+                <Suspense fallback={<LoadingCode label="Loading syntax highlighter..." />}>
+                  <LazyCodeBlock code={problem.initialSolution} language={problem.solutionFormat} />
+                </Suspense>
+              </ContentSection>
+            )}
+            {problem?.evaluationPrompt && (
+              <ContentSection title="Evaluation Prompt">
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{problem.evaluationPrompt}</Typography>
+              </ContentSection>
+            )}
+            {problem?.process && (
+              <ContentSection title="Process">
+                <Box component="ol" sx={{ m: 0, pl: 2.5 }}>
+                  {problem.process.map((step, index) => <Typography component="li" variant="body2" key={`${step}-${index}`} sx={{ mb: 0.75 }}>{step}</Typography>)}
+                </Box>
+              </ContentSection>
+            )}
+          </Stack>
+        )}
+
+        {viewMode === "persona" && (
+          <Stack spacing={2.5}>
+            <ContentSection title="Persona Information">
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 2 }}>
+                <Box><Typography variant="overline">Full Name</Typography><Typography variant="body2">{persona?.fullName || "N/A"}</Typography></Box>
+                <Box><Typography variant="overline">First Name</Typography><Typography variant="body2">{persona?.firstName || "N/A"}</Typography></Box>
+              </Box>
+            </ContentSection>
+            {persona?.description && <ContentSection title="Description"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{persona.description}</Typography></ContentSection>}
+            {persona?.personality && <ContentSection title="Personality"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{persona.personality}</Typography></ContentSection>}
+            <ContentSection title="Pronouns">
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 2 }}>
+                <Box><Typography variant="overline">Subject</Typography><Typography variant="body2">{persona?.subjectPronoum || "N/A"}</Typography></Box>
+                <Box><Typography variant="overline">Object</Typography><Typography variant="body2">{persona?.objectPronoum || "N/A"}</Typography></Box>
+                <Box><Typography variant="overline">Possessive</Typography><Typography variant="body2">{persona?.possesivePronoum || "N/A"}</Typography></Box>
+                <Box><Typography variant="overline">Possessive Adj.</Typography><Typography variant="body2">{persona?.possesiveAdjective || "N/A"}</Typography></Box>
+              </Box>
+            </ContentSection>
+          </Stack>
+        )}
+
+        {viewMode === "behaviour" && user?.role === "admin" && (
+          <Stack spacing={2.5}>
+            <ContentSection title="Behaviour Configuration">
+              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour?.description || "No description available"}</Typography>
+            </ContentSection>
+            {behaviour?.role && <ContentSection title="Role"><Typography variant="body2">{behaviour.role}</Typography></ContentSection>}
+            {behaviour?.process && (
+              <ContentSection title="Process">
+                <Box component="ol" sx={{ m: 0, pl: 2.5 }}>
+                  {behaviour.process.map((step, index) => <Typography component="li" variant="body2" key={`${step}-${index}`} sx={{ mb: 0.75 }}>{step}</Typography>)}
+                </Box>
+              </ContentSection>
+            )}
+            {behaviour?.tooltip && <ContentSection title="Initial Tooltip"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour.tooltip}</Typography></ContentSection>}
+          </Stack>
+        )}
+      </DialogContent>
+    </Dialog>
   );
-};
-
-export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(
-  ({ leia, isOpen, onClose }) => {
-    const [viewMode, setViewMode] = useState<ViewMode>("problem");
-    const [displayLeia, setDisplayLeia] = useState<Leia | null>(leia);
-    const [isRegenerateMenuOpen, setIsRegenerateMenuOpen] = useState(false);
-    const [regeneratingTarget, setRegeneratingTarget] =
-      useState<RegenerationTarget | null>(null);
-    const { user } = useAuth();
-    const {
-      apiKeys,
-      isLoading: isApiKeysLoading,
-      error: apiKeysError,
-      getDefaultKey,
-    } = useApiKeys();
-    const geminiApiKeys = useMemo(
-      () => apiKeys.filter((key) => key.provider === "gemini"),
-      [apiKeys],
-    );
-    const [imageApiKeyId, setImageApiKeyId] = useState<string | null>(null);
-
-    useEffect(() => {
-      if (leia?.id) {
-        setViewMode("problem");
-        setDisplayLeia(leia);
-        setIsRegenerateMenuOpen(false);
-      }
-    }, [leia?.id]);
-
-    useEffect(() => {
-      setImageApiKeyId((current) => {
-        if (current && geminiApiKeys.some((key) => key.id === current)) {
-          return current;
-        }
-
-        const defaultKey = getDefaultKey?.();
-        if (defaultKey?.provider === "gemini") {
-          return defaultKey.id;
-        }
-
-        return geminiApiKeys[0]?.id ?? null;
-      });
-    }, [geminiApiKeys, getDefaultKey]);
-
-    const getTargetId = (target: AvatarRegenerationTarget) => {
-      if (!displayLeia) return null;
-      if (target === "leias") return displayLeia.id;
-      if (target === "problems") return displayLeia.spec?.problem?.id;
-      return displayLeia.spec?.persona?.id;
-    };
-
-    const refreshAvatar = (avatar?: string) => {
-      if (!avatar) return "";
-      const separator = avatar.includes("?") ? "&" : "?";
-      return `${avatar}${separator}t=${Date.now()}`;
-    };
-
-    const refreshStoredImage = refreshAvatar;
-    const infographicCandidates = buildLeiaInfographicPaths(
-      displayLeia?.id,
-      "infographic",
-    );
-    const infographicSolutionCandidates = buildLeiaInfographicPaths(
-      displayLeia?.id,
-      "infographicSolution",
-    );
-    const hasInfographic = !!displayLeia?.spec?.infographic?.trim();
-    const hasInfographicSolution =
-      !!displayLeia?.spec?.infographicSolution?.trim();
-    const isAdmin = user?.role === "admin";
-    const canRegenerateLeia =
-      isAdmin || getUserId(displayLeia?.user) === user?.id;
-    const canRegenerateProblem =
-      isAdmin || getUserId(displayLeia?.spec?.problem?.user) === user?.id;
-    const canRegeneratePersona =
-      isAdmin || getUserId(displayLeia?.spec?.persona?.user) === user?.id;
-    const avatarRegenerationOptions = [
-      ...(canRegenerateLeia
-        ? [{ label: "LEIA", target: "leias" as const }]
-        : []),
-      ...(canRegenerateProblem
-        ? [{ label: "Problem", target: "problems" as const }]
-        : []),
-      ...(canRegeneratePersona
-        ? [{ label: "Persona", target: "personas" as const }]
-        : []),
-    ];
-    const infographicRegenerationOptions = canRegenerateLeia
-      ? [
-          { label: "Infographic", target: "infographic" as const },
-          {
-            label: "Infographic with solution",
-            target: "infographicSolution" as const,
-          },
-        ]
-      : [];
-    const canOpenRegenerate =
-      avatarRegenerationOptions.length > 0 ||
-      infographicRegenerationOptions.length > 0;
-
-    const getSelectedImageApiKeyId = () => {
-      if (imageApiKeyId) return imageApiKeyId;
-      toast.error("Select a Gemini API key before generating images", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-      return null;
-    };
-
-    const handleRegenerateAvatar = async (
-      target: AvatarRegenerationTarget,
-    ) => {
-      const targetId = getTargetId(target);
-      if (!targetId) {
-        toast.error("Could not find the selected resource", {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-        return;
-      }
-      const selectedImageApiKeyId = getSelectedImageApiKeyId();
-      if (!selectedImageApiKeyId) return;
-
-      setRegeneratingTarget(target);
-      setIsRegenerateMenuOpen(false);
-
-      try {
-        const response = await api.post(
-          `/api/v1/images/${target}/${targetId}/generate`,
-          { apiKeyId: selectedImageApiKeyId },
-        );
-        const avatar = refreshAvatar(response.data?.avatar);
-
-        setDisplayLeia((currentLeia) => {
-          if (!currentLeia || !avatar) return currentLeia;
-
-          if (target === "leias") {
-            return {
-              ...currentLeia,
-              spec: { ...currentLeia.spec, avatar },
-            };
-          }
-
-          if (target === "problems") {
-            return {
-              ...currentLeia,
-              spec: {
-                ...currentLeia.spec,
-                problem: {
-                  ...currentLeia.spec.problem,
-                  spec: {
-                    ...currentLeia.spec.problem.spec,
-                    avatar,
-                  },
-                },
-              },
-            };
-          }
-
-          return {
-            ...currentLeia,
-            spec: {
-              ...currentLeia.spec,
-              persona: {
-                ...currentLeia.spec.persona,
-                spec: {
-                  ...currentLeia.spec.persona.spec,
-                  avatar,
-                },
-              },
-            },
-          };
-        });
-
-        toast.success("Image regenerated successfully", {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-      } catch (error) {
-        let errorMessage = "Could not regenerate the image";
-
-        if (error && typeof error === "object" && "response" in error) {
-          const axiosError = error as {
-            response?: { data?: { message?: string } };
-          };
-          errorMessage = axiosError.response?.data?.message || errorMessage;
-        }
-
-        toast.error(errorMessage, {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-      } finally {
-        setRegeneratingTarget(null);
-      }
-    };
-
-    const handleRegenerateInfographic = async (
-      target: InfographicRegenerationTarget,
-    ) => {
-      if (!displayLeia?.id) {
-        toast.error("Could not find the selected LEIA", {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-        return;
-      }
-      const selectedImageApiKeyId = getSelectedImageApiKeyId();
-      if (!selectedImageApiKeyId) return;
-
-      const path =
-        target === "infographic" ? "infographic" : "infographic-solution";
-
-      setRegeneratingTarget(target);
-      setIsRegenerateMenuOpen(false);
-
-      try {
-        const response = await api.post(
-          `/api/v1/images/leias/${displayLeia.id}/${path}/generate`,
-          { apiKeyId: selectedImageApiKeyId },
-        );
-        const image = refreshStoredImage(response.data?.[target]);
-
-        setDisplayLeia((currentLeia) => {
-          if (!currentLeia || !image) return currentLeia;
-
-          return {
-            ...currentLeia,
-            spec: {
-              ...currentLeia.spec,
-              [target]: image,
-            },
-          };
-        });
-
-        toast.success("Image regenerated successfully", {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-      } catch (error) {
-        let errorMessage = "Could not regenerate the image";
-
-        if (error && typeof error === "object" && "response" in error) {
-          const axiosError = error as {
-            response?: { data?: { message?: string } };
-          };
-          errorMessage = axiosError.response?.data?.message || errorMessage;
-        }
-
-        toast.error(errorMessage, {
-          position: "bottom-right",
-          autoClose: 3000,
-        });
-      } finally {
-        setRegeneratingTarget(null);
-      }
-    };
-
-    if (!isOpen || !displayLeia) return null;
-
-    return (
-      <div
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            onClose();
-          }
-        }}
-      >
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {displayLeia.metadata?.name || `LEIA ${displayLeia.id}`}
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">View LEIA content</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {canOpenRegenerate && (
-                <div className="relative">
-                  <button
-                    onClick={() =>
-                      setIsRegenerateMenuOpen((isOpen) => !isOpen)
-                    }
-                    disabled={regeneratingTarget !== null}
-                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ArrowPathIcon
-                      className={`h-4 w-4 ${
-                        regeneratingTarget ? "animate-spin" : ""
-                      }`}
-                    />
-                    Regenerate
-                    <ChevronDownIcon className="h-4 w-4" />
-                  </button>
-
-                  {isRegenerateMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-72 rounded-lg border border-gray-200 bg-white shadow-lg z-10 overflow-hidden">
-                      <div className="border-b border-gray-100 p-3">
-                        <label className="mb-1 block text-xs font-medium text-gray-600">
-                          Gemini API key
-                        </label>
-                        <select
-                          value={imageApiKeyId ?? ""}
-                          onChange={(e) =>
-                            setImageApiKeyId(e.target.value || null)
-                          }
-                          disabled={isApiKeysLoading || geminiApiKeys.length === 0}
-                          className="h-9 w-full rounded-md border border-gray-300 px-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-                        >
-                          <option value="">
-                            {isApiKeysLoading
-                              ? "Loading API keys..."
-                              : "Select Gemini API key"}
-                          </option>
-                          {geminiApiKeys.map((key) => (
-                            <option key={key.id} value={key.id}>
-                              {key.description}
-                              {key.isDefault ? " (default)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                        {apiKeysError ? (
-                          <p className="mt-1 text-xs text-red-600">
-                            {apiKeysError}
-                          </p>
-                        ) : geminiApiKeys.length === 0 && !isApiKeysLoading ? (
-                          <p className="mt-1 text-xs text-gray-500">
-                            Add a Gemini API key to regenerate images.
-                          </p>
-                        ) : null}
-                      </div>
-                      {avatarRegenerationOptions.map((option) => (
-                        <button
-                          key={option.target}
-                          onClick={() => handleRegenerateAvatar(option.target)}
-                          disabled={!imageApiKeyId}
-                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                      {avatarRegenerationOptions.length > 0 &&
-                        infographicRegenerationOptions.length > 0 && (
-                          <div className="border-t border-gray-100" />
-                        )}
-                      {infographicRegenerationOptions.map((option) => (
-                        <button
-                          key={option.target}
-                          onClick={() =>
-                            handleRegenerateInfographic(option.target)
-                          }
-                          disabled={!imageApiKeyId}
-                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              <button
-                onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <XMarkIcon className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex border-b border-gray-200 flex-shrink-0">
-            <button
-              onClick={() => setViewMode("problem")}
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
-                viewMode === "problem"
-                  ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Problem
-            </button>
-            <button
-              onClick={() => setViewMode("persona")}
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
-                viewMode === "persona"
-                  ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Persona
-            </button>
-            {user?.role === "admin" && (
-              <button
-                onClick={() => setViewMode("behaviour")}
-                className={`px-6 py-3 text-sm font-medium transition-colors ${
-                  viewMode === "behaviour"
-                    ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Behaviour
-              </button>
-            )}
-            <button
-              onClick={() => setViewMode("infographics")}
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
-                viewMode === "infographics"
-                  ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Infographics
-            </button>
-          </div>
-
-          <div className="flex-1 p-6 overflow-y-auto">
-            {viewMode === "problem" && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Avatar
-                    src={displayLeia.spec?.problem?.spec?.avatar}
-                    fallbackSrc={buildOriginalAvatarPath(
-                      "problems",
-                      displayLeia.spec?.problem?.id,
-                    )}
-                    alt={`${displayLeia.spec?.problem?.metadata?.name || "Problem"} avatar`}
-                    label={
-                      displayLeia.spec?.problem?.metadata?.name || "Problem"
-                    }
-                    size="lg"
-                  />
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {displayLeia.spec?.problem?.metadata?.name || "Problem"}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      v{displayLeia.spec?.problem?.metadata?.version || "N/A"}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Problem Description
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-gray-700 leading-relaxed">
-                      {displayLeia.spec?.problem?.spec?.description ||
-                        "No description available"}
-                    </p>
-                  </div>
-                </div>
-                {displayLeia.spec?.problem?.spec?.details && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Details
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {displayLeia.spec.problem.spec.details}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {displayLeia.spec?.problem?.spec?.solution && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Solution
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <Suspense
-                        fallback={
-                          <div className="flex items-center justify-center py-4">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                            <span className="ml-2 text-sm text-gray-500">
-                              Loading syntax highlighter...
-                            </span>
-                          </div>
-                        }
-                      >
-                        <LazyCodeBlock
-                          code={displayLeia.spec.problem.spec.solution}
-                          language={displayLeia.spec.problem.spec.solutionFormat}
-                        />
-                      </Suspense>
-                    </div>
-                  </div>
-                )}{" "}
-                {displayLeia.spec?.problem?.spec?.initialSolution && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Initial Solution
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <Suspense
-                        fallback={
-                          <div className="flex items-center justify-center py-4">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                            <span className="ml-2 text-sm text-gray-500">
-                              Loading syntax highlighter...
-                            </span>
-                          </div>
-                        }
-                      >
-                        <LazyCodeBlock
-                          code={displayLeia.spec.problem.spec.initialSolution}
-                          language={displayLeia.spec.problem.spec.solutionFormat}
-                        />
-                      </Suspense>
-                    </div>
-                  </div>
-                )}{" "}
-                {displayLeia.spec?.problem?.spec?.evaluationPrompt && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Evaluation Prompt
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {displayLeia.spec.problem.spec.evaluationPrompt}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {displayLeia.spec?.problem?.spec?.process && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Process
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <ol className="list-decimal list-inside space-y-1">
-                        {displayLeia.spec.problem.spec.process.map(
-                          (step, index) => (
-                            <li key={index} className="text-gray-700">
-                              {step}
-                            </li>
-                          ),
-                        )}
-                      </ol>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {viewMode === "persona" && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Avatar
-                    src={displayLeia.spec?.persona?.spec?.avatar}
-                    fallbackSrc={buildOriginalAvatarPath(
-                      "personas",
-                      displayLeia.spec?.persona?.id,
-                    )}
-                    alt={`${displayLeia.spec?.persona?.spec?.fullName || "Persona"} avatar`}
-                    label={
-                      displayLeia.spec?.persona?.spec?.fullName || "Persona"
-                    }
-                    size="lg"
-                  />
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {displayLeia.spec?.persona?.spec?.fullName ||
-                        displayLeia.spec?.persona?.metadata?.name ||
-                        "Persona"}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      v{displayLeia.spec?.persona?.metadata?.version || "N/A"}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Persona Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="font-medium text-gray-600">
-                        Full Name:
-                      </span>
-                      <p className="text-gray-900">
-                        {displayLeia.spec?.persona?.spec?.fullName || "N/A"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">
-                        First Name:
-                      </span>
-                      <p className="text-gray-900">
-                        {displayLeia.spec?.persona?.spec?.firstName || "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {displayLeia.spec?.persona?.spec?.description && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Description
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-gray-700 leading-relaxed">
-                        {displayLeia.spec.persona.spec.description}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {displayLeia.spec?.persona?.spec?.personality && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Personality
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {displayLeia.spec.persona.spec.personality}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-2">
-                    Pronouns
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-gray-600">
-                        Subject:
-                      </span>
-                      <span className="ml-2 text-gray-900">
-                        {displayLeia.spec?.persona?.spec?.subjectPronoum ||
-                          "N/A"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Object:</span>
-                      <span className="ml-2 text-gray-900">
-                        {displayLeia.spec?.persona?.spec?.objectPronoum ||
-                          "N/A"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">
-                        Possessive:
-                      </span>
-                      <span className="ml-2 text-gray-900">
-                        {displayLeia.spec?.persona?.spec?.possesivePronoum ||
-                          "N/A"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">
-                        Possessive Adj:
-                      </span>
-                      <span className="ml-2 text-gray-900">
-                        {displayLeia.spec?.persona?.spec?.possesiveAdjective ||
-                          "N/A"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {viewMode === "behaviour" && user?.role === "admin" && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Behaviour Configuration
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-gray-700 leading-relaxed">
-                      {displayLeia.spec?.behaviour?.spec?.description ||
-                        "No description available"}
-                    </p>
-                  </div>
-                </div>
-
-                {displayLeia.spec?.behaviour?.spec?.role && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Role
-                    </h4>
-                    <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">
-                      {displayLeia.spec.behaviour.spec.role}
-                    </p>
-                  </div>
-                )}
-
-                {displayLeia.spec?.behaviour?.spec?.process && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Process
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <ol className="list-decimal list-inside space-y-2">
-                        {displayLeia.spec.behaviour.spec.process.map(
-                          (step, index) => (
-                            <li key={index} className="text-gray-700">
-                              {step}
-                            </li>
-                          ),
-                        )}
-                      </ol>
-                    </div>
-                  </div>
-                )}
-
-                {displayLeia.spec?.behaviour?.spec?.tooltip && (
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">
-                      Initial Tooltip
-                    </h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {displayLeia.spec.behaviour.spec.tooltip}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {viewMode === "infographics" && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Infographics
-                  </h3>
-                  {!hasInfographic && !hasInfographicSolution && (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <p className="text-gray-600">
-                          No infographics available for this LEIA.
-                        </p>
-                      </div>
-                    )}
-                </div>
-                {hasInfographic && (
-                  <InfographicImage
-                    title="Infographic"
-                    description="Student-facing version without the solution."
-                    src={displayLeia.spec?.infographic}
-                    candidateSources={infographicCandidates}
-                  />
-                )}
-                {hasInfographicSolution && (
-                  <InfographicImage
-                    title="Infographic with solution"
-                    description="Instructor version including the expected solution."
-                    src={displayLeia.spec?.infographicSolution}
-                    candidateSources={infographicSolutionCandidates}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  },
-);
+});

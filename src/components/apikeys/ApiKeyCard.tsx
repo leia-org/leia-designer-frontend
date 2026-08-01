@@ -1,154 +1,305 @@
-import React from "react";
+import type React from "react";
 import {
-  PencilIcon,
-  TrashIcon,
-  LinkIcon,
-  CubeTransparentIcon,
-} from "@heroicons/react/24/solid";
-import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
-import type { ApiKey } from "../../models/ApiKeys"; // Asegúrate de que esta ruta sea correcta en tu proyecto
+  Box,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Divider,
+  IconButton,
+  Link as MuiLink,
+  Stack,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
+import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderOutlinedIcon from "@mui/icons-material/StarBorderOutlined";
+import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
+import type { ApiKey } from "../../models/ApiKeys";
 
 interface ApiKeyCardProps {
   apiKey: ApiKey;
-  userRole: string|undefined;
+  userRole: string | undefined;
   onEdit: () => void;
   onDelete: () => void;
   onToggleDefault?: (apiKey: ApiKey) => void;
   isSaving?: boolean;
 }
 
-export const ApiKeyCard: React.FC<ApiKeyCardProps> = ({ apiKey, onEdit, userRole,onDelete, onToggleDefault, isSaving = false }) => {
+const MetaRow: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}> = ({ icon, label, children }) => (
+  <Stack direction="row" spacing={1.5} alignItems="flex-start">
+    <Box sx={{ color: "text.disabled", display: "flex", mt: 0.25 }}>{icon}</Box>
+    <Box sx={{ minWidth: 0, flex: 1 }}>
+      <Typography variant="overline" sx={{ display: "block" }}>
+        {label}
+      </Typography>
+      <Box sx={{ mt: 0.25, minWidth: 0 }}>{children}</Box>
+    </Box>
+  </Stack>
+);
 
-  const handleToggleDefault = () => {
-    if (onToggleDefault) {
-      onToggleDefault(apiKey);
-      return;
-    }
-  };
+const actionButtonSx = {
+  border: "1px solid",
+  borderColor: "divider",
+  borderRadius: 1.5,
+  color: "text.secondary",
+  bgcolor: "background.paper",
+};
+
+export const ApiKeyCard: React.FC<ApiKeyCardProps> = ({
+  apiKey,
+  onEdit,
+  userRole,
+  onDelete,
+  onToggleDefault,
+  isSaving = false,
+}) => {
+  const canManage = !apiKey.isSystemApiKey || userRole === "admin";
+
   return (
-    <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-200 p-6 flex flex-col">
-
-      {/* --- CABECERA --- */}
-      <div className="flex justify-between items-start mb-5">
-        <div className="overflow-hidden pr-4">
-          <h3 className="text-xl font-bold text-gray-800 mb-2 truncate" title={apiKey.description}>
-            {apiKey.description}
-          </h3>
-
-          <div className="flex items-center space-x-2">
-            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-              apiKey.isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
-            }`}>
-              {apiKey.isActive ? (
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-              ) : (
-                <span className="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
+    <Card
+      variant="outlined"
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        borderColor: "divider",
+        transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+        "&:hover": { boxShadow: 2, borderColor: "#D6D3D1" },
+      }}
+    >
+      <CardContent
+        sx={{
+          p: { xs: 2, sm: 3 },
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          "&:last-child": { pb: { xs: 2, sm: 3 } },
+        }}
+      >
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={2}
+          sx={{ mb: 2.5 }}
+        >
+          <Box sx={{ minWidth: 0, overflow: "hidden" }}>
+            <Typography
+              variant="h6"
+              title={apiKey.description}
+              sx={{
+                fontWeight: 700,
+                color: "text.primary",
+                mb: 1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {apiKey.description}
+            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Chip
+                size="small"
+                label={apiKey.isActive ? "Active" : "Inactive"}
+                icon={
+                  <Box
+                    component="span"
+                    aria-hidden
+                    sx={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      bgcolor: apiKey.isActive ? "success.main" : "text.disabled",
+                    }}
+                  />
+                }
+                sx={{
+                  height: 22,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  bgcolor: apiKey.isActive ? "rgba(22,163,74,0.08)" : "surfaces.subtle",
+                  color: apiKey.isActive ? "success.main" : "text.secondary",
+                  "& .MuiChip-icon": { ml: 1, mr: -0.25 },
+                }}
+              />
+              {apiKey.isDefault && (
+                <Chip
+                  size="small"
+                  label="Default"
+                  sx={{
+                    height: 22,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    bgcolor: "surfaces.accent",
+                    color: "primary.dark",
+                  }}
+                />
               )}
-              {apiKey.isActive ? 'Active' : 'Inactive'}
-            </span>
+              {apiKey.isSystemApiKey && (
+                <Chip
+                  size="small"
+                  label="System"
+                  sx={{
+                    height: 22,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    bgcolor: "surfaces.subtle",
+                    color: "warning.main",
+                  }}
+                />
+              )}
+            </Stack>
+          </Box>
 
-            {apiKey.isDefault && (
-              <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2.5 py-1 rounded uppercase tracking-wide">
-                Default
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            <Tooltip title={apiKey.isDefault ? "Unmark Default" : "Mark as Default"}>
+              <span>
+                <IconButton
+                  onClick={() => onToggleDefault?.(apiKey)}
+                  disabled={isSaving}
+                  size="small"
+                  sx={{
+                    ...actionButtonSx,
+                    "&:hover": {
+                      color: "warning.main",
+                      borderColor: "warning.main",
+                      bgcolor: "rgba(217,119,6,0.06)",
+                    },
+                  }}
+                >
+                  {isSaving ? (
+                    <CircularProgress size={20} sx={{ color: "text.secondary" }} />
+                  ) : apiKey.isDefault ? (
+                    <StarIcon sx={{ fontSize: 20, color: "warning.main" }} />
+                  ) : (
+                    <StarBorderOutlinedIcon sx={{ fontSize: 20, color: "text.disabled" }} />
+                  )}
+                </IconButton>
               </span>
+            </Tooltip>
+            {canManage && (
+              <>
+                <Tooltip title="Edit API Key">
+                  <IconButton
+                    onClick={onEdit}
+                    size="small"
+                    sx={{
+                      ...actionButtonSx,
+                      "&:hover": {
+                        color: "primary.main",
+                        borderColor: "primary.main",
+                        bgcolor: "surfaces.accent",
+                      },
+                    }}
+                  >
+                    <EditOutlinedIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete API Key">
+                  <IconButton
+                    onClick={onDelete}
+                    size="small"
+                    sx={{
+                      ...actionButtonSx,
+                      "&:hover": {
+                        color: "error.main",
+                        borderColor: "error.main",
+                        bgcolor: "rgba(220,38,38,0.06)",
+                      },
+                    }}
+                  >
+                    <DeleteOutlinedIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+              </>
             )}
+          </Stack>
+        </Stack>
 
-            {apiKey.isSystemApiKey && (
-              <span className="bg-gray-100 text-yellow-800 text-[10px] font-bold px-2.5 py-1 rounded uppercase tracking-wide">
-                System
-              </span>
-            )}
-          </div>
-        </div>
+        <Divider sx={{ mb: 2.5 }} />
 
-        <div className="flex space-x-2 flex-shrink-0">
-          {!apiKey.isDefault && <button
-            onClick={handleToggleDefault}
-            title="Mark as Default"
-            disabled={isSaving}
-            className={`p-2 bg-white border border-gray-200 rounded-lg text-gray-500 transition-all shadow-sm ${isSaving ? 'opacity-60 cursor-not-allowed' : 'hover:text-yellow-600 hover:bg-yellow-50 hover:border-yellow-200'}`}
+        <Stack spacing={2.5} sx={{ flex: 1 }}>
+          <Box>
+            <Typography variant="overline" sx={{ display: "block" }}>
+              API Key Value
+            </Typography>
+            <Box
+              sx={{
+                mt: 0.75,
+                p: 1.25,
+                borderRadius: 1.5,
+                border: "1px solid",
+                borderColor: "divider",
+                bgcolor: "surfaces.subtle",
+              }}
+            >
+              <Typography
+                className="mono"
+                sx={{ color: "text.primary", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+              >
+                {apiKey.keyValue}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Stack
+            spacing={2}
+            sx={{ p: 2, borderRadius: 1.5, border: "1px solid", borderColor: "divider", bgcolor: "surfaces.subtle" }}
           >
-            {isSaving ? (
-              <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-              </svg> // Cambiar por iconos
-            ) : (
-              <StarOutlineIcon className="h-5 w-5 text-gray-400" />
+            <MetaRow icon={<ViewInArOutlinedIcon sx={{ fontSize: 20 }} />} label="API Key Provider">
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", overflowWrap: "anywhere" }}>
+                {apiKey.provider}
+              </Typography>
+            </MetaRow>
+            {apiKey.model && (
+              <MetaRow icon={<MemoryOutlinedIcon sx={{ fontSize: 20 }} />} label="Default Model">
+                <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", overflowWrap: "anywhere" }}>
+                  {apiKey.model}
+                </Typography>
+              </MetaRow>
             )}
-          </button>}
-
-          {(!apiKey?.isSystemApiKey|| (userRole && userRole === 'admin')) && (
-            <>
-              <button
-                onClick={onEdit}
-                title="Edit API Key"
-                className="p-2 bg-white border border-gray-200 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all shadow-sm"
-              >
-                <PencilIcon className="h-5 w-5" />
-              </button>
-              <button
-                onClick={onDelete}
-                title="Delete API Key"
-                className="p-2 bg-white border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm"
-              >
-                <TrashIcon className="h-5 w-5" />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <hr className="border-gray-100 mb-5" />
-
-      {/* --- CUERPO (Datos) --- */}
-      <div className="flex-1 space-y-5">
-
-        {/* Valor de la API Key */}
-        <div>
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">API Key Value</label>
-          <div className="flex items-center justify-between mt-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2.5">
-
-            <span className="text-sm font-mono text-gray-800 truncate">
-              {apiKey.keyValue}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 bg-gray-50/50 rounded-lg p-4 border border-gray-100">
-          <div className="flex items-start space-x-3">
-            <CubeTransparentIcon className="h-5 w-5 text-gray-400 mt-0.5" />
-            <div className="overflow-hidden">
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">API Key Provider</p>
-              <p className="text-sm text-gray-800 font-semibold mt-0.5 truncate">{apiKey.provider}</p>
-            </div>
-          </div>
-
-          {apiKey.baseUrl &&(
-            <div className="flex items-start space-x-3">
-              <LinkIcon className="h-5 w-5 text-gray-400 mt-0.5" />
-              <div className="overflow-hidden">
-                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Base URL</p>
-                <a href={apiKey.baseUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 truncate hover:underline mt-0.5 block">
+            {apiKey.baseUrl && (
+              <MetaRow icon={<LinkOutlinedIcon sx={{ fontSize: 20 }} />} label="Base URL">
+                <MuiLink
+                  href={apiKey.baseUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="hover"
+                  sx={{ display: "block", fontSize: 14, color: "primary.main", overflowWrap: "anywhere" }}
+                >
                   {apiKey.baseUrl}
-                </a>
-              </div>
-            </div>
-          )}
-
-          {apiKey.managementUrl && (
-            <div className="flex items-start space-x-3">
-              <LinkIcon className="h-5 w-5 text-gray-400 mt-0.5" />
-              <div className="overflow-hidden">
-                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Management URL</p>
-                <a href={apiKey.managementUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 truncate hover:underline mt-0.5 block">
+                </MuiLink>
+              </MetaRow>
+            )}
+            {apiKey.managementUrl && (
+              <MetaRow icon={<LinkOutlinedIcon sx={{ fontSize: 20 }} />} label="Management URL">
+                <MuiLink
+                  href={apiKey.managementUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="hover"
+                  sx={{ display: "block", fontSize: 14, color: "primary.main", overflowWrap: "anywhere" }}
+                >
                   {apiKey.managementUrl}
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+                </MuiLink>
+              </MetaRow>
+            )}
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
   );
 };

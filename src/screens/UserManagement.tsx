@@ -1,17 +1,48 @@
-import { useState, useEffect} from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
-  UsersIcon,
-  UserPlusIcon,
-  PencilIcon,
-  TrashIcon,
-  XMarkIcon,
-  EyeIcon,
-  EyeSlashIcon,
-} from "@heroicons/react/24/outline";
-import {authApi} from "../lib/axios";
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Checkbox,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Tooltip,
+  Typography,
+  type SelectChangeEvent,
+} from "@mui/material";
+import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
+import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import CloseIcon from "@mui/icons-material/Close";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
+import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import validator from "validator";
 import axios from "axios";
-import { Header } from "../components/shared/Header";
+import { authApi } from "../lib/axios";
+import { PageShell } from "../components/shared/PageShell";
 
 interface UserResponse {
   id: string;
@@ -22,11 +53,38 @@ interface UserResponse {
   updatedAt: string;
 }
 
+type UserFormData = {
+  email: string;
+  role: UserResponse["role"];
+  password: string;
+  confirmPassword: string;
+  useSystemApiKey: boolean;
+};
+
+const emptyForm = (): UserFormData => ({
+  email: "",
+  role: "instructor",
+  password: "",
+  confirmPassword: "",
+  useSystemApiKey: false,
+});
+
+const roleLabel = (role: UserResponse["role"]) => {
+  if (role === "admin") return "Administrator";
+  if (role === "advanced") return "Advanced";
+  return "Instructor";
+};
+
+const roleChipSx = (role: UserResponse["role"]) => {
+  if (role === "admin") return { bgcolor: "rgba(124,58,237,0.10)", color: "#6D28D9" };
+  if (role === "advanced") return { bgcolor: "surfaces.accent", color: "primary.dark" };
+  return { bgcolor: "rgba(22,163,74,0.10)", color: "success.main" };
+};
+
 export const UserManagement = () => {
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
@@ -35,114 +93,84 @@ export const UserManagement = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState("");
   const [deleteSuccess, setDeleteSuccess] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    role: "instructor" as "admin" | "instructor" | "advanced",
-    password: "",
-    confirmPassword: "",
-    useSystemApiKey: false,
-  });
+  const [formData, setFormData] = useState<UserFormData>(emptyForm);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await authApi.get<UserResponse[]>("/api/v1/users");
       setUsers(response.data);
-    } catch (err) {
-      console.error("Error fetching users:", err);
+    } catch (fetchError) {
+      console.error("Error fetching users:", fetchError);
       setError("Failed to load users");
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    void fetchUsers();
+  }, [fetchUsers]);
+
+  const resetForm = (user: UserResponse | null = editingUser) => {
+    setFormData(
+      user
+        ? { email: user.email, role: user.role, password: "", confirmPassword: "", useSystemApiKey: user.useSystemApiKey }
+        : emptyForm(),
+    );
+    setFormErrors({});
+    setSubmitMessage("");
+    setSubmitSuccess(false);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const closeUserModal = () => {
+    resetForm();
+    setIsModalOpen(false);
+    setEditingUser(null);
   };
 
-  const getRoleBadge = (role: string) => {
-    const baseClasses =
-      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium";
-
-    if (role === "admin") {
-      return `${baseClasses} bg-purple-100 text-purple-800`;
-    }
-    if (role === "instructor") {
-      return `${baseClasses} bg-green-100 text-green-800`;
-    }
-    if (role === "advanced") {
-      return `${baseClasses} bg-blue-100 text-blue-800`;
-    }
-    return `${baseClasses} bg-gray-100 text-gray-800`;
+  const openCreateModal = () => {
+    setEditingUser(null);
+    resetForm(null);
+    setIsModalOpen(true);
   };
 
-  const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case "admin":
-        return "Administrator";
-      case "instructor":
-        return "Instructor";
-      case "advanced":
-        return "Advanced";
-      default:
-        return role;
-    }
-  };
-
-  const getInitials = (email: string) => {
-    return email.charAt(0).toUpperCase();
+  const openEditModal = (user: UserResponse) => {
+    setEditingUser(user);
+    resetForm(user);
+    setIsModalOpen(true);
   };
 
   const validateForm = () => {
-    const errors: { [key: string]: string } = {};
+    const errors: Record<string, string> = {};
+    if (!formData.email.trim()) errors.email = "Email is required";
+    else if (!validator.isEmail(formData.email)) errors.email = "Please enter a valid email address";
 
-    if (!formData.email.trim()) {
-      errors.email = "Email is required";
-    } else if (!validator.isEmail(formData.email)) {
-      errors.email = "Please enter a valid email address";
-    }
+    if (!formData.password && !editingUser) errors.password = "Password is required";
+    else if (formData.password && formData.password.length < 6) errors.password = "Password must be at least 6 characters";
 
-    if (!formData.password && !editingUser) {
-      errors.password = "Password is required";
-    } else if (formData.password && formData.password.length < 6) {
-      errors.password = "Password must be at least 6 characters";
-    }
-
-    if (!formData.confirmPassword && formData.password) {
-      errors.confirmPassword = "Please confirm your password";
-    } else if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = "Passwords do not match";
-    }
+    if (!formData.confirmPassword && formData.password) errors.confirmPassword = "Please confirm your password";
+    else if (formData.password !== formData.confirmPassword) errors.confirmPassword = "Passwords do not match";
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!validateForm()) return;
 
     setIsSubmitting(true);
     setSubmitMessage("");
-
     try {
       if (editingUser) {
         await authApi.put(`/api/v1/users/${editingUser.id}`, {
@@ -163,79 +191,25 @@ export const UserManagement = () => {
         setSubmitSuccess(true);
         setSubmitMessage("User created successfully!");
       }
-
-      setTimeout(() => {
-        setIsModalOpen(false);
-        setSubmitMessage("");
-        setSubmitSuccess(false);
-        setEditingUser(null);
-        fetchUsers();
-      }, 1500);
-    } catch (error: unknown) {
-      setSubmitSuccess(false);
-
+      window.setTimeout(() => {
+        closeUserModal();
+        void fetchUsers();
+      }, 1200);
+    } catch (submitError: unknown) {
       let errorMessage = editingUser
         ? "An error occurred while updating the user"
         : "An error occurred while creating the user";
-
-      if (axios.isAxiosError(error) && error.response) {
-        if (error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.data?.validationErrors) {
-          const validationErrors = Object.values(
-            error.response.data.validationErrors
-          ) as string[];
-          errorMessage = validationErrors.join(", ");
+      if (axios.isAxiosError(submitError) && submitError.response) {
+        if (submitError.response.data?.message) {
+          errorMessage = submitError.response.data.message;
+        } else if (submitError.response.data?.validationErrors) {
+          errorMessage = (Object.values(submitError.response.data.validationErrors) as string[]).join(", ");
         }
       }
-
+      setSubmitSuccess(false);
       setSubmitMessage(errorMessage);
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const openDeleteModal = (user: UserResponse) => {
-    setDeletingUser(user);
-    setDeleteConfirmEmail("");
-    setDeleteMessage("");
-    setDeleteSuccess(false);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (!deletingUser) return;
-
-    setIsDeleting(true);
-    setDeleteMessage("");
-
-    try {
-      await authApi.delete(`/api/v1/users/${deletingUser.id}`);
-      setDeleteSuccess(true);
-      setDeleteMessage("User deleted successfully!");
-
-      setTimeout(() => {
-        setIsDeleteModalOpen(false);
-        setDeleteMessage("");
-        setDeleteSuccess(false);
-        setDeletingUser(null);
-        setDeleteConfirmEmail("");
-        fetchUsers();
-      }, 1500);
-    } catch (error: unknown) {
-      setDeleteSuccess(false);
-
-      let errorMessage = "An error occurred while deleting the user";
-
-      if (axios.isAxiosError(error) && error.response) {
-        if (error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        }
-      }
-
-      setDeleteMessage(errorMessage);
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -245,543 +219,251 @@ export const UserManagement = () => {
     setDeleteSuccess(false);
   };
 
-  const openEditModal = (user: UserResponse) => {
-    setEditingUser(user);
-    setFormData({
-      email: user.email,
-      role: user.role,
-      password: "",
-      confirmPassword: "",
-      useSystemApiKey: user.useSystemApiKey,
-    });
-    setFormErrors({});
-    setSubmitMessage("");
-    setSubmitSuccess(false);
-    setIsModalOpen(true);
+  const closeDeleteModal = () => {
+    resetDeleteModal();
+    setIsDeleteModalOpen(false);
+    setDeletingUser(null);
   };
 
-  const resetModal = () => {
-    if (editingUser) {
-      setFormData({
-        email: editingUser.email,
-        role: editingUser.role,
-        password: "",
-        confirmPassword: "",
-        useSystemApiKey: editingUser.useSystemApiKey,
+  const openDeleteModal = (user: UserResponse) => {
+    setDeletingUser(user);
+    resetDeleteModal();
+    setIsDeleteModalOpen(true);
+  };
 
-      });
-    } else {
-      setFormData({
-        email: "",
-        role: "instructor",
-        password: "",
-        confirmPassword: "",
-        useSystemApiKey: false,
-      });
+  const handleDelete = async () => {
+    if (!deletingUser) return;
+    setIsDeleting(true);
+    setDeleteMessage("");
+    try {
+      await authApi.delete(`/api/v1/users/${deletingUser.id}`);
+      setDeleteSuccess(true);
+      setDeleteMessage("User deleted successfully!");
+      window.setTimeout(() => {
+        closeDeleteModal();
+        void fetchUsers();
+      }, 1200);
+    } catch (deleteError: unknown) {
+      let errorMessage = "An error occurred while deleting the user";
+      if (axios.isAxiosError(deleteError) && deleteError.response?.data?.message) {
+        errorMessage = deleteError.response.data.message;
+      }
+      setDeleteSuccess(false);
+      setDeleteMessage(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
-    setFormErrors({});
-    setSubmitMessage("");
-    setSubmitSuccess(false);
-    setShowPassword(false);
-    setShowConfirmPassword(false);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading users...</p>
-        </div>
-      </div>
-    );
-  }
+  const formatDate = (date: string) => new Date(date).toLocaleDateString("en-US", {
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 text-xl mb-4">⚠️</div>
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={fetchUsers}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const passwordAdornment = (visible: boolean, toggle: () => void) => (
+    <InputAdornment position="end">
+      <IconButton onClick={toggle} edge="end" aria-label="Toggle password visibility">
+        {visible ? <VisibilityOffOutlinedIcon /> : <VisibilityOutlinedIcon />}
+      </IconButton>
+    </InputAdornment>
+  );
+
+  const table = (
+    <Paper variant="outlined" sx={{ borderColor: "divider", overflow: "hidden" }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ p: { xs: 2, sm: 2.5 }, borderBottom: "1px solid", borderColor: "divider" }}>
+        <Stack direction="row" spacing={1.25} alignItems="center">
+          <GroupOutlinedIcon color="primary" />
+          <Typography variant="h6" fontWeight={700}>Users</Typography>
+        </Stack>
+        <Button variant="contained" startIcon={<PersonAddAltOutlinedIcon />} onClick={openCreateModal}>
+          Add User
+        </Button>
+      </Stack>
+      <TableContainer>
+        <Table sx={{ minWidth: 760 }}>
+          <TableHead sx={{ bgcolor: "surfaces.subtle" }}>
+            <TableRow>
+              <TableCell>Email</TableCell>
+              <TableCell>Role</TableCell>
+              <TableCell>Creation Date</TableCell>
+              <TableCell>System API Key</TableCell>
+              <TableCell align="right">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id} hover>
+                <TableCell>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Avatar sx={{ width: 36, height: 36, bgcolor: "surfaces.subtle", color: "text.secondary", fontSize: 14, fontWeight: 700 }}>
+                      {user.email.charAt(0).toUpperCase()}
+                    </Avatar>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap>{user.email}</Typography>
+                      <Typography variant="caption" className="mono" noWrap>ID: {user.id}</Typography>
+                    </Box>
+                  </Stack>
+                </TableCell>
+                <TableCell><Chip label={roleLabel(user.role)} size="small" sx={roleChipSx(user.role)} /></TableCell>
+                <TableCell><Typography variant="body2" color="text.secondary">{formatDate(user.createdAt)}</Typography></TableCell>
+                <TableCell>
+                  <Chip
+                    label={user.useSystemApiKey ? "Yes" : "No"}
+                    size="small"
+                    sx={user.useSystemApiKey ? { bgcolor: "rgba(22,163,74,0.10)", color: "success.main" } : { bgcolor: "surfaces.subtle", color: "text.secondary" }}
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Edit user"><IconButton size="small" onClick={() => openEditModal(user)} color="primary"><EditOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="Delete user"><IconButton size="small" onClick={() => openDeleteModal(user)} color="error"><DeleteOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      {users.length === 0 && (
+        <Stack spacing={1.5} alignItems="center" sx={{ p: 7, color: "text.disabled" }}>
+          <GroupOutlinedIcon sx={{ fontSize: 44 }} />
+          <Typography variant="body2" color="text.secondary">No users registered</Typography>
+        </Stack>
+      )}
+    </Paper>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        title="User Management"
-        description="Manage users, roles, and permissions"
-      />
+    <PageShell
+      title="User Management"
+      description="Manage users, roles, and permissions"
+      maxWidth="xl"
+      actions={<Button variant="contained" startIcon={<PersonAddAltOutlinedIcon />} onClick={openCreateModal}>Add User</Button>}
+    >
+      {loading ? (
+        <Stack spacing={2} alignItems="center" justifyContent="center" sx={{ minHeight: 360 }}>
+          <CircularProgress size={40} />
+          <Typography color="text.secondary">Loading users...</Typography>
+        </Stack>
+      ) : error ? (
+        <Stack spacing={2} alignItems="center" justifyContent="center" sx={{ minHeight: 360 }}>
+          <WarningAmberOutlinedIcon sx={{ fontSize: 44, color: "error.main" }} />
+          <Typography color="error.main">{error}</Typography>
+          <Button variant="outlined" onClick={() => void fetchUsers()}>Retry</Button>
+        </Stack>
+      ) : table}
 
-      <div className="py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Users Table */}
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <UsersIcon className="h-6 w-6 text-blue-600 mr-3" />
-                  <h2 className="text-xl font-bold text-gray-900">Users</h2>
-                </div>
-                <button
-                  onClick={() => {
-                    resetModal();
-                    setIsModalOpen(true);
-                  }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
+      <Dialog open={isModalOpen} onClose={closeUserModal} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="h6" component="span">{editingUser ? "Edit User" : "Add New User"}</Typography>
+          <IconButton onClick={closeUserModal} aria-label="Close"><CloseIcon /></IconButton>
+        </DialogTitle>
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          <DialogContent dividers>
+            <Stack spacing={2.25}>
+              {submitMessage && <Alert severity={submitSuccess ? "success" : "error"}>{submitMessage}</Alert>}
+              <TextField
+                type="email"
+                label="Email"
+                value={formData.email}
+                onChange={(event) => setFormData((current) => ({ ...current, email: event.target.value }))}
+                error={Boolean(formErrors.email)}
+                helperText={formErrors.email}
+                placeholder="Enter email"
+                required
+                fullWidth
+              />
+              <FormControl fullWidth>
+                <InputLabel id="user-role-label">Role</InputLabel>
+                <Select
+                  labelId="user-role-label"
+                  label="Role"
+                  value={formData.role}
+                  onChange={(event: SelectChangeEvent<UserResponse["role"]>) => setFormData((current) => ({ ...current, role: event.target.value as UserResponse["role"] }))}
                 >
-                  <UserPlusIcon className="h-5 w-5 mr-2" />
-                  Add User
-                </button>
-              </div>
-            </div>
+                  <MenuItem value="instructor">Instructor</MenuItem>
+                  <MenuItem value="admin">Administrator</MenuItem>
+                  <MenuItem value="advanced">Advanced</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                type={showPassword ? "text" : "password"}
+                label="Password"
+                value={formData.password}
+                onChange={(event) => setFormData((current) => ({ ...current, password: event.target.value }))}
+                error={Boolean(formErrors.password)}
+                helperText={formErrors.password || (editingUser ? "Leave blank to keep the current password" : undefined)}
+                placeholder="Enter password"
+                required={!editingUser}
+                autoComplete="new-password"
+                fullWidth
+                slotProps={{ input: { endAdornment: passwordAdornment(showPassword, () => setShowPassword((visible) => !visible)) } }}
+              />
+              <TextField
+                type={showConfirmPassword ? "text" : "password"}
+                label="Confirm Password"
+                value={formData.confirmPassword}
+                onChange={(event) => setFormData((current) => ({ ...current, confirmPassword: event.target.value }))}
+                error={Boolean(formErrors.confirmPassword)}
+                helperText={formErrors.confirmPassword}
+                placeholder="Confirm password"
+                required={!editingUser || Boolean(formData.password.trim())}
+                autoComplete="new-password"
+                fullWidth
+                slotProps={{ input: { endAdornment: passwordAdornment(showConfirmPassword, () => setShowConfirmPassword((visible) => !visible)) } }}
+              />
+              <FormControlLabel
+                control={<Checkbox checked={formData.useSystemApiKey} onChange={(event) => setFormData((current) => ({ ...current, useSystemApiKey: event.target.checked }))} />}
+                label="Use System API Key"
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button type="button" color="inherit" onClick={() => resetForm()}>Reset</Button>
+            <Box sx={{ flex: 1 }} />
+            <Button type="button" color="inherit" onClick={closeUserModal}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={isSubmitting}>
+              {isSubmitting ? <CircularProgress size={18} color="inherit" /> : editingUser ? "Update User" : "Create User"}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Role
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Creation Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      System API Key
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 flex-shrink-0">
-                            <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                              <span className="text-sm font-medium text-gray-700">
-                                {getInitials(user.email)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.email}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              ID: {user.id}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={getRoleBadge(user.role)}>
-                          {getRoleDisplayName(user.role)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(user.createdAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {user.useSystemApiKey ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Yes
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            No
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => openEditModal(user)}
-                            className="text-blue-600 hover:text-blue-900 p-1 rounded"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            className="text-red-600 hover:text-red-900 p-1 rounded"
-                            onClick={() => openDeleteModal(user)}
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {users.length === 0 && (
-              <div className="text-center py-12">
-                <UsersIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No users registered</p>
-              </div>
-            )}
-          </div>
-
-          {/* User Modal - Create/Edit */}
-          {isModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500/50 backdrop-blur-sm">
-              <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-auto p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    {editingUser ? "Edit User" : "Add New User"}
-                  </h2>
-                  <button
-                    onClick={() => {
-                      resetModal();
-                      setIsModalOpen(false);
-                      setEditingUser(null);
-                    }}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
-
-                {submitMessage && (
-                  <div
-                    className={`p-4 mb-4 rounded-md text-sm ${
-                      submitSuccess
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                    role="alert"
-                  >
-                    {submitMessage}
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmit}>
-                  <div className="mb-4">
-                    <label
-                      htmlFor="email"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      id="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                      className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${
-                        formErrors.email ? "border-red-300" : "border-gray-300"
-                      }`}
-                      placeholder="Enter email"
-                      required
-                    />
-                    {formErrors.email && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {formErrors.email}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mb-4">
-                    <label
-                      htmlFor="role"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Role
-                    </label>
-                    <select
-                      id="role"
-                      value={formData.role}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          role: e.target.value as
-                            | "admin"
-                            | "instructor"
-                            | "advanced",
-                        })
-                      }
-                      className="block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
-                      required
-                    >
-                      <option value="instructor">Instructor</option>
-                      <option value="admin">Administrator</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                  </div>
-
-                  <div className="mb-4">
-                    <label
-                      htmlFor="password"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        id="password"
-                        value={formData.password}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            password: e.target.value,
-                          })
-                        }
-                        className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${
-                          formErrors.password
-                            ? "border-red-300"
-                            : "border-gray-300"
-                        }`}
-                        placeholder="Enter password"
-                        required={!editingUser}
-                      />
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="text-gray-500 hover:text-gray-700"
-                        >
-                          {showPassword ? (
-                            <EyeIcon className="h-5 w-5" />
-                          ) : (
-                            <EyeSlashIcon className="h-5 w-5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {formErrors.password && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {formErrors.password}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mb-4">
-                    <label
-                      htmlFor="confirmPassword"
-                      className="block text-sm font-medium text-gray-700 mb-1"
-                    >
-                      Confirm Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        id="confirmPassword"
-                        value={formData.confirmPassword}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            confirmPassword: e.target.value,
-                          })
-                        }
-                        className={`block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 ${
-                          formErrors.confirmPassword
-                            ? "border-red-300"
-                            : "border-gray-300"
-                        }`}
-                        placeholder="Confirm password"
-                        required={
-                          !editingUser || formData.password.trim() !== ""
-                        }
-                      />
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowConfirmPassword(!showConfirmPassword)
-                          }
-                          className="text-gray-500 hover:text-gray-700"
-                        >
-                          {showConfirmPassword ? (
-                            <EyeIcon className="h-5 w-5" />
-                          ) : (
-                            <EyeSlashIcon className="h-5 w-5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    {formErrors.confirmPassword && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {formErrors.confirmPassword}
-                      </p>
-                    )}
-                    <div className="py-3 mb-4 flex items-center">
-                    <input
-                      type="checkbox"
-                      id="useSystemApiKey"
-                      checked={formData.useSystemApiKey}
-                      onChange={(e) =>
-                        setFormData({ ...formData, useSystemApiKey: e.target.checked })
-                      }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="useSystemApiKey"
-                      className="ml-2 block text-sm text-gray-700"
-                    >
-                      Use System API Key
-                    </label>
-                  </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={resetModal}
-                      className="text-gray-500 hover:text-gray-700 text-sm"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className={`${
-                        isSubmitting
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-blue-600 hover:bg-blue-700"
-                      } text-white px-4 py-2 rounded-md transition-colors text-sm flex items-center`}
-                    >
-                      {isSubmitting && (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      )}
-                      {editingUser ? "Update User" : "Create User"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* Delete User Modal */}
-          {isDeleteModalOpen && deletingUser && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500/50 backdrop-blur-sm">
-              <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-auto p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Delete User
-                  </h2>
-                  <button
-                    onClick={() => {
-                      resetDeleteModal();
-                      setIsDeleteModalOpen(false);
-                      setDeletingUser(null);
-                    }}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
-
-                {deleteMessage && (
-                  <div
-                    className={`p-4 mb-4 rounded-md text-sm ${
-                      deleteSuccess
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                    role="alert"
-                  >
-                    {deleteMessage}
-                  </div>
-                )}
-
-                <div className="mb-6">
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                    <div className="flex items-center">
-                      <div className="text-sm text-red-700">
-                        <p>
-                          You are about to permanently delete the user:
-                          <br />
-                          <strong className="font-semibold">
-                            {deletingUser.email}
-                          </strong>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="confirmEmail"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      To confirm deletion, please type the user's email address:
-                    </label>
-                    <input
-                      type="email"
-                      id="confirmEmail"
-                      value={deleteConfirmEmail}
-                      onChange={(e) => setDeleteConfirmEmail(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                      placeholder={deletingUser.email}
-                      disabled={isDeleting}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={resetDeleteModal}
-                    className="text-gray-500 hover:text-gray-700 text-sm"
-                    disabled={isDeleting}
-                  >
-                    Reset
-                  </button>
-                  <div className="flex space-x-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetDeleteModal();
-                        setIsDeleteModalOpen(false);
-                        setDeletingUser(null);
-                      }}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                      disabled={isDeleting}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={
-                        isDeleting || deleteConfirmEmail !== deletingUser.email
-                      }
-                      className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 flex items-center ${
-                        isDeleting || deleteConfirmEmail !== deletingUser.email
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-red-600 hover:bg-red-700"
-                      }`}
-                    >
-                      {isDeleting && (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      )}
-                      Delete User
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+      <Dialog open={isDeleteModalOpen && Boolean(deletingUser)} onClose={closeDeleteModal} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="h6" component="span">Delete User</Typography>
+          <IconButton onClick={closeDeleteModal} aria-label="Close"><CloseIcon /></IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2.5}>
+            {deleteMessage && <Alert severity={deleteSuccess ? "success" : "error"}>{deleteMessage}</Alert>}
+            <Alert severity="error" icon={<WarningAmberOutlinedIcon />}>
+              You are about to permanently delete <strong>{deletingUser?.email}</strong>.
+            </Alert>
+            <TextField
+              type="email"
+              label="Confirm email address"
+              value={deleteConfirmEmail}
+              onChange={(event) => setDeleteConfirmEmail(event.target.value)}
+              placeholder={deletingUser?.email}
+              helperText="Type the user's email address to enable deletion."
+              disabled={isDeleting}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button type="button" color="inherit" onClick={resetDeleteModal} disabled={isDeleting}>Reset</Button>
+          <Box sx={{ flex: 1 }} />
+          <Button type="button" color="inherit" onClick={closeDeleteModal} disabled={isDeleting}>Cancel</Button>
+          <Button
+            type="button"
+            variant="contained"
+            color="error"
+            onClick={handleDelete}
+            disabled={isDeleting || deleteConfirmEmail !== deletingUser?.email}
+          >
+            {isDeleting ? <CircularProgress size={18} color="inherit" /> : "Delete User"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </PageShell>
   );
 };

@@ -2,6 +2,21 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import mermaid from "mermaid";
 import ReactMarkdown from "react-markdown";
+import CloseIcon from "@mui/icons-material/Close";
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Paper,
+  Stack,
+} from "@mui/material";
 import { Header } from "../components/shared/Header";
 import { FormatEditor } from "../components/FormatEditor";
 import { FormatPreview } from "../components/FormatPreview";
@@ -84,58 +99,45 @@ const getDefaultCode = (exercise?: ExerciseSpec) => {
   return initialSolution || fallbackCode;
 };
 
+const unwrapMermaidCodeFence = (value: string) => {
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/^```(?:mermaid)?\s*\r?\n([\s\S]*?)\r?\n?```\s*$/i);
+  return fenced ? fenced[1].trim() : trimmed;
+};
+
 const EvaluationModal: React.FC<{
   evaluation: string;
   score: number;
   onClose: () => void;
 }> = ({ evaluation, score, onClose }) => (
-  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl">
-      <div className="flex items-center justify-between px-6 py-4 border-b">
-        <h2 className="text-xl font-semibold text-gray-900">
-          Evaluation Result
-        </h2>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-
-      <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-        <div className="mb-4">
-          <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-sm font-medium">
-            Score: {score}
-          </span>
-        </div>
-        <div className="prose prose-sm max-w-none text-gray-700">
-          <ReactMarkdown>{evaluation}</ReactMarkdown>
-        </div>
-      </div>
-
-      <div className="px-6 py-4 border-t flex justify-end">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-        >
-          Back to editor
-        </button>
-      </div>
-    </div>
-  </div>
+  <Dialog open onClose={onClose} fullWidth maxWidth="md" aria-labelledby="evaluation-result-title">
+    <DialogTitle id="evaluation-result-title" sx={{ pr: 7 }}>
+      Evaluation Result
+      <IconButton aria-label="Close" onClick={onClose} sx={{ position: "absolute", top: 12, right: 12 }}>
+        <CloseIcon />
+      </IconButton>
+    </DialogTitle>
+    <DialogContent dividers sx={{ maxHeight: "60vh" }}>
+      <Chip label={`Score: ${score}`} color="primary" sx={{ mb: 2 }} />
+      <Box
+        sx={{
+          color: "text.secondary",
+          "& h1, & h2, & h3, & h4": { color: "text.primary", mt: 2, mb: 1 },
+          "& p": { lineHeight: 1.65, my: 1 },
+          "& ul, & ol": { pl: 3 },
+          "& pre": { overflow: "auto", p: 1.5, bgcolor: "surfaces.subtle", borderRadius: 1 },
+          "& code": { fontFamily: "'JetBrains Mono Variable', monospace", fontSize: "0.9em" },
+        }}
+      >
+        <ReactMarkdown>{evaluation}</ReactMarkdown>
+      </Box>
+    </DialogContent>
+    <DialogActions sx={{ px: 3, py: 2 }}>
+      <Button variant="contained" onClick={onClose}>
+        Back to editor
+      </Button>
+    </DialogActions>
+  </Dialog>
 );
 
 export const Edit: React.FC = () => {
@@ -191,8 +193,14 @@ export const Edit: React.FC = () => {
         setError(null);
         return;
       }
+      const diagramCode = unwrapMermaidCodeFence(code);
+      if (!diagramCode) {
+        setMermaidSvg("");
+        setError(null);
+        return;
+      }
       try {
-        const { svg } = await mermaid.render("designer-mermaid-diagram", code);
+        const { svg } = await mermaid.render("designer-mermaid-diagram", diagramCode);
         setMermaidSvg(svg);
         setLastValidSvg(svg);
         setError(null);
@@ -289,76 +297,78 @@ export const Edit: React.FC = () => {
   }, [navigate, sessionId]);
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
+    <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
       <Header
         title="Edit Solution"
         description="Write and evaluate the current solution"
         showNavigation={false}
         rightContent={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleBackToChat}
-              className="px-4 py-1.5 text-sm text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50"
-            >
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button color="inherit" variant="outlined" onClick={handleBackToChat}>
               Chat
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleSubmit}
               disabled={isSubmitting || !sessionId || !!error}
-              className="px-4 py-1.5 text-sm text-blue-600 bg-white border border-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="outlined"
+              startIcon={isSubmitting ? <CircularProgress size={14} color="inherit" /> : undefined}
             >
               {isSubmitting ? "Evaluating..." : "Evaluate Solution"}
-            </button>
-            <button
-              onClick={handleContinueConfiguration}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-700 border border-blue-800 rounded-md hover:bg-blue-800 shadow-sm"
-            >
+            </Button>
+            <Button onClick={handleContinueConfiguration} variant="contained">
               Continue Configuration
-            </button>
-          </div>
+            </Button>
+          </Stack>
         }
       />
 
-      <div className="flex-1 min-h-0 px-6 py-4">
-        <div className="h-full w-full flex flex-col min-h-0">
+      <Box sx={{ flex: 1, minHeight: 0, px: { xs: 2, md: 3 }, py: 2 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
           {submitError && (
-            <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+            <Alert severity="error" sx={{ mb: 2 }}>
               {submitError}
-            </div>
+            </Alert>
           )}
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm">
+            <Alert severity="warning" sx={{ mb: 2 }}>
               {error}
-            </div>
+            </Alert>
           )}
 
-          <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-xl overflow-hidden flex">
-            <div style={{ width: `${editorWidth}%` }} className="h-full">
+          <Paper variant="outlined" sx={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
+            <Box sx={{ width: `${editorWidth}%`, height: "100%" }}>
               <FormatEditor
                 value={code}
                 onChange={handleEditorChange}
                 format={solutionFormat}
                 onError={(nextError) => setError(nextError)}
               />
-            </div>
-            <div
-              className={`w-1 hover:bg-blue-500 cursor-col-resize transition-colors ${
-                isResizing ? "bg-blue-500" : "bg-gray-200"
-              }`}
+            </Box>
+            <Box
+              role="separator"
+              aria-orientation="vertical"
               onMouseDown={handleMouseDown}
+              sx={{
+                width: 4,
+                flexShrink: 0,
+                cursor: "col-resize",
+                bgcolor: isResizing ? "primary.main" : "divider",
+                transition: (theme) => theme.transitions.create("background-color"),
+                "&:hover": { bgcolor: "primary.main" },
+              }}
             />
-            <div style={{ width: `${100 - editorWidth}%` }} className="h-full">
+            <Box sx={{ width: `${100 - editorWidth}%`, height: "100%" }}>
               <FormatPreview
                 code={code}
                 format={solutionFormat}
                 mermaidSvg={mermaidSvg}
                 error={error}
               />
-            </div>
-          </div>
-        </div>
-      </div>
+            </Box>
+          </Paper>
+        </Box>
+      </Box>
 
       {evaluation !== null && score !== null && (
         <EvaluationModal
@@ -370,6 +380,6 @@ export const Edit: React.FC = () => {
           }}
         />
       )}
-    </div>
+    </Box>
   );
 };

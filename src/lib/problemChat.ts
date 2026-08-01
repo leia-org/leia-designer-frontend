@@ -1,7 +1,7 @@
 import api from "./axios";
 
 // Wire types for the design-time problem-chat assistant. The model drives the
-// editor through frontend tools (apply_problem / get_current_problem), reusing
+// editor through frontend tools (apply_problem / get_current_problem), using
 // the same tool round-trip the workbench chat uses.
 
 export interface ProblemChatTool {

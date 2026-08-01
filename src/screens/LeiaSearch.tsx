@@ -1,20 +1,39 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  SwatchIcon,
-  LightBulbIcon,
-  PuzzlePieceIcon,
-  EyeIcon,
-  TrashIcon,
-  BookOpenIcon,
-  PlayIcon,
-  ChevronDownIcon,
-} from "@heroicons/react/24/outline";
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
+import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import LibraryBooksOutlinedIcon from "@mui/icons-material/LibraryBooksOutlined";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
+import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import api from "../lib/axios";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
-import { SearchFilter } from "../components/shared/SearchFilter";
-import { Header } from "../components/shared/Header";
+import { PageShell } from "../components/shared/PageShell";
 import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
 import type { Leia, Persona, Problem, Behaviour, Label } from "../models/Leia";
 import { ToastContainer, toast } from "react-toastify";
@@ -27,7 +46,6 @@ import { Avatar } from "../components/shared/Avatar";
 import { buildOriginalAvatarPath } from "../lib/avatar";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
-import { ActivityReplicationModal } from "../components/ActivityReplicationModal";
 type VersionFilter = "" | "latest";
 
 export const LeiaSearch: React.FC = () => {
@@ -75,6 +93,7 @@ export const LeiaSearch: React.FC = () => {
   const [nameActivityReplication, setNameActivityReplication] = useState("");
   const [openLabelModalLeia, setOpenLabelModalLeia] = useState<Leia | null>(null);
   const [tryMenuOpenId, setTryMenuOpenId] = useState<string | null>(null);
+  const [trySettingsAnchor, setTrySettingsAnchor] = useState<HTMLElement | null>(null);
   const [tryConfigByLeia, setTryConfigByLeia] = useState<
     Record<string, { modelName: string; apiKeyId: string | null }>
   >({});
@@ -140,6 +159,7 @@ export const LeiaSearch: React.FC = () => {
     };
     fetchLabels();
   }, []);
+
   const handlePersonalize = useCallback(async (leia: Leia, fromTour: boolean) => {
     try {
       const [personaResp, problemResp, behaviourResp] = await Promise.all([
@@ -484,13 +504,25 @@ export const LeiaSearch: React.FC = () => {
     [defaultModel, getDefaultKey, getTryApiKeys, getTryModels]
   );
 
+  const closeTrySettings = useCallback(() => {
+    setTryMenuOpenId(null);
+    setTrySettingsAnchor(null);
+  }, []);
+
   const handleTryMenuToggle = useCallback(
-    (leia: Leia) => {
+    (leia: Leia, anchor: HTMLElement) => {
       if (initializingId === leia.id) return;
-      setTryMenuOpenId((prev) => (prev === leia.id ? null : leia.id));
+
+      if (tryMenuOpenId === leia.id) {
+        closeTrySettings();
+        return;
+      }
+
+      setTryMenuOpenId(leia.id);
+      setTrySettingsAnchor(anchor);
       ensureTryConfig(leia);
     },
-    [ensureTryConfig, initializingId]
+    [closeTrySettings, ensureTryConfig, initializingId, tryMenuOpenId]
   );
 
   const handleTryModelChange = useCallback(
@@ -566,7 +598,7 @@ export const LeiaSearch: React.FC = () => {
       });
       return;
     }
-    setTryMenuOpenId(null);
+    closeTrySettings();
     await handleTest(leia, config);
   };
 
@@ -794,24 +826,23 @@ export const LeiaSearch: React.FC = () => {
 
 
   return (
-    <div className="flex flex-col h-screen bg-white">
-      <Header
-        dropdownTour={showDropdown}
-        title="Search"
-        description="Discover and test existing LEIA configurations"
-        leftContent={
-          <button
-            type="button"
-            onClick={() =>
-              startGuidedTour()
-            }
-            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
-          >
-            <PlayIcon className="h-4 w-4" />
+    <PageShell
+      title="LEIA library"
+      description="Browse, test, and design learning experiences"
+      dropdownTour={showDropdown}
+      actions={
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" startIcon={<PlayCircleOutlineIcon />} onClick={() => startGuidedTour()}>
             Design tour
-          </button>
-        }
-      />
+          </Button>
+          <Button variant="contained" startIcon={<AddOutlinedIcon />} onClick={() => navigate("/create")}>
+            New LEIA
+          </Button>
+        </Stack>
+      }
+      maxWidth={false}
+      flush
+    >
       <ToastContainer />
       <AddLeiaToAnActivity
         isOpen={showExperimentsModal}
@@ -826,99 +857,136 @@ export const LeiaSearch: React.FC = () => {
           handleCloseExperimentsModal();
         }}
       />
-      <ActivityReplicationModal
-        isOpen={showActivityReplicationModal}
-        name={nameActivityReplication}
-        onNameChange={setNameActivityReplication}
-        onConfirm={() => handleQuickReplication()}
-        onClose={closeActivityReplicationModal}
-      />
-      <div className="max-w-6xl mx-auto pt-6 px-6 w-full mx-auto">
-        <div className="flex items-end gap-4 mb-6">
-          <div className="flex-1">
-            <SearchFilter
+      {showActivityReplicationModal && (
+        <Dialog open onClose={closeActivityReplicationModal} maxWidth="sm" fullWidth>
+          <DialogTitle>Replicate activity</DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Choose a name for the new activity and its Workbench replication.
+              </Typography>
+              <TextField
+                autoFocus
+                label="Activity and Replication name"
+                value={nameActivityReplication}
+                onChange={(event) => setNameActivityReplication(event.target.value)}
+                placeholder="Activity replication name"
+                fullWidth
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button color="inherit" onClick={closeActivityReplicationModal}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={() => void handleQuickReplication()}
+              disabled={!nameActivityReplication.trim()}
+            >
+              Replicate
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <Box
+          sx={{
+            flexShrink: 0,
+            px: { xs: 2, md: 4 },
+            py: 2,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.paper",
+          }}
+        >
+          <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} alignItems={{ lg: "center" }}>
+            <TextField
+              fullWidth
+              size="small"
               placeholder="Search by name or description"
               value={queryText}
-              onChange={setQueryText}
-              className="max-w-xl"
+              onChange={(event) => setQueryText(event.target.value)}
+              inputProps={{ "aria-label": "Search LEIAs" }}
+              sx={{ maxWidth: { lg: 520 } }}
             />
-          </div>
-          <div className="flex gap-4">
-            <div className="min-w-[140px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Label
-              </label>
-              <select
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                value={selectedLabelFilter || ""}
-                onChange={(e) =>
-                  setSelectedLabelFilter(
-                    e.target.value
-                  )
-                }
-              >
-                <option value="">All Labels</option>
-                {labels.map((label) => (
-                  <option key={label._id} value={label._id}>
-                    {label.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="min-w-[140px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Visibility
-              </label>
-              <select
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                value={visibilityFilter}
-                onChange={(e) =>
-                  setVisibilityFilter(
-                    e.target.value as "all" | "private" | "public"
-                  )
-                }
-              >
-                <option value="all">All</option>
-                <option value="private">Private</option>
-                <option value="public">Public</option>
-              </select>
-            </div>
-            <div className="min-w-[180px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Version
-              </label>
-              <select
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                value={versionFilter}
-                onChange={(e) =>
-                  setVersionFilter(e.target.value as VersionFilter)
-                }
-              >
-                <option value="latest">Latest only</option>
-                <option value="">All</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ flexShrink: 0 }}>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel id="label-filter-label">Label</InputLabel>
+                <Select
+                  labelId="label-filter-label"
+                  label="Label"
+                  value={selectedLabelFilter || ""}
+                  onChange={(event) => setSelectedLabelFilter(event.target.value || null)}
+                >
+                  <MenuItem value="">All labels</MenuItem>
+                  {labels.map((label) => (
+                    <MenuItem key={label._id} value={label._id}>
+                      {label.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 130 }}>
+                <InputLabel id="visibility-filter-label">Visibility</InputLabel>
+                <Select
+                  labelId="visibility-filter-label"
+                  label="Visibility"
+                  value={visibilityFilter}
+                  onChange={(event) => setVisibilityFilter(event.target.value as "all" | "private" | "public")}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="private">Private</MenuItem>
+                  <MenuItem value="public">Public</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 135 }}>
+                <InputLabel id="version-filter-label">Version</InputLabel>
+                <Select
+                  labelId="version-filter-label"
+                  label="Version"
+                  value={versionFilter}
+                  onChange={(event) => setVersionFilter(event.target.value as VersionFilter)}
+                >
+                  <MenuItem value="latest">Latest only</MenuItem>
+                  <MenuItem value="">All versions</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
+          </Stack>
+        </Box>
 
-      <div className="relative flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto">
-          <div id="search-results" className="max-w-6xl mx-auto px-6 mt-6 pb-6 w-full">
-            {error && (
-              <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded">
-                {error}
-              </div>
-            )}
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
+          <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
-              <div className="py-16 text-center text-gray-500">Loading…</div>
+              <Stack alignItems="center" spacing={1.5} sx={{ py: 10 }}>
+                <CircularProgress size={28} />
+                <Typography variant="body2" color="text.secondary">Loading library…</Typography>
+              </Stack>
             ) : leias.length === 0 ? (
-              <div className="py-16 text-center text-gray-500">
-                No LEIAs found
-              </div>
+              <Stack alignItems="center" spacing={1} sx={{ py: 10, color: "text.secondary" }}>
+                <LibraryBooksOutlinedIcon sx={{ fontSize: 32, color: "text.disabled" }} />
+                <Typography variant="body2">
+                  {queryText || selectedLabelFilter || visibilityFilter !== "all" || !versionFilter
+                    ? "No LEIAs match these filters."
+                    : "No LEIAs found."}
+                </Typography>
+              </Stack>
             ) : (
-              <ul  className="divide-y divide-gray-200 bg-white rounded-md border border-gray-200">
+              <Box
+                component="ul"
+                sx={{
+                  m: 0,
+                  p: 0,
+                  listStyle: "none",
+                  overflow: "visible",
+                  bgcolor: "background.paper",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1.5,
+                }}
+              >
                 {leias.map((leia, index) => {
                   const description =
                     leia.spec?.problem?.spec?.description ||
@@ -929,8 +997,7 @@ export const LeiaSearch: React.FC = () => {
                     "leias",
                     leia.id,
                   );
-            
-                  const labelData = leia.metadata?.labels;
+                  const labelData = leia.metadata?.labels || [];
                   const tryConfig = tryConfigByLeia[leia.id];
                   const tryModelName = tryConfig?.modelName ?? "";
                   const tryApiKeyId = tryConfig?.apiKeyId ?? null;
@@ -939,8 +1006,7 @@ export const LeiaSearch: React.FC = () => {
                   const validTryApiKeys = getTryApiKeys(leia, tryModelName);
                   const isTryMenuOpen = tryMenuOpenId === leia.id;
                   const isTryLoading = isProvidersLoading || isApiKeysLoading;
-                  const canStartTry =
-                    Boolean(tryModelName && tryApiKeyId) && !isTryLoading;
+                  const canStartTry = Boolean(tryModelName && tryApiKeyId) && !isTryLoading;
                   const showNoApiKeys =
                     !isTryLoading &&
                     !providersError &&
@@ -950,13 +1016,30 @@ export const LeiaSearch: React.FC = () => {
                     !isTryLoading &&
                     Boolean(tryModelName) &&
                     validTryApiKeys.length === 0 &&
-                    apiKeys.some((key) => key.isActive !== false);
+                    apiKeys.length > 0;
+                  const leiaUserId = typeof leia.user === "object" ? leia.user?.id : leia.user;
+                  const canManageLabels = Boolean(
+                    user && (user.role === "admin" || user.id === leiaUserId),
+                  );
 
                   return (
-                    <li
+                    <Box
+                      component="li"
                       key={leia.id}
-                      className="flex items-start justify-between gap-4 p-4"
-                      id = {index === 1 ? "first-leia" : undefined}
+                      id={index === 1 ? "first-leia" : undefined}
+                      sx={{
+                        px: { xs: 2, md: 2.5 },
+                        py: 2,
+                        borderBottom: index < leias.length - 1 ? "1px solid" : 0,
+                        borderColor: "divider",
+                        display: "flex",
+                        flexDirection: { xs: "column", xl: "row" },
+                        alignItems: { xl: "center" },
+                        justifyContent: "space-between",
+                        gap: 2,
+                        transition: "background-color 120ms ease",
+                        "&:hover": { bgcolor: "surfaces.hover" },
+                      }}
                     >
                       <Avatar
                         src={leiaAvatar}
@@ -964,170 +1047,152 @@ export const LeiaSearch: React.FC = () => {
                         alt={`${leia.metadata.name} avatar`}
                         label={leia.metadata.name}
                         size="md"
-                        className="mt-1"
                       />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-base font-medium text-gray-900 truncate">
-                              {leia.metadata.name}
-                            </h3>
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                              v{leia.metadata.version}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                                leia.isPublished
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
+                          <Typography sx={{ fontSize: 15, fontWeight: 700, lineHeight: 1.35 }}>
+                            {leia.metadata.name}
+                          </Typography>
+                          <Chip
+                            label={"v" + leia.metadata.version}
+                            size="small"
+                            variant="outlined"
+                            sx={{ height: 22, fontSize: 11 }}
+                          />
+                          <Chip
+                            label={leia.isPublished ? "Published" : "Unpublished"}
+                            size="small"
+                            sx={{
+                              height: 22,
+                              fontSize: 11,
+                              bgcolor: leia.isPublished ? "rgba(22, 163, 74, 0.10)" : "rgba(217, 119, 6, 0.10)",
+                              color: leia.isPublished ? "success.main" : "warning.main",
+                            }}
+                          />
+                          {labelData.map((label) => (
+                            <Chip
+                              key={label._id}
+                              label={label.name}
+                              size="small"
+                              sx={{
+                                height: 22,
+                                fontSize: 11,
+                                bgcolor: label.color || "surfaces.subtle",
+                                color: label.secundaryColor || "text.primary",
+                                border: "1px solid",
+                                borderColor: "divider",
+                              }}
+                            />
+                          ))}
+                          {canManageLabels && (
+                            <Button
+                              size="small"
+                              onClick={() => setOpenLabelModalLeia(leia)}
+                              sx={{ minWidth: 0, px: 0.75, fontSize: 11, textTransform: "none" }}
                             >
-                              {leia.isPublished ? "Published" : "Unpublished"}
-                            </span>
-                            {labelData?.length > 0 && labelData.map((label, index) => (
-                              <span
-                                key={label._id || `${leia.id}-${label.name}-${index}`}
-                                className="px-2 py-0.5 text-xs font-medium rounded-full border border-gray-200"
-                                style={{
-                                  backgroundColor: label.color || "#f3f4f6",
-                                  color: label.secundaryColor || "#111827",
-                                }}
-                                title={`Label: ${label.name}`}
-                              >
-                                {label.name} 
-                                
-                              </span>
-                              
-                            ))}
-                            {user && (user.role === "admin" || (user.id === (leia.user as unknown as string))) && (
-                              <button className="px-1.5 py-0.5 text-xs rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600" onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenLabelModalLeia(leia);
-                                  }}>
-                                    + Label
-                                  </button>
-                            )}
-                          </div>
-                          {/* User information moved back to the right without margin */}
-                          {leia.user && leia.user.email && leia.user.role && (
-                            <div className="flex items-center gap-3 text-xs text-gray-500 flex-shrink-0">
-                              <span>{leia.user.email}</span>
-                              <span className="flex items-center gap-1">
-                                <span
-                                  className={`inline-block w-2 h-2 rounded-full ${
-                                    leia.user.role === "admin"
-                                      ? "bg-purple-500"
-                                      : "bg-green-500"
-                                  }`}
-                                ></span>
-                                {leia.user.role === "admin"
-                                  ? "Administrator"
-                                  : "Instructor"}
-                              </span>
-                            </div>
+                              + Label
+                            </Button>
                           )}
-                        </div>
+                        </Stack>
+
                         {description && (
-                          <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                            {description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          className="group relative px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-10 hover:w-40"
-                          onClick={() => handlePersonalize(leia, false)}
-                          id = {index === 1 ? "first-design-from-this-button" : undefined}
-                          onMouseEnter={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
-                          onMouseLeave={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
-                        >
-                          <SwatchIcon className="w-4 h-4 flex-shrink-0" />
-                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                            Design from this
-                          </span>
-                        </button>
-                        <button
-                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-20"
-                          onClick={() => handleViewLeiaContent(leia)}
-                          title="View LEIA content"
-                          id= "view-button"
-                          onMouseEnter={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
-                          onMouseLeave={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
-                        >
-                          <EyeIcon className="w-4 h-4 flex-shrink-0" />
-                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                            View
-                          </span>
-                        </button>
-                        <div className="group/try relative flex h-[34px]">
-                          <button
-                            className={`h-[34px] flex items-center gap-2 overflow-hidden border border-gray-300 px-2.5 py-0 text-sm transition-all duration-300 hover:bg-gray-50 disabled:cursor-wait disabled:bg-gray-100 ${
-                              initializingId === leia.id
-                                ? "w-30 rounded-l-md"
-                                : showNoApiKeys
-                                  ? "w-9 rounded-md group-hover/try:w-20"
-                                  : "w-9 rounded-md group-hover/try:w-20 group-hover/try:rounded-l-md group-hover/try:rounded-r-none"
-                            }`}
-                            onClick={() => handleDefaultTry(leia)}
-                            disabled={initializingId === leia.id}
-                            id= "try-button"
-                            onMouseEnter={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
-                          onMouseLeave={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
+                          <Typography
+                            sx={{
+                              mt: 0.75,
+                              maxWidth: 760,
+                              fontSize: 13,
+                              color: "text.secondary",
+                              lineHeight: 1.5,
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
                           >
-                            <LightBulbIcon className="w-4 h-4 flex-shrink-0" />
-                            <span
-                              className={`whitespace-nowrap transition-opacity duration-300 ${
-                                initializingId === leia.id
-                                  ? "opacity-100"
-                                  : "opacity-0 group-hover/try:opacity-100"
-                              }`}
-                            >
-                              {initializingId === leia.id ? "Starting…" : "Try"}
-                            </span>
-                          </button>
+                            {description}
+                          </Typography>
+                        )}
+
+                        {leia.user?.email && (
+                          <Stack direction="row" spacing={0.65} alignItems="center" sx={{ mt: 1, color: "text.disabled" }}>
+                            <AccountCircleOutlinedIcon sx={{ fontSize: 15 }} />
+                            <Typography sx={{ fontSize: 11.5 }}>{leia.user.email}</Typography>
+                            {leia.user.role && (
+                              <Typography sx={{ fontSize: 11.5 }}>· {leia.user.role}</Typography>
+                            )}
+                          </Stack>
+                        )}
+                      </Box>
+
+                      <Stack
+                        direction="row"
+                        spacing={0.75}
+                        useFlexGap
+                        flexWrap="wrap"
+                        alignItems="center"
+                        sx={{ flexShrink: 0 }}
+                      >
+                        <Tooltip title="Design from this LEIA">
+                          <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<PaletteOutlinedIcon />}
+                            onClick={() => handlePersonalize(leia, false)}
+                            id={index === 1 ? "first-design-from-this-button" : undefined}
+                          >
+                            Design from this
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title="View LEIA content">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<VisibilityOutlinedIcon />}
+                            onClick={() => handleViewLeiaContent(leia)}
+                            id={index === 1 ? "view-button" : undefined}
+                          >
+                            View
+                          </Button>
+                        </Tooltip>
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<LightbulbOutlinedIcon />}
+                            onClick={() => void handleDefaultTry(leia)}
+                            disabled={initializingId === leia.id}
+                            id={index === 1 ? "try-button" : undefined}
+                            sx={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                          >
+                            {initializingId === leia.id ? "Starting…" : "Test LEIA"}
+                          </Button>
                           {!showNoApiKeys && (
-                            <button
-                              className={`h-[34px] overflow-hidden rounded-r-md border-0 p-0 transition-all duration-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 ${
-                                initializingId === leia.id
-                                  ? "w-0 border-0 opacity-0"
-                                  : "w-0 opacity-0 group-hover/try:w-8 group-hover/try:border-y group-hover/try:border-r group-hover/try:border-gray-300 group-hover/try:px-2 group-hover/try:opacity-100"
-                              }`}
-                              onClick={() => handleTryMenuToggle(leia)}
-                              disabled={initializingId === leia.id}
-                              aria-label="Choose Try settings"
-                              aria-expanded={isTryMenuOpen}
-                              aria-haspopup="dialog"
-                            >
-                              <ChevronDownIcon className="h-4 w-4" />
-                            </button>
+                            <Tooltip title="Test settings">
+                              <IconButton
+                                size="small"
+                                aria-label="Choose Test LEIA settings"
+                                aria-expanded={isTryMenuOpen}
+                                aria-haspopup="dialog"
+                                onClick={(event) => handleTryMenuToggle(leia, event.currentTarget)}
+                                disabled={initializingId === leia.id}
+                                sx={{
+                                  alignSelf: "stretch",
+                                  border: "1px solid",
+                                  borderLeft: 0,
+                                  borderColor: "divider",
+                                  borderRadius: 0,
+                                  borderTopRightRadius: 6,
+                                  borderBottomRightRadius: 6,
+                                }}
+                              >
+                                <TuneOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           )}
                           <LeiaTryDropdown
                             isOpen={isTryMenuOpen}
-                            onClose={() => setTryMenuOpenId(null)}
+                            anchorEl={trySettingsAnchor}
+                            onClose={closeTrySettings}
                             isLoading={isTryLoading}
                             providersError={providersError}
                             apiKeysError={apiKeysError}
@@ -1137,90 +1202,60 @@ export const LeiaSearch: React.FC = () => {
                             apiKeyValue={tryApiKeyId}
                             apiKeyProvidersMapped={apiKeyProvidersMapped}
                             toolsRestricted={requiresTools}
-                            onModelChange={(value) =>
-                              handleTryModelChange(leia, value)
-                            }
-                            onApiKeyChange={(value) =>
-                              handleTryApiKeyChange(leia, value)
-                            }
+                            onModelChange={(value) => handleTryModelChange(leia, value)}
+                            onApiKeyChange={(value) => handleTryApiKeyChange(leia, value)}
                             canStart={canStartTry}
                             onStart={() => handleStartTry(leia)}
                             isStarting={initializingId === leia.id}
                             showNoApiKeys={showNoApiKeys}
                             showNoMatchingKeys={showNoMatchingKeys}
                           />
-                        </div>
+                        </Box>
                         {(user?.role === "admin" || user?.role === "advanced") && (
-                          <button
-                            className={`group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 ${
-                              selectedLeia?.id === leia.id
-                                ? "w-42"
-                                : "w-9 hover:w-38"
-                            }`}
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ExtensionOutlinedIcon />}
                             onClick={() => {
                               setSelectedLeia(leia);
                               handleOpenExperimentsModal();
                             }}
-                            id= "activity-button"
-                            onMouseEnter={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
-                          onMouseLeave={() => {
-                            setTimeout(() => {
-                              tourRef.current?.refresh();
-                            }, 300);
-                          }}
+                            id={index === 1 ? "activity-button" : undefined}
                           >
-                            <PuzzlePieceIcon className="w-4 h-4 flex-shrink-0" />
-                            <span
-                              className={`absolute left-10 transition-opacity duration-300 whitespace-nowrap ${
-                                selectedLeia?.id === leia.id
-                                  ? "opacity-100"
-                                  : "opacity-0 group-hover:opacity-100"
-                              }`}
-                            >
-                              {selectedLeia?.id === leia.id 
-                                ? "Adding to Activity"
-                                : "Add to Activity"}
-                            </span>
-                          </button>
+                            Add to activity
+                          </Button>
                         )}
-                        {user?.role==="admin" && (<button
-                          className="group relative px-2.5 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-40"
-                          onClick={() => {
-                            setSelectedLeia(leia);
-                            handleQuickReplication(leia);
-                          }}
-                        >
-                          <BookOpenIcon className="w-4 h-4 flex-shrink-0" />
-                          <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                            Quick Replication
-                          </span>
-                        </button>)}
+                        {user?.role === "admin" && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<LibraryBooksOutlinedIcon />}
+                            onClick={() => handleQuickReplication(leia)}
+                          >
+                            Quick replication
+                          </Button>
+                        )}
                         {canDeleteLeia(leia) && (
-                          <button
-                            className="group relative px-2.5 py-2 text-sm rounded-md border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 flex items-center gap-2 overflow-hidden transition-all duration-300 w-9 hover:w-22"
-                            onClick={() => handleDeleteLeia(leia)}
-                            title="Delete LEIA"
-                          >
-                            <TrashIcon className="w-4 h-4 flex-shrink-0" />
-                            <span className="absolute left-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                              Delete
-                            </span>
-                          </button>
+                          <Tooltip title="Delete LEIA">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              aria-label={"Delete " + leia.metadata.name}
+                              onClick={() => handleDeleteLeia(leia)}
+                            >
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         )}
-                      </div>
-                    </li>
+                      </Stack>
+                    </Box>
                   );
                 })}
-              </ul>
+              </Box>
             )}
-          </div>
-        </div>
-        <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-white via-white to-transparent pointer-events-none"></div>
-      </div>
+          </Box>
+        </Box>
+      </Box>
       {/* Label Add Modal */}
       {openLabelModalLeia && (
         <LabelAddModal
@@ -1256,7 +1291,7 @@ export const LeiaSearch: React.FC = () => {
         isDeleting={isDeleting}
         error={deleteError}
       />
-    </div>
+    </PageShell>
   );
 };
 
