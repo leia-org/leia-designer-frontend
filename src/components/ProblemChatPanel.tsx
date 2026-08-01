@@ -14,6 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { keyframes } from "@mui/material/styles";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
@@ -43,6 +44,17 @@ const WIDGET_CATALOG_DOC = WIDGET_CATALOG.length
 
 const EXAMPLE_PROMPT =
   "Create a requirements-elicitation activity about a library booking system";
+
+const thinkingDot = keyframes`
+  0%, 80%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+`;
 
 // extends / overrides / constrainedTo are keyed by component (persona /
 // behaviour / problem); each component is { spec: {...}, apiVersion? }.
@@ -560,7 +572,40 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             );
           })
         )}
-        {sending && <Typography variant="caption" color="text.disabled" fontStyle="italic">Thinking…</Typography>}
+        {sending && (
+          <Box
+            role="status"
+            aria-label="The assistant is thinking"
+            sx={{ display: "flex", justifyContent: "flex-start" }}
+          >
+            <Paper
+              variant="outlined"
+              sx={{
+                px: 1.5,
+                py: 1.25,
+                bgcolor: "surfaces.subtle",
+                borderRadius: 1.5,
+                borderBottomLeftRadius: 0.5,
+              }}
+            >
+              <Stack direction="row" spacing={0.6} alignItems="center" aria-hidden="true">
+                {[0, 1, 2].map((index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      bgcolor: "primary.main",
+                      animation: `${thinkingDot} 1.2s ease-in-out infinite`,
+                      animationDelay: `${index * 0.16}s`,
+                    }}
+                  />
+                ))}
+              </Stack>
+            </Paper>
+          </Box>
+        )}
       </Stack>
 
       {attachments.length > 0 && (
