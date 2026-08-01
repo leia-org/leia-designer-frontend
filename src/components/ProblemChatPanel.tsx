@@ -14,6 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { keyframes } from "@mui/material/styles";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
@@ -40,6 +41,20 @@ const WIDGET_CATALOG_DOC = WIDGET_CATALOG.length
           .join("; ")}`,
     ).join("\n")
   : "(none available)";
+
+const EXAMPLE_PROMPT =
+  "Create a requirements-elicitation activity about a library booking system";
+
+const thinkingDot = keyframes`
+  0%, 80%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+`;
 
 // extends / overrides / constrainedTo are keyed by component (persona /
 // behaviour / problem); each component is { spec: {...}, apiVersion? }.
@@ -492,7 +507,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           <Typography variant="caption" color="text.disabled" fontStyle="italic">
             Attach a PDF of a past exercise or describe what you want, and I'll build the whole
             LEIA — problem, behaviour and persona — writing each into its editor and suggesting a LEIA title.
-            E.g. "create a requirements-elicitation activity about a library booking system".
+            E.g. "{EXAMPLE_PROMPT}".
           </Typography>
         ) : (
           messages.map((msg, i) => {
@@ -557,7 +572,40 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             );
           })
         )}
-        {sending && <Typography variant="caption" color="text.disabled" fontStyle="italic">Thinking…</Typography>}
+        {sending && (
+          <Box
+            role="status"
+            aria-label="The assistant is thinking"
+            sx={{ display: "flex", justifyContent: "flex-start" }}
+          >
+            <Paper
+              variant="outlined"
+              sx={{
+                px: 1.5,
+                py: 1.25,
+                bgcolor: "surfaces.subtle",
+                borderRadius: 1.5,
+                borderBottomLeftRadius: 0.5,
+              }}
+            >
+              <Stack direction="row" spacing={0.6} alignItems="center" aria-hidden="true">
+                {[0, 1, 2].map((index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      bgcolor: "primary.main",
+                      animation: `${thinkingDot} 1.2s ease-in-out infinite`,
+                      animationDelay: `${index * 0.16}s`,
+                    }}
+                  />
+                ))}
+              </Stack>
+            </Paper>
+          </Box>
+        )}
       </Stack>
 
       {attachments.length > 0 && (
@@ -604,7 +652,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             multiline
             minRows={1}
             maxRows={5}
-            placeholder={ready ? "Describe the problem or ask to convert the PDF…" : "Select a model and key…"}
+            placeholder={ready ? `E.g. ${EXAMPLE_PROMPT}` : "Select a model and key…"}
             fullWidth
             slotProps={{ htmlInput: { onKeyDown: handleKeyDown } }}
             sx={{ "& textarea": { maxHeight: 120, overflowY: "auto" } }}
