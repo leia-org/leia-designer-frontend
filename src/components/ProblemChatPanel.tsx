@@ -148,7 +148,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_behaviour",
     description:
-      "Writes a COMPLETE behaviour into the editor, replacing the current one. The behaviour defines the role the AI plays opposite the student (e.g. a client being interviewed, a teammate). Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
+      "Writes a NEW, COMPLETE behaviour into the editor, replacing the current one. It must be written specifically for the exact current Problem, including its real task, subject, technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. The behaviour defines the role the AI plays opposite the student (e.g. a client being interviewed, a teammate). Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -192,22 +192,6 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     },
   },
   {
-    name: "list_behaviours",
-    description:
-      "Lists EXISTING behaviours the instructor already has, so you can REUSE one (by id) instead of creating a new one. Returns [{ id, name, role, description }]. Prefer reusing a suitable existing behaviour; only create a new one with apply_behaviour when none fits.",
-    parameters: { type: "object", properties: {} },
-  },
-  {
-    name: "use_behaviour",
-    description:
-      "Selects an EXISTING behaviour (by its id, from list_behaviours) as the LEIA's behaviour, instead of creating a new one. Returns { status, name } or { error }.",
-    parameters: {
-      type: "object",
-      properties: { id: { type: "string", description: "The behaviour id from list_behaviours." } },
-      required: ["id"],
-    },
-  },
-  {
     name: "list_personas",
     description:
       "Lists EXISTING personas the instructor already has, so you can REUSE one (by id) instead of creating a new one. Returns [{ id, name, firstName, description }]. Prefer reusing a suitable existing persona; only create a new one with apply_persona when none fits.",
@@ -235,12 +219,10 @@ interface ProblemChatPanelProps {
   currentProblem: Problem | null;
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
-  behaviours: Behaviour[];
   personas: Persona[];
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
-  onUseBehaviour: (id: string) => { ok: boolean; name?: string };
   onUsePersona: (id: string) => { ok: boolean; name?: string };
 }
 
@@ -248,12 +230,10 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblem,
   currentBehaviour,
   currentPersona,
-  behaviours,
   personas,
   onApplyProblem,
   onApplyBehaviour,
   onApplyPersona,
-  onUseBehaviour,
   onUsePersona,
 }) => {
   const { apiKeys, getDefaultKey, isLoading: apiKeysLoading } = useApiKeys();
@@ -321,9 +301,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviourRef.current = currentBehaviour;
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
-  // Latest lists of existing resources the chat can reuse by id.
-  const behavioursRef = useRef<Behaviour[]>(behaviours);
-  behavioursRef.current = behaviours;
+  // Latest list of existing personas the chat can reuse by id.
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
@@ -389,7 +367,22 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       const calls = response.toolCalls;
       if (!Array.isArray(calls) || calls.length === 0) break;
 
-      const results: ProblemChatToolResult[] = calls.map((call) => {
+      // Tool calls may arrive in parallel. Apply the new problem before its
+      // activity-specific behaviour so invalidating the stale behaviour cannot
+      // erase the replacement from the same model turn.
+      const priority: Record<string, number> = {
+        get_current_problem: 0,
+        get_current_behaviour: 0,
+        get_current_persona: 0,
+        apply_problem: 10,
+        apply_behaviour: 20,
+        apply_persona: 30,
+      };
+      const orderedCalls = [...calls].sort(
+        (left, right) => (priority[left.name] ?? 100) - (priority[right.name] ?? 100),
+      );
+
+      const results: ProblemChatToolResult[] = orderedCalls.map((call) => {
         let output: unknown;
         let args: Record<string, unknown> = {};
         try {
@@ -422,22 +415,6 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           output = currentBehaviourRef.current?.spec ?? null;
         } else if (call.name === "get_current_persona") {
           output = currentPersonaRef.current?.spec ?? null;
-        } else if (call.name === "list_behaviours") {
-          output = behavioursRef.current.map((b) => ({
-            id: b.id,
-            name: b.metadata?.name,
-            role: b.spec?.role,
-            description: typeof b.spec?.description === "string" ? b.spec.description.slice(0, 240) : undefined,
-          }));
-        } else if (call.name === "use_behaviour") {
-          const id = typeof args.id === "string" ? args.id : "";
-          const res = onUseBehaviour(id);
-          if (res.ok) {
-            pushMessage("system", `✓ Using existing behaviour${res.name ? ` ("${res.name}")` : ""}.`);
-            output = { status: "selected", name: res.name };
-          } else {
-            output = { error: `no behaviour with id '${id}'` };
-          }
         } else if (call.name === "list_personas") {
           output = personasRef.current.map((p) => ({
             id: p.id,

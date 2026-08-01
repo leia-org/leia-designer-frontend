@@ -1902,6 +1902,9 @@ const openGenerateProblemModal = () => {
           isPublished: false,
           user: currentUser!,
         } as unknown as Problem,
+        // A matching process or programming language does not make an old
+        // exercise-specific behaviour valid for this new problem.
+        behaviour: null,
       }));
     },
     [currentUser],
@@ -1955,18 +1958,8 @@ const openGenerateProblemModal = () => {
     [currentUser],
   );
 
-  // The chat may REUSE an existing behaviour/persona (by id) instead of
-  // creating a new one — selects it like the manual picker (not marked edited).
-  const handleUseExistingBehaviour = useCallback(
-    (id: string): { ok: boolean; name?: string } => {
-      const item = behaviours.find((b) => b.id === id);
-      if (!item) return { ok: false };
-      setLeiaConfig((prev) => ({ ...prev, behaviour: item }));
-      return { ok: true, name: item.metadata?.name };
-    },
-    [behaviours],
-  );
-
+  // The chat may reuse an existing persona by id. Behaviours are always
+  // generated for the exact new problem.
   const handleUseExistingPersona = useCallback(
     (id: string): { ok: boolean; name?: string } => {
       const item = personas.find((p) => p.id === id);
@@ -2156,12 +2149,10 @@ const openGenerateProblemModal = () => {
           currentProblem={leiaConfig.problem}
           currentBehaviour={leiaConfig.behaviour}
           currentPersona={leiaConfig.persona}
-          behaviours={behaviours}
           personas={personas}
           onApplyProblem={applyChatProblem}
           onApplyBehaviour={applyChatBehaviour}
           onApplyPersona={applyChatPersona}
-          onUseBehaviour={handleUseExistingBehaviour}
           onUsePersona={handleUseExistingPersona}
         />
       </div>
