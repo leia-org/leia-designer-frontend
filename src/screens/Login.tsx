@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -23,7 +23,7 @@ import { isTurnstileEnabled } from "../config/turnstile";
 
 export const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, token } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,6 +36,10 @@ export const Login = () => {
   const handleTurnstileTokenChange = useCallback((token: string) => {
     setTurnstileToken(token);
   }, []);
+
+  useEffect(() => {
+    if (token) navigate("/", { replace: true });
+  }, [navigate, token]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -60,6 +64,7 @@ export const Login = () => {
           password: password.trim(),
           ...(isTurnstileEnabled && { "cf-turnstile-response": turnstileToken }),
         },
+        { withCredentials: true },
       );
       const token = response.data.token;
       if (!token) {

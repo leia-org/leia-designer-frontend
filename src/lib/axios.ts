@@ -1,18 +1,21 @@
 import axios from 'axios';
 import type { AxiosResponse, AxiosError } from 'axios';
+import { getAuthToken, setAuthToken } from './authToken';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_APP_BACKEND,
 });
 export const authApi = axios.create({
   baseURL: import.meta.env.VITE_AUTH_SERVICE_BACKEND,
+  withCredentials: true,
 });
-const getToken = (): string | null => {
-  return localStorage.getItem('token');
-};
 
 const logout = (): void => {
-  localStorage.removeItem('token');
+  setAuthToken(null);
+  void fetch(
+    `${import.meta.env.VITE_AUTH_SERVICE_BACKEND}/api/v1/users/logout`,
+    { method: 'POST', credentials: 'include' },
+  ).catch((error) => console.error('Error closing Auth session:', error));
   window.location.href = '/login';
 };
 
@@ -22,7 +25,7 @@ const forbidden = (): void => {
 
 api.interceptors.request.use(
   (config) => {
-    const token = getToken();
+    const token = getAuthToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -59,7 +62,7 @@ api.interceptors.response.use(
 
 authApi.interceptors.request.use(
   (config) => {
-    const token = getToken();
+    const token = getAuthToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
