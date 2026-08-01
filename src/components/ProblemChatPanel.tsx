@@ -41,6 +41,9 @@ const WIDGET_CATALOG_DOC = WIDGET_CATALOG.length
     ).join("\n")
   : "(none available)";
 
+const EXAMPLE_PROMPT =
+  "Create a requirements-elicitation activity about a library booking system";
+
 // extends / overrides / constrainedTo are keyed by component (persona /
 // behaviour / problem); each component is { spec: {...}, apiVersion? }.
 const COMPONENT_SCOPED_PROPS = {
@@ -492,7 +495,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           <Typography variant="caption" color="text.disabled" fontStyle="italic">
             Attach a PDF of a past exercise or describe what you want, and I'll build the whole
             LEIA — problem, behaviour and persona — writing each into its editor and suggesting a LEIA title.
-            E.g. "create a requirements-elicitation activity about a library booking system".
+            E.g. "{EXAMPLE_PROMPT}".
           </Typography>
         ) : (
           messages.map((msg, i) => {
@@ -604,7 +607,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             multiline
             minRows={1}
             maxRows={5}
-            placeholder={ready ? "Describe the problem or ask to convert the PDF…" : "Select a model and key…"}
+            placeholder={ready ? `E.g. ${EXAMPLE_PROMPT}` : "Select a model and key…"}
             fullWidth
             slotProps={{ htmlInput: { onKeyDown: handleKeyDown } }}
             sx={{ "& textarea": { maxHeight: 120, overflowY: "auto" } }}
