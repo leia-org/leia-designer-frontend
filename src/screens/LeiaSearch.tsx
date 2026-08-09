@@ -574,8 +574,13 @@ export const LeiaSearch: React.FC = () => {
       if (sessionId) {
         navigate(`/chat/${sessionId}`, {
           state: {
+            leia,
             problemDescription: leia.spec?.problem?.spec?.description || "",
             personaAvatar: leia.spec?.persona?.spec?.avatar || "",
+            personaName:
+              leia.spec?.persona?.spec?.fullName ||
+              leia.spec?.persona?.metadata?.name ||
+              "Persona",
             problem: leia.spec?.problem,
           },
         });

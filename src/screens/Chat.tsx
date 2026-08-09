@@ -55,6 +55,7 @@ interface NavigationState {
   };
   problemDescription?: string;
   personaAvatar?: string;
+  personaName?: string;
   experimentTranscription?: {
     experimentId: string;
     leiaConfigId: string;
@@ -155,10 +156,46 @@ function extractPersonaAvatarFromState(
 
   return (
     navState?.personaAvatar ||
+    avatarFromLeia(navState?.leia) ||
     avatarFromResource(navState?.save?.leiaConfig?.persona) ||
     avatarFromResource(navState?.preset?.persona) ||
     avatarFromLeia(navState?.experimentTranscription?.leiaConfig?.leia) ||
     ""
+  );
+}
+
+function extractPersonaNameFromState(navState: NavigationState | null): string {
+  const nameFromResource = (resource: unknown): string => {
+    const typedResource = resource as
+      | {
+          metadata?: { name?: unknown };
+          spec?: { fullName?: unknown; firstName?: unknown };
+        }
+      | null
+      | undefined;
+    const candidates = [
+      typedResource?.spec?.fullName,
+      typedResource?.metadata?.name,
+      typedResource?.spec?.firstName,
+    ];
+    return candidates.find(
+      (candidate): candidate is string =>
+        typeof candidate === "string" && candidate.trim().length > 0,
+    )?.trim() || "";
+  };
+  const nameFromLeia = (leia: unknown): string =>
+    nameFromResource(
+      (leia as { spec?: { persona?: unknown } } | null | undefined)?.spec
+        ?.persona,
+    );
+
+  return (
+    navState?.personaName?.trim() ||
+    nameFromLeia(navState?.leia) ||
+    nameFromResource(navState?.save?.leiaConfig?.persona) ||
+    nameFromResource(navState?.preset?.persona) ||
+    nameFromLeia(navState?.experimentTranscription?.leiaConfig?.leia) ||
+    "Persona"
   );
 }
 
@@ -188,6 +225,7 @@ function extractPersonaAvatarFallbackFromState(
 
   const savedPersonaId = getResourceId(navState?.save?.leiaConfig?.persona);
   const presetPersonaId = getResourceId(navState?.preset?.persona);
+  const directLeiaIds = getLeiaResourceIds(navState?.leia);
   const transcriptionIds = getLeiaResourceIds(
     navState?.experimentTranscription?.leiaConfig?.leia,
   );
@@ -195,6 +233,8 @@ function extractPersonaAvatarFallbackFromState(
   return (
     buildOriginalAvatarPath("personas", savedPersonaId) ||
     buildOriginalAvatarPath("personas", presetPersonaId) ||
+    buildOriginalAvatarPath("personas", directLeiaIds.personaId) ||
+    buildOriginalAvatarPath("leias", directLeiaIds.leiaId) ||
     buildOriginalAvatarPath("personas", transcriptionIds.personaId) ||
     buildOriginalAvatarPath("leias", transcriptionIds.leiaId) ||
     ""
@@ -222,6 +262,7 @@ export const Chat = () => {
   );
   const [personaAvatar, setPersonaAvatar] = useState("");
   const [personaAvatarFallback, setPersonaAvatarFallback] = useState("");
+  const [personaName, setPersonaName] = useState("Persona");
 
   // Mount the activity's widgets in a side panel (text mode). Any non-left
   // slot is shown on the right so a "main"-slotted widget still appears.
@@ -341,6 +382,7 @@ export const Chat = () => {
     const resolvedNavigationState = navigationState || parseSavedNavigationState();
 
     setPersonaAvatar(extractPersonaAvatarFromState(resolvedNavigationState));
+    setPersonaName(extractPersonaNameFromState(resolvedNavigationState));
     setPersonaAvatarFallback(
       extractPersonaAvatarFallbackFromState(resolvedNavigationState),
     );
@@ -633,7 +675,7 @@ export const Chat = () => {
                   src={personaAvatar}
                   fallbackSrc={personaAvatarFallback}
                   alt="Persona avatar"
-                  label="Persona"
+                  label={personaName}
                   size="md"
                   className="border-blue-100 bg-blue-50"
                 />
@@ -669,7 +711,7 @@ export const Chat = () => {
                 src={personaAvatar}
                 fallbackSrc={personaAvatarFallback}
                 alt="Persona avatar"
-                label="Persona"
+                label={personaName}
                 size="md"
                 className="border-blue-100 bg-blue-50"
               />

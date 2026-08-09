@@ -607,6 +607,10 @@ export const MyActivities: React.FC = () => {
             problemDescription:
               leiaConfig.leia.spec?.problem?.spec?.description || "",
             personaAvatar: leiaConfig.leia.spec?.persona?.spec?.avatar || "",
+            personaName:
+              leiaConfig.leia.spec?.persona?.spec?.fullName ||
+              leiaConfig.leia.spec?.persona?.metadata?.name ||
+              "Persona",
             experimentTranscription: {
               experimentId,
               leiaConfigId,
