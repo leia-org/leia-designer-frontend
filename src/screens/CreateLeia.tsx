@@ -1511,6 +1511,11 @@ const openGenerateProblemModal = () => {
       const { sessionId } = response.data;
       navigate(`/chat/${sessionId}`, {
         state: {
+          leia: generatedLeia,
+          personaAvatar: generatedLeia.spec.persona.spec.avatar || "",
+          personaName:
+            generatedLeia.spec.persona.spec.fullName ||
+            generatedLeia.spec.persona.metadata.name,
           save: {
             currentStep,
             leiaConfig,
