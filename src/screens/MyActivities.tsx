@@ -8,6 +8,7 @@ import { z } from "zod";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
+import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import AddIcon from "@mui/icons-material/Add";
@@ -1287,6 +1288,9 @@ export const MyActivities: React.FC = () => {
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        {experiment.orchestration?.mode === "multi" && (
+                          <Chip label="MultiLEIA" color="primary" size="small" variant="outlined" />
+                        )}
                         {experiment.isPublished && <Chip label="Published" color="success" size="small" />}
                         {experiment.isPublished ? (
                           <Button size="small" color="secondary" variant="contained" startIcon={<ContentCopyIcon />} onClick={() => handleFastReplication(experiment.id)}>
@@ -1325,6 +1329,19 @@ export const MyActivities: React.FC = () => {
 
                     <Collapse in={expanded}>
                       <Box sx={{ borderTop: 1, borderColor: "divider" }}>
+                        <ActivityOrchestrationEditor
+                          experiment={experiment}
+                          onSaved={(updatedExperiment) =>
+                            setExperiments((previous) =>
+                              previous?.map((candidate) =>
+                                candidate.id === updatedExperiment.id
+                                  ? updatedExperiment
+                                  : candidate,
+                              ) || null,
+                            )
+                          }
+                        />
+                        <Box sx={{ borderTop: 1, borderColor: "divider" }} />
                         {experiment.leias && experiment.leias.length > 0 ? (
                           <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
                             {experiment.leias.map((leiaConfig, leiaIndex) => {
@@ -1374,7 +1391,12 @@ export const MyActivities: React.FC = () => {
                                               sx={{ minWidth: 150 }}
                                             >
                                               <MenuItem value="standard">standard</MenuItem>
-                                              <MenuItem value="transcription">transcription</MenuItem>
+                                              <MenuItem
+                                                value="transcription"
+                                                disabled={experiment.orchestration?.mode === "multi"}
+                                              >
+                                                transcription
+                                              </MenuItem>
                                             </TextField>
                                           )
                                         )}
