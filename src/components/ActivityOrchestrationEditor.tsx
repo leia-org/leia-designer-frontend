@@ -101,7 +101,7 @@ export const ActivityOrchestrationEditor = ({
             </Typography>
             {initial.mode === "multi" && (
               <Typography variant="caption" color="text.secondary">
-                Starts with {leiaName(experiment, initial.openingLeiaId)}, uses the problem from {leiaName(experiment, initial.problemLeiaId)}, and explores up to {initial.maxInternalTurns} LEIA turns before waiting for the participant.
+                Prefers {leiaName(experiment, initial.openingLeiaId)} as the fallback first speaker, uses the problem from {leiaName(experiment, initial.problemLeiaId)}, and lets the orchestrator route up to {initial.maxInternalTurns} LEIA messages before returning to the participant.
               </Typography>
             )}
           </Box>
@@ -165,7 +165,7 @@ export const ActivityOrchestrationEditor = ({
               <TextField
                 select
                 size="small"
-                label="Opening LEIA"
+                label="Preferred first LEIA"
                 value={value.openingLeiaId || ""}
                 onChange={(event) =>
                   setValue((previous) => ({
@@ -186,7 +186,7 @@ export const ActivityOrchestrationEditor = ({
               <TextField
                 select
                 size="small"
-                label="LEIA turns before participant"
+                label="Maximum LEIA messages per round"
                 value={value.maxInternalTurns}
                 onChange={(event) =>
                   setValue((previous) => ({
@@ -196,16 +196,16 @@ export const ActivityOrchestrationEditor = ({
                 }
                 sx={{ minWidth: 240 }}
               >
-                {Array.from(
-                  { length: Math.max(0, Math.min(5, experiment.leias.length) - 1) },
-                  (_, index) => index + 2,
-                ).map((turns) => (
+                {Array.from({ length: 8 }, (_, index) => index + 1).map((turns) => (
                   <MenuItem key={turns} value={turns}>
                     {turns}
                   </MenuItem>
                 ))}
               </TextField>
             </Stack>
+            <Typography variant="caption" color="text.secondary">
+              This is a safety limit. The orchestrator can stop after one message or route additional LEIAs when their roles add value.
+            </Typography>
             <TextField
               select
               size="small"
