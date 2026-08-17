@@ -30,6 +30,8 @@ import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
+import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import api from "../lib/axios";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
@@ -77,6 +79,8 @@ export const LeiaSearch: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initializingId, setInitializingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(10);
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
@@ -84,10 +88,12 @@ export const LeiaSearch: React.FC = () => {
     if (versionFilter) p.version = versionFilter;
     if (visibilityFilter !== "all") p.visibility = visibilityFilter;
     if (selectedLabelFilter) p.labelId = selectedLabelFilter;
+    p.page = currentPage.toString();
     return p;
-  }, [queryText, versionFilter, visibilityFilter, selectedLabelFilter]);
+  }, [queryText, versionFilter, visibilityFilter, selectedLabelFilter, currentPage]);
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
+
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
   const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
   const [nameActivityReplication, setNameActivityReplication] = useState("");
@@ -132,6 +138,7 @@ export const LeiaSearch: React.FC = () => {
         });
         if (!active) return;
         setLeias(response.data || []);
+        setTotalPages(parseInt(response.headers["x-total-pages"] || "1"));
       } catch (err: any) {
         if (!active) return;
         if (err?.name === "CanceledError") return;
@@ -1259,7 +1266,27 @@ export const LeiaSearch: React.FC = () => {
               </Box>
             )}
           </Box>
+             <Box sx={{ px: 1, pt: 1, display: "flex", gap: 1, justifyContent: "flex-end"}}>
+              
+              <Button size="small" disabled={currentPage <= 1} sx={{ flex: "0 0 auto" }}
+                      onClick={() => {
+                        if (currentPage > 1) {
+                          setCurrentPage((prev) => prev - 1);
+                        }
+                      }}>
+                 <KeyboardArrowLeftIcon fontSize="small" />
+              </Button>
+              <Button size="small" disabled={currentPage >= totalPages} sx={{ flex: "0 0 auto" }}
+                      onClick={() => {
+                        if (currentPage < totalPages) {
+                          setCurrentPage((prev) => prev + 1);
+                        }
+                      }}>
+                 <KeyboardArrowRightIcon fontSize="small" />
+              </Button>
+              </Box>
         </Box>
+        
       </Box>
       {/* Label Add Modal */}
       {openLabelModalLeia && (
