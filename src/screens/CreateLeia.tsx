@@ -466,6 +466,11 @@ export const CreateLeia: React.FC = () => {
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
 
+  // Prevenir solutionFormat incorrecto 
+  const solutionFormatError:Error= new Error(`The problem's field: -solutionFormat- does not have a correct value, please introduce only the given options, consider using the visual editor for more simplicity.` )
+  const [isSolutionFormatError, SetisSolutionFormatError]=useState(false);
+  const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
+
   const hasDraftContent = useMemo(() => {
     const hasSelectedComponent = Boolean(
       leiaConfig.persona || leiaConfig.problem || leiaConfig.behaviour,
@@ -1774,6 +1779,15 @@ const openGenerateProblemModal = () => {
           },
           leia: { name: previous.leia.name, version: "1.0.0" },
         }));
+
+        //Error si solutionFormat no es válido
+
+        if(!validSolutionFormatValues.includes(leiaConfig.problem?.spec.solutionFormat!)){
+          SetisSolutionFormatError(true);
+          
+          return;
+        }else SetisSolutionFormatError(false);
+
       setCurrentStep(2);
     }
   };
@@ -2276,6 +2290,26 @@ const openGenerateProblemModal = () => {
             />
           </Box>
         </Box>
+
+        {isSolutionFormatError && (
+          <Box
+            id="solutionFormatError"
+            sx={{
+              gridArea: "chat",
+              minWidth: 0,
+              minHeight: { xs: 560, lg: 0 },
+              height: { lg: "100%" },
+              bgcolor:'floralwhite',
+              fontFamily:"system-ui",
+              p:1.5
+            }}
+          >
+            <div>
+              <h3>{solutionFormatError.message}</h3>
+            </div>
+
+          </Box>
+        )}
 
         {editingResource.resource && (
           <Dialog
