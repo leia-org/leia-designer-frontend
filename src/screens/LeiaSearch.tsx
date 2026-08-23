@@ -1230,7 +1230,7 @@ export const LeiaSearch: React.FC = () => {
                             Add to activity
                           </Button>
                         )}
-                        {user?.role === "admin" && (
+                        {(user?.role === "admin" || user?.role === "advanced") && (
                           <Button
                             size="small"
                             variant="outlined"
