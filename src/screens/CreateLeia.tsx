@@ -65,6 +65,7 @@ import {
   updateLeiaDraft,
 } from "../lib/leiaDrafts";
 import { generateLeia } from "../lib/leia";
+import { toast, ToastContainer } from "react-toastify";
 
 interface Label {
   id?: string;
@@ -214,6 +215,7 @@ const copyProcess = (value: unknown): string[] =>
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = useAuth().user;
   const { user: currentUser } = useAuth();
   const tourRef = useRef<ReturnType<typeof driver> | null>(null);
   const {
@@ -229,6 +231,8 @@ export const CreateLeia: React.FC = () => {
   } = useProviders();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [tourRequested, setTourRequested] = useState(false);
+  const [nameActivityReplication, setNameActivityReplication] = useState("");
+  const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>(createEmptyLeiaConfig);
   const [leiaConfigSnapShot, setLeiaConfigSnapShot] =
     useState<LeiaConfig | null>(null);
@@ -1249,6 +1253,76 @@ export const CreateLeia: React.FC = () => {
       setIsDeleting(false);
     }
   };
+
+const closeActivityReplicationModal = useCallback(() => {
+      setShowActivityReplicationModal(false);
+      setNameActivityReplication("");
+      navigate("/leias");
+    }, [navigate]);
+    const handleQuickReplication = useCallback(async (leia?: LeiaResource|null) => {
+  
+    if (!leia) {
+      toast.error("No LEIA selected", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+  
+    try {
+      const leiaName = nameActivityReplication || leia.metadata.name || "";
+      const activityReplication = await api.post(`/api/v1/experiments/leia/`, {
+        leiaName,
+        leiaId: leia.id,
+      });
+      toast.success("LEIA replicated successfully", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+  
+      const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL;
+      const replicationUrl = `${workbenchBaseUrl.replace(
+      /\/$/, "" )}/login?redirect=/replications/${encodeURIComponent(
+      activityReplication.data.replication.id)}`;
+      closeActivityReplicationModal();
+      const newWindow = window.open(replicationUrl);
+  
+      if (!newWindow) {
+        toast.error("Popup blocked or could not open replication", {
+          position: "bottom-right",
+          autoClose: 2000,
+        });
+      }
+    } catch (error) {
+      const axiosError = error as {
+        response?: {
+          status?: number;
+          data?: {
+            error?: string;
+            data?: Array<{ id: string; name: string }>;
+          };
+        };
+      };
+  
+      if (axiosError.response?.status === 409) {
+        toast.info(axiosError.response?.data?.error, {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+  
+        if (!nameActivityReplication) {
+          setNameActivityReplication(leia.metadata.name + "-v2");
+        }
+        setShowActivityReplicationModal(true);
+        return;
+      }
+  
+      toast.error("Error replicating LEIA. Please try again.", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    }
+  }, [closeActivityReplicationModal, nameActivityReplication]);
 
   const closeDeleteModal = () => {
     setDeleteModal({
@@ -2935,6 +3009,38 @@ const openGenerateProblemModal = () => {
         leadingContent={designBackButton}
         rightContent={designHeaderRightContent}
       />
+      <ToastContainer />
+      {showActivityReplicationModal && (
+              <Dialog open onClose={closeActivityReplicationModal} maxWidth="sm" fullWidth>
+                <DialogTitle>Replicate activity</DialogTitle>
+                <DialogContent>
+                  <Box sx={{ pt: 1 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      Choose a name for the new activity and its Workbench replication.
+                    </Typography>
+                    <TextField
+                      autoFocus
+                      label="Activity and Replication name"
+                      value={nameActivityReplication}
+                      onChange={(event) => setNameActivityReplication(event.target.value)}
+                      placeholder="Activity replication name"
+                      fullWidth
+                    />
+                  </Box>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                  <Button color="inherit" onClick={closeActivityReplicationModal}>Cancel</Button>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={() => void handleQuickReplication(createdLeiaResource)}
+                    disabled={!nameActivityReplication.trim()}
+                  >
+                    Replicate
+                  </Button>
+                </DialogActions>
+              </Dialog>
+            )}
       <Container maxWidth={false} sx={{ flex: 1, py: { xs: 2, md: 4 }, px: { xs: 2, md: 3 } }}>
         <Box
           sx={{
@@ -3224,9 +3330,16 @@ const openGenerateProblemModal = () => {
       <Dialog open={showFinishModal} onClose={() => setShowFinishModal(false)} fullWidth maxWidth="sm">
         <DialogTitle>LEIA created successfully</DialogTitle>
         <DialogContent dividers>
-          <Typography color="text.secondary">
-            "{createdLeiaName}" was created successfully. Do you want to add it directly to an activity?
-          </Typography>
+          {(user?.role === "admin" || user?.role === "advanced") && (
+            <Typography color="text.secondary">
+              "{createdLeiaName}" was created successfully. Now you can create the activity and its replication directly, add it to an existing activity or return to the home page.
+            </Typography>
+          )}
+          {user?.role === "instructor" && (
+            <Typography color="text.secondary">
+              "{createdLeiaName}" was created successfully.
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button
@@ -3236,8 +3349,9 @@ const openGenerateProblemModal = () => {
               navigate("/leias");
             }}
           >
-            No, go to LEIAs
+            Go to LEIAs
           </Button>
+          {(user?.role === "admin" || user?.role === "advanced") && (
           <Button
             variant="contained"
             onClick={() => {
@@ -3245,8 +3359,18 @@ const openGenerateProblemModal = () => {
               setShowAddToActivityModal(true);
             }}
           >
-            Yes, add now
+            Add to Activity
           </Button>
+          )}
+          {(user?.role === "admin" || user?.role === "advanced") && (
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => void handleQuickReplication(createdLeiaResource)}
+              >
+              Quick Replication
+          </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>
