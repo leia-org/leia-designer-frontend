@@ -855,6 +855,7 @@ export const LeiaSearch: React.FC = () => {
       maxWidth={false}
       flush
     >
+    
       <ToastContainer />
       <AddLeiaToAnActivity
         isOpen={showExperimentsModal}
@@ -969,6 +970,9 @@ export const LeiaSearch: React.FC = () => {
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
           <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, display: "flex", justifyContent: "flex-end" }}>
+                Showing {leias.length} LEIA{leias.length !== 1 ? "s" : ""} (page {params.page} of {totalPages})
+              </Typography>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
@@ -999,6 +1003,7 @@ export const LeiaSearch: React.FC = () => {
                   borderRadius: 1.5,
                 }}
               >
+                
                 {leias.map((leia, index) => {
                   const description =
                     leia.spec?.problem?.spec?.description ||
@@ -1266,7 +1271,7 @@ export const LeiaSearch: React.FC = () => {
               </Box>
             )}
           </Box>
-             <Box sx={{ px: 1, pt: 1, display: "flex", gap: 1, justifyContent: "flex-end"}}>
+              <Box sx={{ px: 1, pt: 1, display: "flex", gap: 1, justifyContent: "flex-end"}}>
               
               <Button size="small" disabled={currentPage <= 1} sx={{ flex: "0 0 auto" }}
                       onClick={() => {
@@ -1274,7 +1279,7 @@ export const LeiaSearch: React.FC = () => {
                           setCurrentPage((prev) => prev - 1);
                         }
                       }}>
-                 <KeyboardArrowLeftIcon fontSize="small" />
+                  <KeyboardArrowLeftIcon fontSize="small" />
               </Button>
               <Button size="small" disabled={currentPage >= totalPages} sx={{ flex: "0 0 auto" }}
                       onClick={() => {
