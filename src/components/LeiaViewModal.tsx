@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  ButtonGroup,
   CircularProgress,
   Dialog,
   DialogContent,
@@ -89,7 +90,7 @@ interface LeiaViewModalProps {
 
 type AvatarRegenerationTarget = "leias" | "problems" | "personas";
 type InfographicRegenerationTarget = "infographic" | "infographicSolution";
-type RegenerationTarget = AvatarRegenerationTarget | InfographicRegenerationTarget;
+type RegenerationTarget = AvatarRegenerationTarget | InfographicRegenerationTarget | "all";
 type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
 
 function getUserId(value: unknown): string | null {
@@ -200,92 +201,104 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
     return null;
   };
 
-  const handleRegenerateAvatar = async (target: AvatarRegenerationTarget) => {
+  const regenerateAvatar = async (target: AvatarRegenerationTarget, selectedImageApiKeyId: string) => {
     const targetId = getTargetId(target);
     if (!targetId) {
-      toast.error("Could not find the selected resource", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-      return;
+      throw new Error("Could not find the selected resource");
     }
-    const selectedImageApiKeyId = requireImageApiKey();
-    if (!selectedImageApiKeyId) return;
+    const response = await api.post(`/api/v1/images/${target}/${targetId}/generate`, {
+      apiKeyId: selectedImageApiKeyId,
+    });
+    const avatar = cacheBustStoredImage(response.data?.avatar);
 
-    setRegeneratingTarget(target);
-    setRegenerateAnchor(null);
-    try {
-      const response = await api.post(`/api/v1/images/${target}/${targetId}/generate`, {
-        apiKeyId: selectedImageApiKeyId,
-      });
-      const avatar = cacheBustStoredImage(response.data?.avatar);
-
-      setDisplayLeia((currentLeia) => {
-        if (!currentLeia || !avatar) return currentLeia;
-        if (target === "leias") {
-          return { ...currentLeia, spec: { ...currentLeia.spec, avatar } };
-        }
-        if (target === "problems") {
-          return {
-            ...currentLeia,
-            spec: {
-              ...currentLeia.spec,
-              problem: {
-                ...currentLeia.spec.problem,
-                spec: { ...currentLeia.spec.problem.spec, avatar },
-              },
-            },
-          };
-        }
+    setDisplayLeia((currentLeia) => {
+      if (!currentLeia || !avatar) return currentLeia;
+      if (target === "leias") {
+        return { ...currentLeia, spec: { ...currentLeia.spec, avatar } };
+      }
+      if (target === "problems") {
         return {
           ...currentLeia,
           spec: {
             ...currentLeia.spec,
-            persona: {
-              ...currentLeia.spec.persona,
-              spec: { ...currentLeia.spec.persona.spec, avatar },
+            problem: {
+              ...currentLeia.spec.problem,
+              spec: { ...currentLeia.spec.problem.spec, avatar },
             },
           },
         };
-      });
-
-      toast.success("Image regenerated successfully", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-    } catch (error) {
-      toast.error(getRegenerationError(error), {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-    } finally {
-      setRegeneratingTarget(null);
-    }
+      }
+      return {
+        ...currentLeia,
+        spec: {
+          ...currentLeia.spec,
+          persona: {
+            ...currentLeia.spec.persona,
+            spec: { ...currentLeia.spec.persona.spec, avatar },
+          },
+        },
+      };
+    });
   };
 
-  const handleRegenerateInfographic = async (target: InfographicRegenerationTarget) => {
+  const regenerateInfographic = async (target: InfographicRegenerationTarget, selectedImageApiKeyId: string) => {
+    const path = target === "infographic" ? "infographic" : "infographic-solution";
+    const response = await api.post(
+      `/api/v1/images/leias/${displayLeia.id}/${path}/generate`,
+      { apiKeyId: selectedImageApiKeyId },
+    );
+    const image = cacheBustStoredImage(response.data?.[target]);
+
+    setDisplayLeia((currentLeia) => {
+      if (!currentLeia || !image) return currentLeia;
+      return {
+        ...currentLeia,
+        spec: { ...currentLeia.spec, [target]: image },
+      };
+    });
+  };
+
+  const handleRegenerate = async (target: RegenerationTarget) => {
     const selectedImageApiKeyId = requireImageApiKey();
     if (!selectedImageApiKeyId) return;
-    const path = target === "infographic" ? "infographic" : "infographic-solution";
 
     setRegeneratingTarget(target);
     setRegenerateAnchor(null);
     try {
-      const response = await api.post(
-        `/api/v1/images/leias/${displayLeia.id}/${path}/generate`,
-        { apiKeyId: selectedImageApiKeyId },
-      );
-      const image = cacheBustStoredImage(response.data?.[target]);
+      if (target === "all") {
+        const targets = [
+          ...avatarRegenerationOptions.map((option) => option.target),
+          ...infographicRegenerationOptions.map((option) => option.target),
+        ];
+        let failedCount = 0;
 
-      setDisplayLeia((currentLeia) => {
-        if (!currentLeia || !image) return currentLeia;
-        return {
-          ...currentLeia,
-          spec: { ...currentLeia.spec, [target]: image },
-        };
-      });
+        // These requests can update the same LEIA document. Run them in sequence
+        // so their Mongoose saves do not race and report false failures.
+        for (const item of targets) {
+          try {
+            if (item === "infographic" || item === "infographicSolution") {
+              await regenerateInfographic(item, selectedImageApiKeyId);
+            } else {
+              await regenerateAvatar(item, selectedImageApiKeyId);
+            }
+          } catch {
+            failedCount += 1;
+          }
+        }
+        if (failedCount > 0) {
+          toast.warning(`${targets.length - failedCount} of ${targets.length} images regenerated`, {
+            position: "bottom-right",
+            autoClose: 4000,
+          });
+          return;
+        }
+      } else if (target === "infographic" || target === "infographicSolution") {
+        await regenerateInfographic(target, selectedImageApiKeyId);
+      } else {
+        await regenerateAvatar(target, selectedImageApiKeyId);
+      }
 
-      toast.success("Image regenerated successfully", {
+      toast.success(target === "all" ? "All images regenerated successfully" : "Image regenerated successfully", {
         position: "bottom-right",
         autoClose: 3000,
       });
@@ -324,18 +337,24 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         <Stack direction="row" alignItems="center" spacing={1}>
           {canOpenRegenerate && (
             <>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={regeneratingTarget ? <CircularProgress size={16} /> : <RefreshIcon />}
-                endIcon={<ArrowDropDownIcon />}
-                onClick={(event) => setRegenerateAnchor(event.currentTarget)}
-                disabled={regeneratingTarget !== null}
-                aria-haspopup="true"
-                aria-expanded={Boolean(regenerateAnchor)}
-              >
-                {regeneratingTarget ? "Regenerating" : "Regenerate"}
-              </Button>
+              <ButtonGroup variant="outlined" size="small" disabled={regeneratingTarget !== null}>
+                <Button
+                  startIcon={regeneratingTarget ? <CircularProgress size={16} /> : <RefreshIcon />}
+                  onClick={() => void handleRegenerate("all")}
+                >
+                  {regeneratingTarget ? "Regenerating" : "Regenerate all"}
+                </Button>
+                <Button
+                  size="small"
+                  onClick={(event) => setRegenerateAnchor(event.currentTarget)}
+                  aria-label="Choose images to regenerate"
+                  aria-haspopup="true"
+                  aria-expanded={Boolean(regenerateAnchor)}
+                  sx={{ px: 0.75 }}
+                >
+                  <ArrowDropDownIcon />
+                </Button>
+              </ButtonGroup>
               <Popover
                 open={Boolean(regenerateAnchor)}
                 anchorEl={regenerateAnchor}
@@ -386,7 +405,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                           color="inherit"
                           fullWidth
                           startIcon={<ImageOutlinedIcon />}
-                          onClick={() => void handleRegenerateAvatar(option.target)}
+                          onClick={() => void handleRegenerate(option.target)}
                           disabled={!imageApiKeyId}
                           sx={{ justifyContent: "flex-start" }}
                         >
@@ -405,7 +424,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                           color="inherit"
                           fullWidth
                           startIcon={<ImageOutlinedIcon />}
-                          onClick={() => void handleRegenerateInfographic(option.target)}
+                          onClick={() => void handleRegenerate(option.target)}
                           disabled={!imageApiKeyId}
                           sx={{ justifyContent: "flex-start" }}
                         >
