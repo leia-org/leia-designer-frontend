@@ -1,4 +1,5 @@
 import type { User } from "./User";
+import type { RubricSnapshot } from "./Rubric";
 
 export interface Label {
   _id: string,
@@ -120,6 +121,8 @@ export interface Leia {
     avatar?: string,
     infographic?: string,
     infographicSolution?: string,
+    rubricId?: string,
+    rubric?: RubricSnapshot,
     persona: {
       id: string,
       apiVersion: string,

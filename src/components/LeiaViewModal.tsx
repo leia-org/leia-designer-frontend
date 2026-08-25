@@ -36,6 +36,7 @@ import {
 } from "../lib/avatar";
 import InfographicViewer from "./InfographicViewer";
 import { Avatar } from "./shared/Avatar";
+import { RubricPreview } from "./RubricPreview";
 
 const SyntaxHighlighter = lazy(() =>
   import("react-syntax-highlighter").then((module) => ({ default: module.Prism })),
@@ -90,7 +91,7 @@ interface LeiaViewModalProps {
 type AvatarRegenerationTarget = "leias" | "problems" | "personas";
 type InfographicRegenerationTarget = "infographic" | "infographicSolution";
 type RegenerationTarget = AvatarRegenerationTarget | InfographicRegenerationTarget;
-type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
+type ViewMode = "problem" | "persona" | "behaviour" | "rubric" | "infographics";
 
 function getUserId(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -159,6 +160,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const problem = problemResource?.spec;
   const persona = personaResource?.spec;
   const behaviour = displayLeia.spec?.behaviour?.spec;
+  const rubric = displayLeia.spec?.rubric;
   const isAdmin = user?.role === "admin";
   const canRegenerateLeia = isAdmin || getUserId(displayLeia.user) === user?.id;
   const canRegenerateProblem = isAdmin || getUserId(problemResource?.user) === user?.id;
@@ -431,6 +433,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         <Tab value="problem" label="Problem" />
         <Tab value="persona" label="Persona" />
         {user?.role === "admin" && <Tab value="behaviour" label="Behaviour" />}
+        {rubric && <Tab value="rubric" label="Rubric" />}
         <Tab value="infographics" label="Infographics" />
       </Tabs>
       <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
@@ -536,6 +539,13 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
               </ContentSection>
             )}
             {behaviour?.tooltip && <ContentSection title="Initial Tooltip"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour.tooltip}</Typography></ContentSection>}
+          </Stack>
+        )}
+
+        {viewMode === "rubric" && rubric && (
+          <Stack spacing={2.5}>
+            <Typography variant="subtitle1" fontWeight={700}>{rubric.metadata.name}</Typography>
+            <RubricPreview markdown={rubric.spec.markdown} />
           </Stack>
         )}
 
