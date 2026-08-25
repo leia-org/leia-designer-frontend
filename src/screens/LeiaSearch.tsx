@@ -608,6 +608,15 @@ export const LeiaSearch: React.FC = () => {
   };
 
   const handleDefaultTry = async (leia: Leia) => {
+    const hasActiveApiKeys = apiKeys.some((key) => key.isActive !== false);
+    if (!isApiKeysLoading && !apiKeysError && !hasActiveApiKeys) {
+      toast.error("Configure an API key before testing a LEIA", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     const existing = tryConfigByLeia[leia.id];
     const validModels = getTryModels(leia);
     if (
@@ -1167,7 +1176,10 @@ export const LeiaSearch: React.FC = () => {
                             onClick={() => void handleDefaultTry(leia)}
                             disabled={initializingId === leia.id}
                             id={index === 1 ? "try-button" : undefined}
-                            sx={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                            sx={{
+                              borderTopRightRadius: showNoApiKeys ? undefined : 0,
+                              borderBottomRightRadius: showNoApiKeys ? undefined : 0,
+                            }}
                           >
                             {initializingId === leia.id ? "Starting…" : "Test LEIA"}
                           </Button>
