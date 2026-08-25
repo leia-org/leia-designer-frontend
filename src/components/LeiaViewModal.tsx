@@ -1,5 +1,5 @@
 import type React from "react";
-import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -123,6 +123,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const [displayLeia, setDisplayLeia] = useState<Leia | null>(leia);
   const [regenerateAnchor, setRegenerateAnchor] = useState<HTMLElement | null>(null);
   const [regeneratingTarget, setRegeneratingTarget] = useState<RegenerationTarget | null>(null);
+  const [tabsOverflow, setTabsOverflow] = useState(false);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
   const [imageApiKeyId, setImageApiKeyId] = useState<string>("");
   const { user } = useAuth();
   const {
@@ -153,6 +155,29 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
       return geminiApiKeys[0]?.id ?? "";
     });
   }, [geminiApiKeys, getDefaultKey]);
+
+  useEffect(() => {
+    const tabsRoot = tabsRef.current;
+    if (!isOpen || !tabsRoot) return;
+
+    const updateTabsOverflow = () => {
+      const scroller = tabsRoot.querySelector<HTMLElement>(".MuiTabs-scroller");
+      setTabsOverflow(Boolean(scroller && scroller.scrollWidth > scroller.clientWidth + 1));
+    };
+
+    updateTabsOverflow();
+    const resizeObserver = new ResizeObserver(updateTabsOverflow);
+    resizeObserver.observe(tabsRoot);
+    const mutationObserver = new MutationObserver(updateTabsOverflow);
+    mutationObserver.observe(tabsRoot, { childList: true, subtree: true });
+    window.addEventListener("resize", updateTabsOverflow);
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener("resize", updateTabsOverflow);
+    };
+  }, [isOpen, displayLeia?.spec?.rubric, user?.role]);
 
   if (!isOpen || !displayLeia) return null;
 
@@ -443,10 +468,12 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         </Stack>
       </DialogTitle>
       <Tabs
+        ref={tabsRef}
         value={viewMode}
         onChange={(_, value: ViewMode) => setViewMode(value)}
         variant="scrollable"
-        scrollButtons="auto"
+        scrollButtons={tabsOverflow}
+        allowScrollButtonsMobile
         sx={{ px: 2, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}
       >
         <Tab value="problem" label="Problem" />
