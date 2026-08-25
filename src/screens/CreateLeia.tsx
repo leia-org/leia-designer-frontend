@@ -1800,20 +1800,22 @@ const openGenerateProblemModal = () => {
 
         SetisSolutionFormatError(isSolutionFormatErrorlocal);
         //Error si procces inválido
-        let problemProcces=leiaConfig.problem?.spec.process;
-        let behaviourProcces=leiaConfig.behaviour?.spec.process;
+        let problemProccesaux=leiaConfig.problem?.spec.process;
+        let behaviourProccesaux=leiaConfig.behaviour?.spec.process;
         let isProblemProccesErrorlocal:boolean=false;
         let isBehaviourProccesErrorlocal:boolean=false;
 
-        if((problemProcces!.includes('other') && problemProcces!.length>1)
-        || problemProcces?.filter(p=>!validProccesValues.includes(p)).length!>0) isProblemProccesErrorlocal=true
+        if((problemProccesaux!.includes('other') && problemProccesaux!.length>1)
+        || problemProccesaux?.filter(p=>!validProccesValues.includes(p)).length!>0
+        || problemProccesaux?.length!<1) isProblemProccesErrorlocal=true
         else isProblemProccesErrorlocal=false
         SetIsProblemProccesError(isProblemProccesErrorlocal);
 
 
 
-        if((behaviourProcces!.includes('other') && behaviourProcces!.length>1)
-        || behaviourProcces?.filter(p=>!validProccesValues.includes(p)).length!>0) isBehaviourProccesErrorlocal=true
+        if((behaviourProccesaux!.includes('other') && behaviourProccesaux!.length>1)
+        || behaviourProccesaux?.filter(p=>!validProccesValues.includes(p)).length!>0
+        || behaviourProccesaux?.length!<1) isBehaviourProccesErrorlocal=true
         else isBehaviourProccesErrorlocal=false;
          SetIsBehaviourProccesError(isBehaviourProccesErrorlocal);
 
