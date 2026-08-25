@@ -471,6 +471,12 @@ export const CreateLeia: React.FC = () => {
   const [isSolutionFormatError, SetisSolutionFormatError]=useState(false);
   const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
 
+  //Elementos con valor '' (Joi no los acepta)
+
+  const [missingPersonaAttributes,SetmissingPersonaAttributes]=useState<string[]>([]);
+  const [missingProblemAttributes, SetmissingProblemAttributes]=useState<string[]>([]);
+  const [missingBehaviourAttributes, SetmissingBehaviourAttributes]=useState<string[]>([]);
+
   const hasDraftContent = useMemo(() => {
     const hasSelectedComponent = Boolean(
       leiaConfig.persona || leiaConfig.problem || leiaConfig.behaviour,
@@ -1788,6 +1794,45 @@ const openGenerateProblemModal = () => {
           return;
         }else SetisSolutionFormatError(false);
 
+        //Revisamos los atributos de la Leia para ver si los hay con valor '' 
+
+        let localPersonaAttrributes:string[]=[];
+        for (const [key, value] of Object.entries(leiaConfig.persona?.spec!)){
+          
+          if(value==='') localPersonaAttrributes.push(key);
+
+        }
+        SetmissingPersonaAttributes(localPersonaAttrributes);
+
+
+
+        let localProblemAttributes:string[]=[];
+        for (const [key, value] of Object.entries(leiaConfig.problem?.spec!)){
+
+          if(value==='') localProblemAttributes.push(key);
+
+        }
+        SetmissingProblemAttributes(localProblemAttributes);
+
+
+        let localBehaviourAttributes:string[]=[];
+        for (const [key, value] of Object.entries(leiaConfig.behaviour?.spec!)){
+
+          if(value==='') localBehaviourAttributes.push(key);
+        }
+        SetmissingBehaviourAttributes(localBehaviourAttributes);
+
+        console.log(missingBehaviourAttributes);
+        console.log(missingPersonaAttributes);
+        console.log(missingProblemAttributes);
+
+        console.log(leiaConfig);
+
+        if (localBehaviourAttributes.length + localPersonaAttrributes.length 
+          + localProblemAttributes.length > 0) return;
+
+          
+
       setCurrentStep(2);
     }
   };
@@ -2313,6 +2358,83 @@ const openGenerateProblemModal = () => {
 
           </Box>
         )}
+
+        {missingPersonaAttributes.map(p=> (
+
+          <Box
+            
+            sx={{
+              
+              minWidth: 0,
+              minHeight: { xs: 0, lg: 0 },
+              height: { lg: "100%" },
+              bgcolor:'crimson',
+              fontFamily:"system-ui",
+              p:1.5,
+              marginTop:2,
+              textAlign:"center",
+              
+            }}
+
+          >
+
+            <div>
+              <h3>Persona's field -{p}- is empty</h3>
+            </div>
+          
+          </Box>
+
+        ))}
+
+
+        {missingProblemAttributes.map(p=> (
+
+          <Box
+            
+            sx={{
+              
+              minWidth: 0,
+              minHeight: { xs: 0, lg: 0 },
+              height: { lg: "100%" },
+              bgcolor:'crimson',
+              fontFamily:"system-ui",
+              p:1.5,
+              marginTop:2,
+              textAlign:"center",
+              
+            }}>
+
+              <div>
+                <h3>Problem's field -{p}- is empty</h3>
+              </div>              
+
+          </Box>))
+        }
+
+
+        {missingBehaviourAttributes.map(p=> (
+
+          <Box
+            
+            sx={{
+              
+              minWidth: 0,
+              minHeight: { xs: 0, lg: 0 },
+              height: { lg: "100%" },
+              bgcolor:'crimson',
+              fontFamily:"system-ui",
+              p:1.5,
+              marginTop:2,
+              textAlign:"center",
+              
+            }}>
+
+              <div>
+                <h3>Behaviour's field -{p}- is empty</h3>
+              </div>              
+
+          </Box>))
+        }
 
         {editingResource.resource && (
           <Dialog
