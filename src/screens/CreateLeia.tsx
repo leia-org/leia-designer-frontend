@@ -471,6 +471,12 @@ export const CreateLeia: React.FC = () => {
   const [isSolutionFormatError, SetisSolutionFormatError]=useState(false);
   const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
 
+
+  //Prevenir Valor procces incorrecto
+  const [isProblemProccesError, SetIsProblemProccesError]=useState(false);
+  const [isBehaviourProccesError, SetIsBehaviourProccesError]=useState(false);
+  const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+
   //Elementos con valor '' (Joi no los acepta)
 
   const [missingPersonaAttributes,SetmissingPersonaAttributes]=useState<string[]>([]);
@@ -1787,10 +1793,29 @@ const openGenerateProblemModal = () => {
         }));
 
         //Error si solutionFormat no es válido
-
+        let isSolutionFormatErrorlocal:boolean=false;
         if(!validSolutionFormatValues.includes(leiaConfig.problem?.spec.solutionFormat!)){
-          SetisSolutionFormatError(true); 
-        }else SetisSolutionFormatError(false);
+          isSolutionFormatErrorlocal=true
+        }else isSolutionFormatErrorlocal=false
+
+        SetisSolutionFormatError(isSolutionFormatErrorlocal);
+        //Error si procces inválido
+        let problemProcces=leiaConfig.problem?.spec.process;
+        let behaviourProcces=leiaConfig.behaviour?.spec.process;
+        let isProblemProccesErrorlocal:boolean=false;
+        let isBehaviourProccesErrorlocal:boolean=false;
+
+        if((problemProcces!.includes('other') && problemProcces!.length>1)
+        || problemProcces?.filter(p=>!validProccesValues.includes(p)).length!>0) isProblemProccesErrorlocal=true
+        else isProblemProccesErrorlocal=false
+        SetIsProblemProccesError(isProblemProccesErrorlocal);
+
+
+
+        if((behaviourProcces!.includes('other') && behaviourProcces!.length>1)
+        || behaviourProcces?.filter(p=>!validProccesValues.includes(p)).length!>0) isBehaviourProccesErrorlocal=true
+        else isBehaviourProccesErrorlocal=false;
+         SetIsBehaviourProccesError(isBehaviourProccesErrorlocal);
 
         //Revisamos los atributos de la Leia para ver si los hay con valor '' 
 
@@ -1823,7 +1848,8 @@ const openGenerateProblemModal = () => {
         
 
         if ((localBehaviourAttributes.length + localPersonaAttrributes.length 
-          + localProblemAttributes.length > 0) || isSolutionFormatError) return;
+          + localProblemAttributes.length > 0) || isSolutionFormatErrorlocal
+        || isBehaviourProccesErrorlocal || isProblemProccesErrorlocal) return;
 
           
 
@@ -2429,6 +2455,55 @@ const openGenerateProblemModal = () => {
 
           </Box>))
         }
+
+        {isProblemProccesError && (
+
+          <Box
+            
+            sx={{
+              
+              minWidth: 0,
+              minHeight: { xs: 0, lg: 0 },
+              height: { lg: "100%" },
+              bgcolor:'crimson',
+              fontFamily:"system-ui",
+              p:1.5,
+              marginTop:2,
+              textAlign:"center",
+              
+            }}>
+
+              <div>
+                <h3>Problem's field -Procces- does not have a correct value</h3>
+              </div>              
+
+          </Box>
+
+        )}
+
+
+        {isBehaviourProccesError && (
+          <Box
+            
+            sx={{
+              
+              minWidth: 0,
+              minHeight: { xs: 0, lg: 0 },
+              height: { lg: "100%" },
+              bgcolor:'crimson',
+              fontFamily:"system-ui",
+              p:1.5,
+              marginTop:2,
+              textAlign:"center",
+              
+            }}>
+
+              <div>
+                <h3>Behaviour's field -Procces- does not have a correct value</h3>
+              </div>              
+
+          </Box>
+        )}
 
         {editingResource.resource && (
           <Dialog
