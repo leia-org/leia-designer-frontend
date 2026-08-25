@@ -54,7 +54,7 @@ import type {
   ProblemWidget,
   Leia as LeiaResource,
 } from "../models/Leia";
-import type { Rubric } from "../models/Rubric";
+import type { Rubric, RubricDefinition, RubricSnapshot } from "../models/Rubric";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import api from "../lib/axios";
@@ -66,7 +66,8 @@ import {
   updateLeiaDraft,
 } from "../lib/leiaDrafts";
 import { generateLeia } from "../lib/leia";
-import { getRubrics } from "../lib/rubrics";
+import { RubricPreview } from "../components/RubricPreview";
+import { parseRubricMarkdown } from "../lib/rubrics";
 import { toast, ToastContainer } from "react-toastify";
 
 interface Label {
@@ -106,7 +107,7 @@ interface Leia {
     persona: Persona;
     problem: Problem;
     behaviour: Behaviour;
-    rubric?: Rubric;
+    rubric?: RubricSnapshot;
     rubricId?: string;
   };
 }
@@ -150,7 +151,7 @@ interface NavigationState {
     chatModelName?: string;
     chatApiKeyId?: string | null;
     pendingLabelDrafts?: LabelDraft[];
-    selectedRubricId?: string | null;
+    rubricDraft?: RubricSnapshot | null;
     supervisorConfig?: SupervisorConfig;
     leiaNameManuallyEdited?: boolean;
     leiaPublish?: boolean;
@@ -170,7 +171,7 @@ interface CreateLeiaDraftState {
   leiaNameManuallyEdited: boolean;
   selectedLabelIds: string[];
   pendingLabelDrafts: LabelDraft[];
-  selectedRubricId: string | null;
+  rubricDraft: RubricSnapshot | null;
   chatState: ProblemChatState;
   chatModelName: string;
   chatApiKeyId: string | null;
@@ -277,9 +278,7 @@ export const CreateLeia: React.FC = () => {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [behaviours, setBehaviours] = useState<Behaviour[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
-  const [rubrics, setRubrics] = useState<Rubric[]>([]);
-  const [selectedRubricId, setSelectedRubricId] = useState<string | null>(null);
-  const [rubricsError, setRubricsError] = useState<string | null>(null);
+  const [rubricDraft, setRubricDraft] = useState<RubricSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<Error | null>(null);
@@ -393,11 +392,6 @@ export const CreateLeia: React.FC = () => {
   const [pendingLabelDrafts, setPendingLabelDrafts] = useState<LabelDraft[]>(
     [],
   );
-  const selectedRubric = useMemo(
-    () => rubrics.find((rubric) => rubric._id === selectedRubricId) ?? null,
-    [rubrics, selectedRubricId],
-  );
-
   // Estados para filtros de visibilidad
   const [personaVisibility, setPersonaVisibility] = useState<
     "all" | "public" | "private"
@@ -435,6 +429,8 @@ export const CreateLeia: React.FC = () => {
     content: null,
     apiVersion: "v1",
   });
+  const [rubricEditorDraft, setRubricEditorDraft] = useState<RubricDefinition | null>(null);
+  const [rubricEditorError, setRubricEditorError] = useState<string | null>(null);
 
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
@@ -496,11 +492,11 @@ export const CreateLeia: React.FC = () => {
         hasNamedResource ||
         selectedLabelIds.length ||
         pendingLabelDrafts.length ||
-        selectedRubricId ||
+        rubricDraft ||
         chatState.messages.length ||
         chatState.input.trim(),
     );
-  }, [chatState.input, chatState.messages.length, customizations, leiaConfig, pendingLabelDrafts.length, selectedLabelIds.length, selectedRubricId]);
+  }, [chatState.input, chatState.messages.length, customizations, leiaConfig, pendingLabelDrafts.length, rubricDraft, selectedLabelIds.length]);
 
   const draftTitle = useMemo(
     () =>
@@ -521,7 +517,7 @@ export const CreateLeia: React.FC = () => {
       leiaNameManuallyEdited,
       selectedLabelIds,
       pendingLabelDrafts,
-      selectedRubricId,
+      rubricDraft,
       chatState,
       chatModelName,
       chatApiKeyId,
@@ -545,8 +541,8 @@ export const CreateLeia: React.FC = () => {
       pendingLabelDrafts,
       personaPublish,
       problemPublish,
+      rubricDraft,
       selectedLabelIds,
-      selectedRubricId,
       supervisorConfig,
     ],
   );
@@ -562,7 +558,7 @@ export const CreateLeia: React.FC = () => {
     setLeiaNameManuallyEdited(false);
     setSelectedLabelIds([]);
     setPendingLabelDrafts([]);
-    setSelectedRubricId(null);
+    setRubricDraft(null);
     setLabelSearchInput("");
     setValidationErrors(null);
     setChatState({ messages: [], input: "" });
@@ -575,6 +571,8 @@ export const CreateLeia: React.FC = () => {
     setProblemPublish(true);
     setPersonaPublish(true);
     setEditingResource({ resource: null, content: null, apiVersion: "v1" });
+    setRubricEditorDraft(null);
+    setRubricEditorError(null);
     setDraftError(null);
   }, []);
 
@@ -603,7 +601,7 @@ export const CreateLeia: React.FC = () => {
     setLeiaNameManuallyEdited(Boolean(state.leiaNameManuallyEdited));
     setSelectedLabelIds(state.selectedLabelIds ?? []);
     setPendingLabelDrafts(state.pendingLabelDrafts ?? []);
-    setSelectedRubricId(state.selectedRubricId ?? null);
+    setRubricDraft(state.rubricDraft ?? null);
     setChatState({
       messages: Array.isArray(state.chatState?.messages)
         ? state.chatState.messages
@@ -623,6 +621,8 @@ export const CreateLeia: React.FC = () => {
     setPersonaPublish(state.personaPublish ?? true);
     setValidationErrors(null);
     setEditingResource({ resource: null, content: null, apiVersion: "v1" });
+    setRubricEditorDraft(null);
+    setRubricEditorError(null);
     setDraftError(null);
     setShowDraftsDialog(false);
   }, []);
@@ -971,7 +971,7 @@ export const CreateLeia: React.FC = () => {
       setChatModelName(savedState.chatModelName ?? "");
       setChatApiKeyId(savedState.chatApiKeyId ?? null);
       setPendingLabelDrafts(savedState.pendingLabelDrafts ?? []);
-      setSelectedRubricId(savedState.selectedRubricId ?? null);
+      setRubricDraft(savedState.rubricDraft ?? null);
       setSupervisorConfig(savedState.supervisorConfig ?? DEFAULT_SUPERVISOR_CONFIG);
       setLeiaNameManuallyEdited(Boolean(savedState.leiaNameManuallyEdited));
       setLeiaPublish(savedState.leiaPublish ?? true);
@@ -1069,20 +1069,6 @@ export const CreateLeia: React.FC = () => {
     }
   };
 
-  const loadAvailableRubrics = async () => {
-    try {
-      setRubricsError(null);
-      const availableRubrics = await getRubrics();
-      setRubrics(availableRubrics);
-      setSelectedRubricId((current) => (
-        current && availableRubrics.some((rubric) => rubric._id === current) ? current : null
-      ));
-    } catch (err) {
-      console.error("Error loading rubrics:", err);
-      setRubricsError("Failed to load rubrics");
-    }
-  };
-
   const getLabelIdentifier = (label: Label) => label.id || label._id || null;
 
   const getPendingLabelId = (labelName: string) =>
@@ -1139,7 +1125,6 @@ export const CreateLeia: React.FC = () => {
         loadProblems(problemVisibility, problemProcess),
         loadBehaviours(behaviourVisibility, behaviourProcess),
         loadLabels(),
-        loadAvailableRubrics(),
       ]);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -1190,6 +1175,7 @@ export const CreateLeia: React.FC = () => {
     type: keyof LeiaConfig,
     item: Persona | Behaviour | Problem,
   ) => {
+    if (type === "problem") setRubricDraft(null);
     setLeiaConfig((prev) => ({
       ...prev,
       [type]: item,
@@ -1427,6 +1413,7 @@ const openGenerateProblemModal = () => {
         user: currentUser!,
       };
 
+      setRubricDraft(null);
       // Añadir a la lista de problems
       setProblems((prev) => [generatedProblem, ...prev]);
 
@@ -1612,13 +1599,12 @@ const openGenerateProblemModal = () => {
     try {
       setTestingLeia(true);
       const savedDraft = await saveCurrentDraft();
-      const testLeia: Leia = selectedRubric
+      const testLeia: Leia = rubricDraft
         ? {
             ...generatedLeia,
             spec: {
               ...generatedLeia.spec,
-              rubricId: selectedRubric._id,
-              rubric: selectedRubric,
+              rubric: rubricDraft,
             },
           }
         : generatedLeia;
@@ -1646,7 +1632,7 @@ const openGenerateProblemModal = () => {
             chatModelName,
             chatApiKeyId,
             pendingLabelDrafts,
-            selectedRubricId,
+            rubricDraft,
             supervisorConfig,
             leiaNameManuallyEdited,
             leiaPublish,
@@ -1831,8 +1817,20 @@ const openGenerateProblemModal = () => {
           leia.spec[key] = leiaConfig[key as keyof LeiaConfig]?.id;
         }
       }
-      if (selectedRubricId) {
-        leia.spec.rubric = selectedRubricId;
+      if (rubricDraft) {
+        if (rubricDraft._id) {
+          leia.spec.rubric = rubricDraft._id;
+        } else {
+          try {
+            const response = await api.post<Rubric>("/api/v1/rubrics", rubricDraft);
+            setRubricDraft(response.data);
+            leia.spec.rubric = response.data._id;
+          } catch (error) {
+            console.error("Error creating rubric:", error);
+            setError("Failed to create rubric resource");
+            return;
+          }
+        }
       }
       // Attach the per-LEIA supervisor config (only when enabled). The
       // supervisor runs on OpenAI with its own key — stored together with the
@@ -1983,6 +1981,10 @@ const openGenerateProblemModal = () => {
 
   const applyChatProblem = useCallback(
     (spec: ProblemSpec, name?: string) => {
+      // Keep the current rubric while the assistant applies the other LEIA
+      // resources. A complete assistant turn may apply the problem first and
+      // the rubric afterwards; clearing here made the rubric disappear again
+      // when the assistant revisited the problem in a later turn.
       const incomingSpec = spec as unknown as Record<string, unknown>;
       const process = copyProcess(incomingSpec.process);
       setLeiaConfig((prev) => ({
@@ -2084,6 +2086,54 @@ const openGenerateProblemModal = () => {
     },
     [currentUser],
   );
+
+  const applyChatRubric = useCallback(
+    (spec: { markdown: string }, name: string) => {
+      setRubricDraft({
+        apiVersion: "v1",
+        metadata: { name },
+        spec: { markdown: spec.markdown },
+      });
+    },
+    [],
+  );
+
+  const openRubricEditor = useCallback(() => {
+    if (!rubricDraft) return;
+    setRubricEditorDraft(structuredClone({
+      apiVersion: rubricDraft.apiVersion,
+      metadata: rubricDraft.metadata,
+      spec: rubricDraft.spec,
+    }));
+    setRubricEditorError(null);
+  }, [rubricDraft]);
+
+  const closeRubricEditor = useCallback(() => {
+    setRubricEditorDraft(null);
+    setRubricEditorError(null);
+  }, []);
+
+  const saveRubricEditor = useCallback(() => {
+    if (!rubricEditorDraft) return;
+    const name = rubricEditorDraft.metadata.name.trim();
+    if (!name) {
+      setRubricEditorError("Rubric name is required.");
+      return;
+    }
+
+    const parsed = parseRubricMarkdown(rubricEditorDraft.spec.markdown);
+    if (parsed.error) {
+      setRubricEditorError(parsed.error);
+      return;
+    }
+
+    setRubricDraft({
+      apiVersion: "v1",
+      metadata: { name },
+      spec: { markdown: rubricEditorDraft.spec.markdown.trim() },
+    });
+    closeRubricEditor();
+  }, [closeRubricEditor, rubricEditorDraft]);
 
   const handleUseExistingPersona = useCallback(
     (id: string): { ok: boolean; name?: string } => {
@@ -2275,6 +2325,15 @@ const openGenerateProblemModal = () => {
         apiVersion: current.apiVersion || "v1",
       });
     };
+    const handleOverviewComponentClick = (
+      resource: "persona" | "problem" | "behaviour" | "rubric",
+    ) => {
+      if (resource === "rubric") {
+        openRubricEditor();
+        return;
+      }
+      editResource(resource);
+    };
     const testAction = !generatedLeia ? (
       <Button fullWidth variant="contained" disabled startIcon={<PlayArrowIcon />}>
         Test LEIA
@@ -2365,10 +2424,12 @@ const openGenerateProblemModal = () => {
               currentProblem={leiaConfig.problem}
               currentBehaviour={leiaConfig.behaviour}
               currentPersona={leiaConfig.persona}
+              currentRubric={rubricDraft}
               personas={personas}
               onApplyProblem={applyChatProblem}
               onApplyBehaviour={applyChatBehaviour}
               onApplyPersona={applyChatPersona}
+              onApplyRubric={applyChatRubric}
               onUsePersona={handleUseExistingPersona}
               onSetLeiaName={handleAssistantLeiaName}
               modelName={chatModelName}
@@ -2390,11 +2451,12 @@ const openGenerateProblemModal = () => {
           >
             <LeiaLivePreview
               leia={generatedLeia}
+              rubric={rubricDraft}
               title={customizations.leia.name}
               onTitleChange={handleLeiaNameChange}
               titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}
               testAction={testAction}
-              onComponentClick={editResource}
+              onComponentClick={handleOverviewComponentClick}
             />
           </Box>
         </Box>
@@ -2414,6 +2476,7 @@ const openGenerateProblemModal = () => {
                 onSave={(data, apiVersion, resourceName) => {
                   const resource = editingResource.resource;
                   if (!resource) return;
+                  if (resource === "problem") setRubricDraft(null);
 
                   setLeiaConfig((previous) => {
                     const current = previous[resource];
@@ -2447,6 +2510,79 @@ const openGenerateProblemModal = () => {
             </DialogContent>
           </Dialog>
         )}
+
+        <Dialog
+          open={Boolean(rubricEditorDraft)}
+          onClose={closeRubricEditor}
+          fullWidth
+          maxWidth="xl"
+        >
+          <DialogTitle>Edit rubric</DialogTitle>
+          <DialogContent dividers sx={{ p: { xs: 1.5, md: 2.5 }, bgcolor: "background.default" }}>
+            {rubricEditorDraft && (
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) minmax(0, 1fr)" },
+                  gap: 2,
+                }}
+              >
+                <Paper variant="outlined" sx={{ p: 2, minWidth: 0 }}>
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Rubric name"
+                      value={rubricEditorDraft.metadata.name}
+                      onChange={(event) => {
+                        setRubricEditorError(null);
+                        setRubricEditorDraft((current) => current ? ({
+                          ...current,
+                          metadata: { name: event.target.value },
+                        }) : current);
+                      }}
+                      fullWidth
+                    />
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Markdown</Typography>
+                      <Box sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
+                        <Editor
+                          height="480px"
+                          language="markdown"
+                          theme="vs-light"
+                          value={rubricEditorDraft.spec.markdown}
+                          onChange={(value) => {
+                            setRubricEditorError(null);
+                            setRubricEditorDraft((current) => current ? ({
+                              ...current,
+                              spec: { markdown: value ?? "" },
+                            }) : current);
+                          }}
+                          options={{
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            fontSize: 13,
+                            lineNumbers: "on",
+                            automaticLayout: true,
+                            wordWrap: "on",
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                    {rubricEditorError && <Alert severity="error">{rubricEditorError}</Alert>}
+                  </Stack>
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2, minWidth: 0, maxHeight: 590, overflow: "auto" }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2 }}>Preview</Typography>
+                  <RubricPreview markdown={rubricEditorDraft.spec.markdown} />
+                </Paper>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button color="inherit" onClick={closeRubricEditor}>Cancel</Button>
+            <Button variant="contained" onClick={saveRubricEditor}>Save rubric</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     );
   };
@@ -2657,78 +2793,6 @@ const openGenerateProblemModal = () => {
               )}
             />
             {labelsError && <Button size="small" sx={{ alignSelf: "flex-start" }} onClick={loadLabels}>Retry labels</Button>}
-            <Autocomplete
-              options={rubrics}
-              value={selectedRubric}
-              onChange={(_, rubric) => setSelectedRubricId(rubric?._id ?? null)}
-              getOptionLabel={(rubric) => rubric.metadata.name}
-              isOptionEqualToValue={(option, value) => option._id === value._id}
-              disabled={loading || Boolean(rubricsError)}
-              renderOption={(props, rubric) => (
-                <Box component="li" {...props}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" fontWeight={600}>{rubric.metadata.name}</Typography>
-                  </Box>
-                </Box>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Rubric (optional)"
-                  placeholder="Select one of your rubrics"
-                  error={Boolean(rubricsError)}
-                  helperText={rubricsError || "The selected rubric will be copied into this LEIA version."}
-                />
-              )}
-            />
-            {rubricsError && (
-              <Button size="small" sx={{ alignSelf: "flex-start" }} onClick={() => void loadAvailableRubrics()}>
-                Retry rubrics
-              </Button>
-            )}
-            {!rubricsError && rubrics.length === 0 && (
-              <Alert severity="info">
-                You do not have any rubrics available. Create one through the rubrics API, then retry this list.
-              </Alert>
-            )}
-            {selectedRubric && (
-              <Accordion
-                disableGutters
-                elevation={0}
-                sx={{ border: 1, borderColor: "divider", borderRadius: "6px !important", overflow: "hidden" }}
-              >
-                <AccordionSummary
-                  expandIcon={<ExpandMoreIcon fontSize="small" />}
-                  sx={{ minHeight: 40, "& .MuiAccordionSummary-content": { my: 0.75 } }}
-                >
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2">{selectedRubric.metadata.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Rubric Markdown preview
-                    </Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails sx={{ p: 0, borderTop: 1, borderColor: "divider" }}>
-                  <Editor
-                    height="220px"
-                    language="markdown"
-                    theme="vs-light"
-                    value={selectedRubric.spec.markdown}
-                    options={{
-                      readOnly: true,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      fontSize: 12,
-                      lineNumbers: "off",
-                      folding: false,
-                      automaticLayout: true,
-                      contextmenu: false,
-                      wordWrap: "on",
-                    }}
-                  />
-                </AccordionDetails>
-              </Accordion>
-            )}
             {currentUser?.role === "admin" && (
               <TextField
                 select
@@ -2951,6 +3015,16 @@ const openGenerateProblemModal = () => {
             {preview("Persona", generatedLeia?.spec.persona, "persona")}
           </Box>
         </Paper>
+
+        {rubricDraft && (
+          <Paper variant="outlined" sx={{ p: 2.5 }}>
+            <Typography variant="subtitle2">Rubric</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+              {rubricDraft.metadata.name}
+            </Typography>
+            <RubricPreview markdown={rubricDraft.spec.markdown} />
+          </Paper>
+        )}
       </Stack>
     );
   };
@@ -2977,7 +3051,7 @@ const openGenerateProblemModal = () => {
             <Stack alignItems="center" spacing={2}>
               <CircularProgress />
               <Typography variant="h6">Loading resources...</Typography>
-              <Typography color="text.secondary">Loading personas, problems, behaviours, and rubrics from the API...</Typography>
+              <Typography color="text.secondary">Loading personas, problems, and behaviours from the API...</Typography>
             </Stack>
           </Paper>
         </Container>

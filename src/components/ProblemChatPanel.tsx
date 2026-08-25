@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
+import type { RubricDefinition } from "../models/Rubric";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
@@ -25,6 +26,7 @@ import {
   type ProblemChatToolResult,
   type UploadedFile,
 } from "../lib/problemChat";
+import { parseRubricMarkdown } from "../lib/rubrics";
 
 // Widget catalog context for the model: available widgetTypes + their tool
 // functions, so it can decide whether the activity needs a widget (e.g. a
@@ -214,6 +216,31 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     },
   },
   {
+    name: "get_current_rubric",
+    description:
+      "Returns the rubric currently prepared for the LEIA. Call it before revising an existing rubric.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "apply_rubric",
+    description:
+      "Writes a COMPLETE evaluation rubric for the exact current Problem. When building a complete LEIA, call this after apply_problem. Set a concise resource name and provide Markdown containing one or more valid tables. Each section may use a level 2-6 heading; append [n%] to section headings for explicit weights. If no section has an explicit weight, all sections weigh the same. Every table needs a header, a separator row with at least three hyphens per column, and at least one criterion row.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Short kebab-case name for the rubric resource (e.g. 'library-interview-rubric').",
+        },
+        markdown: {
+          type: "string",
+          description: "The complete rubric as section headings and Markdown tables.",
+        },
+      },
+      required: ["name", "markdown"],
+    },
+  },
+  {
     name: "list_personas",
     description:
       "Lists existing personas the instructor can reuse. Prefer a suitable existing persona and only create a new one when none fits.",
@@ -267,10 +294,12 @@ interface ProblemChatPanelProps {
   currentProblem: Problem | null;
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
+  currentRubric: RubricDefinition | null;
   personas: Persona[];
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
+  onApplyRubric: (spec: { markdown: string }, name: string) => void;
   onUsePersona: (id: string) => { ok: boolean; name?: string };
   onSetLeiaName?: (name: string) => void;
   modelName: string;
@@ -283,10 +312,12 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblem,
   currentBehaviour,
   currentPersona,
+  currentRubric,
   personas,
   onApplyProblem,
   onApplyBehaviour,
   onApplyPersona,
+  onApplyRubric,
   onUsePersona,
   onSetLeiaName,
   modelName,
@@ -315,6 +346,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviourRef.current = currentBehaviour;
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
+  const currentRubricRef = useRef<RubricDefinition | null>(currentRubric);
+  currentRubricRef.current = currentRubric;
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
@@ -387,12 +420,14 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         get_current_problem: 0,
         get_current_behaviour: 0,
         get_current_persona: 0,
+        get_current_rubric: 0,
         list_personas: 0,
         apply_problem: 10,
         apply_behaviour: 20,
         apply_persona: 30,
         use_persona: 30,
-        set_leia_name: 40,
+        apply_rubric: 40,
+        set_leia_name: 50,
       };
       const orderedCalls = [...calls].sort(
         (left, right) => (priority[left.name] ?? 100) - (priority[right.name] ?? 100),
@@ -406,8 +441,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         } catch {
           args = {};
         }
-        const takeName = () => {
-          const { name, ...rest } = args as { name?: unknown };
+        const takeName = (): { name?: string; spec: Record<string, unknown> } => {
+          const { name, ...rest } = args;
           return { name: typeof name === "string" && name.trim() ? name.trim() : undefined, spec: rest };
         };
         if (call.name === "apply_problem") {
@@ -425,6 +460,21 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           onApplyPersona(spec, name);
           pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
+        } else if (call.name === "apply_rubric") {
+          const { name, spec } = takeName();
+          const markdown = typeof spec.markdown === "string" ? spec.markdown : "";
+          const rubricValidation = markdown.trim()
+            ? parseRubricMarkdown(markdown)
+            : { rubric: null, error: "rubric Markdown is required" };
+          if (name && !rubricValidation.error) {
+            onApplyRubric({ markdown }, name);
+            pushMessage("system", `✓ Rubric applied${name ? ` ("${name}")` : ""}.`);
+            output = { status: "applied" };
+          } else {
+            const errorMessage = name ? rubricValidation.error : "rubric name is required";
+            pushMessage("system", `⚠ Rubric was not applied: ${errorMessage}`);
+            output = { error: errorMessage };
+          }
         } else if (call.name === "set_leia_name") {
           const name = typeof args.name === "string" ? args.name.trim() : "";
           if (name) {
@@ -440,6 +490,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           output = currentBehaviourRef.current?.spec ?? null;
         } else if (call.name === "get_current_persona") {
           output = currentPersonaRef.current?.spec ?? null;
+        } else if (call.name === "get_current_rubric") {
+          output = currentRubricRef.current;
         } else if (call.name === "list_personas") {
           output = personasRef.current.map((persona) => ({
             id: persona.id,
@@ -506,7 +558,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         {messages.length === 0 ? (
           <Typography variant="caption" color="text.disabled" fontStyle="italic">
             Attach a PDF of a past exercise or describe what you want, and I'll build the whole
-            LEIA — problem, behaviour and persona — writing each into its editor and suggesting a LEIA title.
+            LEIA — problem, behaviour, persona and rubric — applying each component and suggesting a LEIA title.
             E.g. "{EXAMPLE_PROMPT}".
           </Typography>
         ) : (

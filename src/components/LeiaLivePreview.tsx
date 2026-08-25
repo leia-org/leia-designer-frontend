@@ -12,7 +12,10 @@ import {
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import PsychologyOutlinedIcon from "@mui/icons-material/PsychologyOutlined";
 import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import type { Behaviour, Persona, Problem } from "../models/Leia";
+import type { RubricDefinition } from "../models/Rubric";
+import { parseRubricMarkdown } from "../lib/rubrics";
 
 interface GeneratedLeiaPreview {
   spec?: {
@@ -24,11 +27,12 @@ interface GeneratedLeiaPreview {
 
 interface LeiaLivePreviewProps {
   leia: GeneratedLeiaPreview | null;
+  rubric: RubricDefinition | null;
   title: string;
   onTitleChange: (value: string) => void;
   titleSuggested?: boolean;
   testAction: React.ReactNode;
-  onComponentClick?: (component: "persona" | "behaviour" | "problem") => void;
+  onComponentClick?: (component: "persona" | "behaviour" | "problem" | "rubric") => void;
 }
 
 interface PreviewSectionProps {
@@ -124,6 +128,7 @@ const EmptySection: React.FC = () => (
 
 export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   leia,
+  rubric,
   title,
   onTitleChange,
   titleSuggested = false,
@@ -136,6 +141,16 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   const displayName = title || persona?.spec?.fullName || "Untitled LEIA";
   const isReady = Boolean(persona && problem && behaviour);
   const widgetCount = problem?.spec?.widgets?.length ?? 0;
+  const parsedRubric = rubric ? parseRubricMarkdown(rubric.spec.markdown).rubric : null;
+  const rubricCriteriaCount = parsedRubric?.sections.reduce(
+    (total, section) => total + section.rows.length,
+    0,
+  ) ?? 0;
+  const rubricWeightingLabel = parsedRubric?.weightingMode === "equal"
+    ? "Equal weights"
+    : parsedRubric?.weightingMode === "mixed"
+      ? "Mixed weights"
+      : "Explicit weights";
 
   return (
     <Paper
@@ -237,6 +252,43 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
               </Stack>
               {problem.spec.description && <Typography variant="body2" color="text.secondary">{truncate(problem.spec.description, 220)}</Typography>}
               {problem.spec.details && <Typography variant="caption" color="text.secondary">{truncate(problem.spec.details, 140)}</Typography>}
+            </Stack>
+          ) : <EmptySection />}
+        </PreviewSection>
+
+        <PreviewSection
+          accent="#D97706"
+          icon={<FactCheckOutlinedIcon sx={{ fontSize: 17 }} />}
+          title="Rubric"
+          subtitle={rubric?.metadata.name}
+          onClick={rubric ? () => onComponentClick?.("rubric") : undefined}
+        >
+          {rubric ? (
+            <Stack spacing={1}>
+              {parsedRubric ? (
+                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                  <Chip
+                    label={`${parsedRubric.sections.length} ${parsedRubric.sections.length === 1 ? "section" : "sections"}`}
+                    size="small"
+                    sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.subtle" }}
+                  />
+                  <Chip
+                    label={`${rubricCriteriaCount} ${rubricCriteriaCount === 1 ? "criterion" : "criteria"}`}
+                    size="small"
+                    sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.subtle" }}
+                  />
+                  <Chip
+                    label={rubricWeightingLabel}
+                    size="small"
+                    sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.accent", color: "primary.dark" }}
+                  />
+                </Stack>
+              ) : (
+                <Typography variant="body2" color="error.main">Invalid rubric Markdown</Typography>
+              )}
+              <Typography variant="caption" color="text.secondary">
+                Click to edit the Markdown and open the rendered preview.
+              </Typography>
             </Stack>
           ) : <EmptySection />}
         </PreviewSection>

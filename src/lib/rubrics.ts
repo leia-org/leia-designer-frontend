@@ -1,6 +1,3 @@
-import api from "./axios";
-import type { Rubric } from "../models/Rubric";
-
 export interface ParsedRubricSection {
   title: string;
   headers: string[];
@@ -81,6 +78,23 @@ export function parseRubricMarkdown(markdown: string): { rubric: ParsedRubric | 
   const explicitSections = sections.filter((section) => section.explicitWeight !== null);
   const explicitTotal = explicitSections.reduce((total, section) => total + (section.explicitWeight ?? 0), 0);
   const automaticCount = sections.length - explicitSections.length;
+  const epsilon = 0.001;
+
+  if (explicitSections.some((section) => (
+    (section.explicitWeight ?? 0) <= 0 || (section.explicitWeight ?? 0) > 100
+  ))) {
+    return { rubric: null, error: "Section weights must be greater than 0% and at most 100%." };
+  }
+  if (explicitTotal > 100 + epsilon) {
+    return { rubric: null, error: "Explicit section weights cannot exceed 100%." };
+  }
+  if (automaticCount === 0 && Math.abs(explicitTotal - 100) > epsilon) {
+    return { rubric: null, error: "Explicit section weights must total 100%." };
+  }
+  if (automaticCount > 0 && explicitSections.length > 0 && 100 - explicitTotal <= epsilon) {
+    return { rubric: null, error: "Unweighted sections need a percentage remaining to distribute." };
+  }
+
   const automaticWeight = explicitSections.length === 0
     ? 100 / sections.length
     : (100 - explicitTotal) / automaticCount;
@@ -99,7 +113,3 @@ export function parseRubricMarkdown(markdown: string): { rubric: ParsedRubric | 
     error: null,
   };
 }
-
-export const getRubrics = async (): Promise<Rubric[]> => (
-  await api.get<Rubric[]>("/api/v1/rubrics")
-).data;

@@ -1,5 +1,4 @@
-export interface Rubric {
-  _id: string;
+export interface RubricDefinition {
   apiVersion: "v1";
   metadata: {
     name: string;
@@ -7,8 +6,14 @@ export interface Rubric {
   spec: {
     markdown: string;
   };
+}
+
+export interface Rubric extends RubricDefinition {
+  _id: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type RubricSnapshot = Pick<Rubric, "_id" | "apiVersion" | "metadata" | "spec">;
+export interface RubricSnapshot extends RubricDefinition {
+  _id?: string;
+}
