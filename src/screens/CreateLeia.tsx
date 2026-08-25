@@ -467,7 +467,7 @@ export const CreateLeia: React.FC = () => {
     useState<LeiaResource | null>(null);
 
   // Prevenir solutionFormat incorrecto 
-  const solutionFormatError:Error= new Error(`The problem's field: -solutionFormat- does not have a correct value, please introduce only the given options, consider using the visual editor for more simplicity.` )
+  const solutionFormatError:Error= new Error(`Problem's field: -solutionFormat- does not have a correct value` );
   const [isSolutionFormatError, SetisSolutionFormatError]=useState(false);
   const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
 
@@ -2295,13 +2295,16 @@ const openGenerateProblemModal = () => {
           <Box
             id="solutionFormatError"
             sx={{
-              gridArea: "chat",
+              
               minWidth: 0,
-              minHeight: { xs: 560, lg: 0 },
+              minHeight: { xs: 0, lg: 0 },
               height: { lg: "100%" },
-              bgcolor:'floralwhite',
+              bgcolor:'crimson',
               fontFamily:"system-ui",
-              p:1.5
+              p:1.5,
+              marginTop:2,
+              textAlign:"center",
+              
             }}
           >
             <div>
