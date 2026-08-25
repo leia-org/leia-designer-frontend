@@ -1789,9 +1789,7 @@ const openGenerateProblemModal = () => {
         //Error si solutionFormat no es válido
 
         if(!validSolutionFormatValues.includes(leiaConfig.problem?.spec.solutionFormat!)){
-          SetisSolutionFormatError(true);
-          
-          return;
+          SetisSolutionFormatError(true); 
         }else SetisSolutionFormatError(false);
 
         //Revisamos los atributos de la Leia para ver si los hay con valor '' 
@@ -1822,14 +1820,10 @@ const openGenerateProblemModal = () => {
         }
         SetmissingBehaviourAttributes(localBehaviourAttributes);
 
-        console.log(missingBehaviourAttributes);
-        console.log(missingPersonaAttributes);
-        console.log(missingProblemAttributes);
+        
 
-        console.log(leiaConfig);
-
-        if (localBehaviourAttributes.length + localPersonaAttrributes.length 
-          + localProblemAttributes.length > 0) return;
+        if ((localBehaviourAttributes.length + localPersonaAttrributes.length 
+          + localProblemAttributes.length > 0) || isSolutionFormatError) return;
 
           
 
