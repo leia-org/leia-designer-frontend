@@ -705,7 +705,14 @@ export const LeiaSearch: React.FC = () => {
       autoClose: 3000,
     });
 
-    const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL;
+    const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL?.trim();
+    if (!workbenchBaseUrl) {
+      toast.error("Workbench URL is not configured", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
     const replicationUrl = `${workbenchBaseUrl.replace(
       /\/$/, "" )}/login?redirect=/replications/${encodeURIComponent(
       activityReplication.data.replication.id)}`;
