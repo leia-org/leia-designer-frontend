@@ -2259,7 +2259,7 @@ const openGenerateProblemModal = () => {
           sx={{
             display: "grid",
             gridTemplateAreas: { xs: '"chat" "components" "preview"', lg: '"components chat preview"' },
-            gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "272px minmax(0, 1fr) 370px" },
+            gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "repeat(3, minmax(0, 1fr))" },
             gridTemplateRows: { lg: "minmax(0, 1fr)" },
             gap: { xs: 2, lg: 1.5 },
             alignItems: "stretch",
@@ -2338,16 +2338,41 @@ const openGenerateProblemModal = () => {
               minWidth: 0,
               minHeight: { xs: 560, lg: 0 },
               height: { lg: "100%" },
+              display: "flex",
+              flexDirection: "column",
+              gap: 1.5,
             }}
           >
-            <LeiaLivePreview
-              leia={generatedLeia}
-              title={customizations.leia.name}
-              onTitleChange={handleLeiaNameChange}
-              titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}
-              testAction={testAction}
-              onComponentClick={editResource}
-            />
+            {currentUser?.role === "admin" && (
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => setShowComponentSelector(true)}
+                sx={{
+                  textTransform: "none",
+                  flexShrink: 0,
+                  bgcolor: "background.paper",
+                  borderColor: "divider",
+                  transition: "background-color 150ms ease, border-color 150ms ease, color 150ms ease",
+                  "&:hover": {
+                    bgcolor: "grey.200",
+                    borderColor: "grey.200",
+                  },
+                }}
+              >
+                Components
+              </Button>
+            )}
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              <LeiaLivePreview
+                leia={generatedLeia}
+                title={customizations.leia.name}
+                onTitleChange={handleLeiaNameChange}
+                titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}
+                testAction={testAction}
+                onComponentClick={editResource}
+              />
+            </Box>
           </Box>
         </Box>
 
@@ -2978,20 +3003,7 @@ const openGenerateProblemModal = () => {
                     {chatOptionsLoading ? "Loading keys" : "Add OpenAI key"}
                   </Button>
                 )}
-            {currentUser?.role === "admin" && (
-              <Button
-                size="small"
-                variant="outlined"
-                fullWidth
-                sx={{ mt: 1.25 }}
-                onClick={() => {
-                  setChatSettingsAnchor(null);
-                  setShowComponentSelector(true);
-                }}
-              >
-                Components
-              </Button>
-            )}
+            
           </Box>
         </Menu>
         </>
