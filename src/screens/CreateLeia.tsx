@@ -1783,6 +1783,15 @@ const openGenerateProblemModal = () => {
           if (resourceName) {
             newResource.metadata.name = resourceName;
           }
+          if (key === "problem") {
+            const problemSpec = newResource.spec as Problem["spec"];
+            if (!problemSpec.initialSolution?.trim()) {
+              delete problemSpec.initialSolution;
+            }
+            if (!problemSpec.evaluationPrompt?.trim()) {
+              delete problemSpec.evaluationPrompt;
+            }
+          }
           try {
             // Agregar query parameter de visibilidad para cada recurso si el usuario es admin
             let publishParam = "";

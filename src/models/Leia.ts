@@ -81,7 +81,7 @@ export interface ProblemSpec {
   personaBackground: string,
   details: string,
   solution: string,
-  initialSolution: string,
+  initialSolution?: string,
   solutionFormat: string,
   process: [
     string
@@ -158,7 +158,7 @@ export interface Leia {
         personaBackground: string,
         details: string,
         solution: string,
-        initialSolution: string,
+        initialSolution?: string,
         solutionFormat: string,
         evaluationPrompt?: string,
         process: [

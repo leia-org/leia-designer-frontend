@@ -103,7 +103,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         solution: { type: "string", description: "The expected solution, in the chosen solutionFormat." },
         initialSolution: {
           type: "string",
-          description: "Optional starting solution shown to the student (empty string if none).",
+          description: "Optional starting solution shown to the student. Use an empty string when none is needed; it will not be persisted.",
         },
         solutionFormat: {
           type: "string",
@@ -112,7 +112,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         },
         evaluationPrompt: {
           type: "string",
-          description: "Optional instructions for grading the student's solution (empty string if none).",
+          description: "Optional instructions for grading the student's solution. Use an empty string when none is needed; it will not be persisted.",
         },
         process: {
           type: "array",
