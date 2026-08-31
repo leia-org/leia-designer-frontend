@@ -26,7 +26,9 @@ import {
   type ProblemChatToolResult,
   type UploadedFile,
 } from "../lib/problemChat";
-import { parseRubricMarkdown } from "../lib/rubrics";
+import { validateRubricSemantics } from "../lib/rubrics";
+import { getRubricSchema, validateAgainstRubricSchema, type JsonSchema } from "../lib/rubricSchema";
+import { normalizeProcessFields } from "../lib/process";
 
 // Widget catalog context for the model: available widgetTypes + their tool
 // functions, so it can decide whether the activity needs a widget (e.g. a
@@ -117,7 +119,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Activity process tags. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
+          description: "Activity process tags. 'other' is exclusive: never combine it with 'requirements-elicitation' or 'game'. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
         },
         extends: componentScoped(
           "ADD to the paired persona/behaviour/problem spec (e.g. add persona personality traits). Empty object {} unless asked to compose.",
@@ -182,7 +184,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Must exactly match the current Problem process tags.",
+          description: "Must exactly match the current Problem process tags. 'other' must be the only value when used.",
         },
         tooltip: { type: "string", description: "Short helper tooltip describing this behaviour." },
       },
@@ -224,21 +226,9 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_rubric",
     description:
-      "Writes a COMPLETE evaluation rubric for the exact current Problem. When building a complete LEIA, call this after apply_problem. Set a concise resource name and provide Markdown containing one or more valid tables. Each section may use a level 2-6 heading; append [n%] to section headings for explicit weights. If no section has an explicit weight, all sections weigh the same. Every table needs a header, a separator row with at least three hyphens per column, and at least one criterion row.",
-    parameters: {
-      type: "object",
-      properties: {
-        name: {
-          type: "string",
-          description: "Short kebab-case name for the rubric resource (e.g. 'library-interview-rubric').",
-        },
-        markdown: {
-          type: "string",
-          description: "The complete rubric as section headings and Markdown tables.",
-        },
-      },
-      required: ["name", "markdown"],
-    },
+      "Writes a COMPLETE structured evaluation rubric for the exact current Problem. Levels must be ordered from worst to best, section weights must total 100, and every criterion must contain exactly one descriptor for every section level.",
+    parameters: { type: "object", properties: {} },
+    strict: true,
   },
   {
     name: "list_personas",
@@ -299,7 +289,7 @@ interface ProblemChatPanelProps {
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
-  onApplyRubric: (spec: { markdown: string }, name: string) => void;
+  onApplyRubric: (rubric: RubricDefinition) => void;
   onUsePersona: (id: string) => { ok: boolean; name?: string };
   onSetLeiaName?: (name: string) => void;
   modelName: string;
@@ -331,6 +321,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rubricSchema, setRubricSchema] = useState<JsonSchema | null>(null);
   const chatIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -351,7 +342,18 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
-  const ready = Boolean(modelName && apiKeyId);
+  useEffect(() => {
+    getRubricSchema().then(setRubricSchema).catch(() => setError("Failed to load the rubric schema."));
+  }, []);
+
+  const chatTools = React.useMemo(() => CHAT_TOOLS.map((tool) => {
+    if (tool.name !== "apply_rubric" || !rubricSchema) return tool;
+    const parameters = { ...rubricSchema };
+    delete parameters.$id;
+    return { ...tool, parameters };
+  }), [rubricSchema]);
+
+  const ready = Boolean(modelName && apiKeyId && rubricSchema);
 
   // Changing the model/key invalidates the server-side session.
   useEffect(() => {
@@ -406,7 +408,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     // if the session was re-opened; it only attaches each one once.
     let response = await sendProblemChatMessage(chatId, {
       message,
-      tools: CHAT_TOOLS,
+      tools: chatTools,
       fileIds: attachments.map((a) => a.fileId),
     });
     for (let i = 0; i < 8; i++) {
@@ -447,12 +449,12 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         };
         if (call.name === "apply_problem") {
           const { name, spec } = takeName();
-          onApplyProblem(stripAvatar(spec), name);
+          onApplyProblem(normalizeProcessFields(stripAvatar(spec)), name);
           pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_behaviour") {
           const { name, spec } = takeName();
-          onApplyBehaviour(spec, name);
+          onApplyBehaviour(normalizeProcessFields(spec), name);
           pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_persona") {
@@ -461,17 +463,15 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_rubric") {
-          const { name, spec } = takeName();
-          const markdown = typeof spec.markdown === "string" ? spec.markdown : "";
-          const rubricValidation = markdown.trim()
-            ? parseRubricMarkdown(markdown)
-            : { rubric: null, error: "rubric Markdown is required" };
-          if (name && !rubricValidation.error) {
-            onApplyRubric({ markdown }, name);
-            pushMessage("system", `✓ Rubric applied${name ? ` ("${name}")` : ""}.`);
+          const rubric = args as unknown as RubricDefinition;
+          const schemaError = rubricSchema ? validateAgainstRubricSchema(rubric, rubricSchema) : "rubric schema is unavailable";
+          const semanticError = schemaError ? null : validateRubricSemantics(rubric);
+          if (!schemaError && !semanticError) {
+            onApplyRubric(rubric);
+            pushMessage("system", `✓ Rubric applied ("${rubric.metadata.name}").`);
             output = { status: "applied" };
           } else {
-            const errorMessage = name ? rubricValidation.error : "rubric name is required";
+            const errorMessage = schemaError || semanticError;
             pushMessage("system", `⚠ Rubric was not applied: ${errorMessage}`);
             output = { error: errorMessage };
           }
@@ -517,7 +517,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         return { callId: call.callId, output };
       });
 
-      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: CHAT_TOOLS });
+      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: chatTools });
     }
     return response.message ?? "";
   };

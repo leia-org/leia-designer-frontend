@@ -32,6 +32,8 @@ import {
   Stack,
   Switch,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -67,7 +69,9 @@ import {
 } from "../lib/leiaDrafts";
 import { generateLeia } from "../lib/leia";
 import { RubricPreview } from "../components/RubricPreview";
-import { parseRubricMarkdown } from "../lib/rubrics";
+import { parseRubricMarkdown, serializeRubricMarkdown, validateRubricSemantics } from "../lib/rubrics";
+import { getRubricSchema, validateAgainstRubricSchema, type JsonSchema } from "../lib/rubricSchema";
+import { normalizeProcess, normalizeProcessFields } from "../lib/process";
 import { toast, ToastContainer } from "react-toastify";
 
 interface Label {
@@ -214,10 +218,7 @@ const createEmptyCustomizations = (): LeiaCustomizations => ({
   leia: { name: "", version: "1.0.0" },
 });
 
-const copyProcess = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((process): process is string => typeof process === "string")
-    : [];
+const copyProcess = normalizeProcess;
 
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
@@ -431,6 +432,14 @@ export const CreateLeia: React.FC = () => {
   });
   const [rubricEditorDraft, setRubricEditorDraft] = useState<RubricDefinition | null>(null);
   const [rubricEditorError, setRubricEditorError] = useState<string | null>(null);
+  const [rubricEditorMode, setRubricEditorMode] = useState<"markdown" | "json">("markdown");
+  const [rubricMarkdownText, setRubricMarkdownText] = useState("");
+  const [rubricJsonText, setRubricJsonText] = useState("");
+  const [rubricSchema, setRubricSchema] = useState<JsonSchema | null>(null);
+
+  useEffect(() => {
+    getRubricSchema().then(setRubricSchema).catch(() => setRubricSchema(null));
+  }, []);
 
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
@@ -1994,7 +2003,7 @@ const openGenerateProblemModal = () => {
       // resources. A complete assistant turn may apply the problem first and
       // the rubric afterwards; clearing here made the rubric disappear again
       // when the assistant revisited the problem in a later turn.
-      const incomingSpec = spec as unknown as Record<string, unknown>;
+      const incomingSpec = normalizeProcessFields(spec as unknown as Record<string, unknown>);
       const process = copyProcess(incomingSpec.process);
       setLeiaConfig((prev) => ({
         ...prev,
@@ -2059,7 +2068,7 @@ const openGenerateProblemModal = () => {
               name: name || prev.behaviour?.metadata?.name || "ai-generated-behaviour",
               version: "1.0.0",
             },
-            spec: { ...spec, process },
+            spec: { ...normalizeProcessFields(spec), process },
             id: "generated-" + Date.now(),
             edited: true,
             createdAt: new Date().toISOString(),
@@ -2096,16 +2105,9 @@ const openGenerateProblemModal = () => {
     [currentUser],
   );
 
-  const applyChatRubric = useCallback(
-    (spec: { markdown: string }, name: string) => {
-      setRubricDraft({
-        apiVersion: "v1",
-        metadata: { name },
-        spec: { markdown: spec.markdown },
-      });
-    },
-    [],
-  );
+  const applyChatRubric = useCallback((rubric: RubricDefinition) => {
+    setRubricDraft(rubric);
+  }, []);
 
   const openRubricEditor = useCallback(() => {
     if (!rubricDraft) return;
@@ -2114,6 +2116,9 @@ const openGenerateProblemModal = () => {
       metadata: rubricDraft.metadata,
       spec: rubricDraft.spec,
     }));
+    setRubricMarkdownText(serializeRubricMarkdown(rubricDraft.spec));
+    setRubricJsonText(JSON.stringify(rubricDraft.spec, null, 2));
+    setRubricEditorMode("markdown");
     setRubricEditorError(null);
   }, [rubricDraft]);
 
@@ -2130,19 +2135,20 @@ const openGenerateProblemModal = () => {
       return;
     }
 
-    const parsed = parseRubricMarkdown(rubricEditorDraft.spec.markdown);
-    if (parsed.error) {
-      setRubricEditorError(parsed.error);
+    const semanticError = validateRubricSemantics(rubricEditorDraft);
+    const schemaError = rubricSchema ? validateAgainstRubricSchema(rubricEditorDraft, rubricSchema) : "Rubric schema is not available.";
+    if (schemaError || semanticError) {
+      setRubricEditorError(schemaError || semanticError);
       return;
     }
 
     setRubricDraft({
       apiVersion: "v1",
       metadata: { name },
-      spec: { markdown: rubricEditorDraft.spec.markdown.trim() },
+      spec: rubricEditorDraft.spec,
     });
     closeRubricEditor();
-  }, [closeRubricEditor, rubricEditorDraft]);
+  }, [closeRubricEditor, rubricEditorDraft, rubricSchema]);
 
   const handleUseExistingPersona = useCallback(
     (id: string): { ok: boolean; name?: string } => {
@@ -2551,19 +2557,60 @@ const openGenerateProblemModal = () => {
                       fullWidth
                     />
                     <Box>
-                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Markdown</Typography>
+                      <ToggleButtonGroup
+                        size="small"
+                        exclusive
+                        value={rubricEditorMode}
+                        onChange={(_event, mode: "markdown" | "json" | null) => {
+                          if (!mode) return;
+                          if (mode === "markdown") setRubricMarkdownText(serializeRubricMarkdown(rubricEditorDraft.spec));
+                          else setRubricJsonText(JSON.stringify(rubricEditorDraft.spec, null, 2));
+                          setRubricEditorMode(mode);
+                          setRubricEditorError(null);
+                        }}
+                        sx={{ mb: 1 }}
+                      >
+                        <ToggleButton value="markdown">Markdown</ToggleButton>
+                        <ToggleButton value="json">JSON</ToggleButton>
+                      </ToggleButtonGroup>
                       <Box sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
                         <Editor
                           height="480px"
-                          language="markdown"
+                          language={rubricEditorMode}
                           theme="vs-light"
-                          value={rubricEditorDraft.spec.markdown}
+                          value={rubricEditorMode === "markdown" ? rubricMarkdownText : rubricJsonText}
                           onChange={(value) => {
-                            setRubricEditorError(null);
-                            setRubricEditorDraft((current) => current ? ({
-                              ...current,
-                              spec: { markdown: value ?? "" },
-                            }) : current);
+                            const text = value ?? "";
+                            if (rubricEditorMode === "markdown") {
+                              setRubricMarkdownText(text);
+                              const parsed = parseRubricMarkdown(text);
+                              if (!parsed.spec) {
+                                setRubricEditorError(parsed.error);
+                                return;
+                              }
+                              setRubricEditorDraft((current) => current ? ({ ...current, spec: parsed.spec! }) : current);
+                              setRubricJsonText(JSON.stringify(parsed.spec, null, 2));
+                              setRubricEditorError(null);
+                              return;
+                            }
+                            setRubricJsonText(text);
+                            try {
+                              const spec = JSON.parse(text) as RubricDefinition["spec"];
+                              const candidate = { ...rubricEditorDraft, spec };
+                              const schemaError = rubricSchema
+                                ? validateAgainstRubricSchema(candidate, rubricSchema)
+                                : "Rubric schema is not available.";
+                              const semanticError = schemaError ? null : validateRubricSemantics(candidate);
+                              if (schemaError || semanticError) {
+                                setRubricEditorError(schemaError || semanticError);
+                                return;
+                              }
+                              setRubricEditorDraft(candidate);
+                              setRubricMarkdownText(serializeRubricMarkdown(spec));
+                              setRubricEditorError(null);
+                            } catch {
+                              setRubricEditorError("Invalid JSON syntax.");
+                            }
                           }}
                           options={{
                             minimap: { enabled: false },
@@ -2582,7 +2629,7 @@ const openGenerateProblemModal = () => {
 
                 <Paper variant="outlined" sx={{ p: 2, minWidth: 0, maxHeight: 590, overflow: "auto" }}>
                   <Typography variant="subtitle2" sx={{ mb: 2 }}>Preview</Typography>
-                  <RubricPreview markdown={rubricEditorDraft.spec.markdown} />
+                  <RubricPreview spec={rubricEditorDraft.spec} />
                 </Paper>
               </Box>
             )}
@@ -3031,7 +3078,7 @@ const openGenerateProblemModal = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
               {rubricDraft.metadata.name}
             </Typography>
-            <RubricPreview markdown={rubricDraft.spec.markdown} />
+            <RubricPreview spec={rubricDraft.spec} />
           </Paper>
         )}
       </Stack>

@@ -15,7 +15,6 @@ import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import type { Behaviour, Persona, Problem } from "../models/Leia";
 import type { RubricDefinition } from "../models/Rubric";
-import { parseRubricMarkdown } from "../lib/rubrics";
 
 interface GeneratedLeiaPreview {
   spec?: {
@@ -141,16 +140,10 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   const displayName = title || persona?.spec?.fullName || "Untitled LEIA";
   const isReady = Boolean(persona && problem && behaviour);
   const widgetCount = problem?.spec?.widgets?.length ?? 0;
-  const parsedRubric = rubric ? parseRubricMarkdown(rubric.spec.markdown).rubric : null;
-  const rubricCriteriaCount = parsedRubric?.sections.reduce(
-    (total, section) => total + section.rows.length,
+  const rubricCriteriaCount = rubric?.spec.sections.reduce(
+    (total, section) => total + section.criteria.length,
     0,
   ) ?? 0;
-  const rubricWeightingLabel = parsedRubric?.weightingMode === "equal"
-    ? "Equal weights"
-    : parsedRubric?.weightingMode === "mixed"
-      ? "Mixed weights"
-      : "Explicit weights";
 
   return (
     <Paper
@@ -265,10 +258,9 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
         >
           {rubric ? (
             <Stack spacing={1}>
-              {parsedRubric ? (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
                   <Chip
-                    label={`${parsedRubric.sections.length} ${parsedRubric.sections.length === 1 ? "section" : "sections"}`}
+                    label={`${rubric.spec.sections.length} ${rubric.spec.sections.length === 1 ? "section" : "sections"}`}
                     size="small"
                     sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.subtle" }}
                   />
@@ -278,16 +270,13 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
                     sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.subtle" }}
                   />
                   <Chip
-                    label={rubricWeightingLabel}
+                    label="Weighted"
                     size="small"
                     sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.accent", color: "primary.dark" }}
                   />
                 </Stack>
-              ) : (
-                <Typography variant="body2" color="error.main">Invalid rubric Markdown</Typography>
-              )}
               <Typography variant="caption" color="text.secondary">
-                Click to edit the Markdown and open the rendered preview.
+                Click to edit the Markdown or JSON and open the rendered preview.
               </Typography>
             </Stack>
           ) : <EmptySection />}

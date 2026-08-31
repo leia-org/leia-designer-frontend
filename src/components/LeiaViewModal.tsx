@@ -591,7 +591,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         {viewMode === "rubric" && rubric && (
           <Stack spacing={2.5}>
             <Typography variant="subtitle1" fontWeight={700}>{rubric.metadata.name}</Typography>
-            <RubricPreview markdown={rubric.spec.markdown} />
+            <RubricPreview spec={rubric.spec} />
           </Stack>
         )}
 
