@@ -466,89 +466,86 @@ export const CreateLeia: React.FC = () => {
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
 
-  // Prevenir solutionFormat incorrecto 
+
+
+  //Errores de Atributos
+  const [personaAttributeErrors, setPersonaAttributeErrors]=useState<string[]>([]);
+  const [problemAttributeErrors, setProblemAttributeErrors]=useState<string[]>([]);
+  const [behaviourAttributeErrors, setbehaviourAttributeErrors]=useState<string[]>([]);
+
   
-  const [isSolutionFormatError, SetisSolutionFormatError]=useState(false);
-  const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
 
+  //Function to check leia attributes. Returns the number of errors found 
 
-  //Prevenir Valor procces incorrecto
-  const [isProblemProccesError, SetIsProblemProccesError]=useState(false);
-  const [isBehaviourProccesError, SetIsBehaviourProccesError]=useState(false);
-  const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+    const CheckLeiaAttributes= (leia:LeiaConfig)=>{
 
-  //Elementos con valor '' (Joi no los acepta)
+      return checkPersonaAttributtes(leia.persona!)+ 
+      checkProblemAttributes(leia.problem!) + 
+      checkBehaviourAttributes(leia.behaviour!);
+      
+  }
 
-  const [missingPersonaAttributes,SetmissingPersonaAttributes]=useState<string[]>([]);
-  const [missingProblemAttributes, SetmissingProblemAttributes]=useState<string[]>([]);
-  const [missingBehaviourAttributes, SetmissingBehaviourAttributes]=useState<string[]>([]);
+  //Returns number of errors in leia's persona and stores the errors in an array to render them later
+  const checkPersonaAttributtes=(persona:Persona)=>{
 
-  //Función para revisar los atributos de la Leia. Devuelve true si todo correcto, else false
-
-  const CheckLeiaAttributes= ()=>{
-    //Error si solutionFormat no es válido
-        let isSolutionFormatErrorlocal:boolean=false;
-        if(!validSolutionFormatValues.includes(leiaConfig.problem?.spec.solutionFormat!)){
-          isSolutionFormatErrorlocal=true
-        }else isSolutionFormatErrorlocal=false
-
-        SetisSolutionFormatError(isSolutionFormatErrorlocal);
-        //Error si procces inválido
-        let problemProccesaux=leiaConfig.problem?.spec.process;
-        let behaviourProccesaux=leiaConfig.behaviour?.spec.process;
-        let isProblemProccesErrorlocal:boolean=false;
-        let isBehaviourProccesErrorlocal:boolean=false;
-
-        if((problemProccesaux!.includes('other') && problemProccesaux!.length>1)
-        || problemProccesaux?.filter(p=>!validProccesValues.includes(p)).length!>0
-        || problemProccesaux?.length!<1) isProblemProccesErrorlocal=true
-        else isProblemProccesErrorlocal=false;
-        SetIsProblemProccesError(isProblemProccesErrorlocal);
-
-
-
-        if((behaviourProccesaux!.includes('other') && behaviourProccesaux!.length>1)
-        || behaviourProccesaux?.filter(p=>!validProccesValues.includes(p)).length!>0
-        || behaviourProccesaux?.length!<1) isBehaviourProccesErrorlocal=true
-        else isBehaviourProccesErrorlocal=false;
-         SetIsBehaviourProccesError(isBehaviourProccesErrorlocal);
-
-        //Revisamos los atributos de la Leia para ver si los hay con valor '' 
-
-        let localPersonaAttrributes:string[]=[];
-        for (const [key, value] of Object.entries(leiaConfig.persona?.spec!)){
+    let localPersonaAttrributes:string[]=[];
+        for (const [key, value] of Object.entries(persona.spec)){
           
-          if(value==='') localPersonaAttrributes.push(key);
+          if(value==='') localPersonaAttrributes.push(`persona's field -${key}- is empty`);
 
         }
-        SetmissingPersonaAttributes(localPersonaAttrributes);
-
-
-
-        let localProblemAttributes:string[]=[];
-        for (const [key, value] of Object.entries(leiaConfig.problem?.spec!)){
-
-          if(value==='') localProblemAttributes.push(key);
-
-        }
-        SetmissingProblemAttributes(localProblemAttributes);
-
-
-        let localBehaviourAttributes:string[]=[];
-        for (const [key, value] of Object.entries(leiaConfig.behaviour?.spec!)){
-
-          if(value==='') localBehaviourAttributes.push(key);
-        }
-        SetmissingBehaviourAttributes(localBehaviourAttributes);
-
+        setPersonaAttributeErrors(localPersonaAttrributes);
+        return localPersonaAttrributes.length;
         
 
-        if ((localBehaviourAttributes.length + localPersonaAttrributes.length 
-          + localProblemAttributes.length > 0) || isSolutionFormatErrorlocal
-        || isBehaviourProccesErrorlocal || isProblemProccesErrorlocal) return false;
-
-        return true;
   }
+  //Idem
+  const checkProblemAttributes=(problem:Problem)=>{
+
+
+    let localProblemAttributes:string[]=[];
+        for (const [key, value] of Object.entries(problem.spec)){
+
+          if(value==='') localProblemAttributes.push(`problem's field -${key} is empty`);
+
+        }
+
+    let problemProcessaux:Array<string>=problem.spec.process;
+    const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+
+    if((problemProcessaux!.includes('other') && problemProcessaux!.length>1)
+        || problemProcessaux?.filter(p=>!validProccesValues.includes(p)).length>0
+        || problemProcessaux?.length!<1) localProblemAttributes.push(`problem's field -process- does not have a correct value`);
+
+
+        
+    const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
+    if(!validSolutionFormatValues.includes(problem.spec.solutionFormat)) localProblemAttributes.push(`problem's field -solutionFormat- does not have a correct value`)
+
+    setProblemAttributeErrors(localProblemAttributes);
+    return localProblemAttributes.length;
+  }
+  //Idem
+  const checkBehaviourAttributes= (behaviour:Behaviour)=>{
+
+    let localBehaviourAttributes:string[]=[];
+        for (const [key, value] of Object.entries(behaviour.spec)){
+
+          if(value==='') localBehaviourAttributes.push(`behaviour's field -${key} is empty`);
+        }
+    const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+    let behaviourProcessaux:Array<string>=behaviour.spec.process;
+    if((behaviourProcessaux!.includes('other') && behaviourProcessaux!.length>1)
+        || behaviourProcessaux?.filter(p=>!validProccesValues.includes(p)).length>0
+        || behaviourProcessaux?.length!<1) localBehaviourAttributes.push(`behaviour's field -process- does not have a correct value`);
+        
+    setbehaviourAttributeErrors(localBehaviourAttributes);
+    return localBehaviourAttributes.length;
+
+  }
+
+
+
 
   const hasDraftContent = useMemo(() => {
     const hasSelectedComponent = Boolean(
@@ -1859,7 +1856,9 @@ const openGenerateProblemModal = () => {
           leia: { name: previous.leia.name, version: "1.0.0" },
         }));
 
-        if (CheckLeiaAttributes()) setCurrentStep(2);
+        
+
+        if(CheckLeiaAttributes(leiaConfig)===0) setCurrentStep(2);
 
           
 
@@ -2368,50 +2367,33 @@ const openGenerateProblemModal = () => {
 
         
 
-        {isSolutionFormatError && (
-          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
-              Problem's field: -solutionFormat- does not have a correct value
-          </Alert>
-        )}
+        
 
-        {missingPersonaAttributes.map(p=> (
+        {personaAttributeErrors.map(p=> (
 
           <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
-              Persona's field: -{p}- is empty
+              {p}
           </Alert>
 
         ))}
 
 
-        {missingProblemAttributes.map(p=> (
+        {problemAttributeErrors.map(p=> (
 
           <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
-              Problem's field: -{p}- is empty
+              {p}
+          </Alert>))
+        }
+
+        {behaviourAttributeErrors.map(p=> (
+
+          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
+              {p}
           </Alert>))
         }
 
 
-        {missingBehaviourAttributes.map(p=> (
-
-          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
-              Behaviour's field: -{p}- is empty
-          </Alert>))
-        }
-
-        {isProblemProccesError && (
-
-          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
-              Problem's field -process- does not have a correct value
-          </Alert>
-
-        )}
-
-
-        {isBehaviourProccesError && (
-          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
-              Behaviour's field -process- does not have a correct value
-          </Alert>
-        )}
+        
 
 
 

@@ -528,6 +528,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Describe the persona..."
         />
+        {visualData.description==="" && (<Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>)}
       </Field>
       <Field label="Personality">
         <HighlightableTextarea
