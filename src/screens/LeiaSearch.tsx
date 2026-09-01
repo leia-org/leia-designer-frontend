@@ -132,9 +132,9 @@ export const LeiaSearch: React.FC = () => {
         });
         if (!active) return;
         setLeias(response.data || []);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!active) return;
-        if (err?.name === "CanceledError") return;
+        if (err instanceof Error && err.name === "CanceledError") return;
         setError("Could not load LEIAs");
       } finally {
         if (active) setLoading(false);
@@ -970,11 +970,21 @@ export const LeiaSearch: React.FC = () => {
         </Box>
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
-          <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+          <Box
+            id="search-results"
+            aria-busy={loading}
+            sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}
+          >
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
-              <Stack alignItems="center" spacing={1.5} sx={{ py: 10 }}>
+              <Stack
+                role="status"
+                aria-live="polite"
+                alignItems="center"
+                spacing={1.5}
+                sx={{ py: 10 }}
+              >
                 <CircularProgress size={28} />
                 <Typography variant="body2" color="text.secondary">Loading library…</Typography>
               </Stack>

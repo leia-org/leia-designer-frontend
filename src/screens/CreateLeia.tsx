@@ -1018,6 +1018,13 @@ export const CreateLeia: React.FC = () => {
         setGenerationError(error);
         setGeneratedLeia(null);
       }
+    } else {
+      // Do not leave a previously generated LEIA in the preview after one of
+      // its source components has been removed. The rest of this screen uses
+      // leiaConfig as the source of truth, so retaining generatedLeia here
+      // made the preview and Test action expose stale component data.
+      setGenerationError(null);
+      setGeneratedLeia(null);
     }
   }, [currentStep, leiaConfig]);
 
@@ -2027,10 +2034,6 @@ const openGenerateProblemModal = () => {
           isPublished: false,
           user: currentUser!,
         } as unknown as Problem,
-        // A previous behaviour may be tied to a different exercise even if
-        // its broad process tag matches. The assistant must now apply a new
-        // behaviour specifically written for this problem.
-        behaviour: null,
       }));
     },
     [currentUser],
@@ -2440,6 +2443,9 @@ const openGenerateProblemModal = () => {
               currentBehaviour={leiaConfig.behaviour}
               currentPersona={leiaConfig.persona}
               currentRubric={rubricDraft}
+              renderedProblem={generatedLeia?.spec?.problem ?? null}
+              renderedBehaviour={generatedLeia?.spec?.behaviour ?? null}
+              renderedPersona={generatedLeia?.spec?.persona ?? null}
               personas={personas}
               onApplyProblem={applyChatProblem}
               onApplyBehaviour={applyChatBehaviour}

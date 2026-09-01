@@ -280,11 +280,22 @@ export interface ProblemChatState {
 type ChatRole = ProblemChatRole;
 type ChatMessage = ProblemChatMessage;
 
+type AppliedComponent = "problem" | "behaviour" | "persona" | "rubric";
+
+interface PendingAppliedConfirmation {
+  component: AppliedComponent;
+  name?: string;
+  previousValue: unknown;
+}
+
 interface ProblemChatPanelProps {
   currentProblem: Problem | null;
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
   currentRubric: RubricDefinition | null;
+  renderedProblem: Problem | null;
+  renderedBehaviour: Behaviour | null;
+  renderedPersona: Persona | null;
   personas: Persona[];
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
@@ -303,6 +314,9 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviour,
   currentPersona,
   currentRubric,
+  renderedProblem,
+  renderedBehaviour,
+  renderedPersona,
   personas,
   onApplyProblem,
   onApplyBehaviour,
@@ -325,6 +339,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const chatIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const pendingAppliedConfirmationsRef = useRef<PendingAppliedConfirmation[]>([]);
 
   useEffect(() => {
     onChatStateChange?.({ messages, input });
@@ -339,6 +354,12 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentPersonaRef.current = currentPersona;
   const currentRubricRef = useRef<RubricDefinition | null>(currentRubric);
   currentRubricRef.current = currentRubric;
+  const renderedProblemRef = useRef<Problem | null>(renderedProblem);
+  renderedProblemRef.current = renderedProblem;
+  const renderedBehaviourRef = useRef<Behaviour | null>(renderedBehaviour);
+  renderedBehaviourRef.current = renderedBehaviour;
+  const renderedPersonaRef = useRef<Persona | null>(renderedPersona);
+  renderedPersonaRef.current = renderedPersona;
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
@@ -364,8 +385,54 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending]);
 
-  const pushMessage = (role: ChatRole, text: string) =>
-    setMessages((prev) => [...prev, { role, text }]);
+  const pushMessage = useCallback((role: ChatRole, text: string) =>
+    setMessages((prev) => [...prev, { role, text }]), []);
+
+  const queueAppliedConfirmation = (
+    component: AppliedComponent,
+    name: string | undefined,
+    previousValue: unknown,
+  ) => {
+    pendingAppliedConfirmationsRef.current = [
+      ...pendingAppliedConfirmationsRef.current.filter((pending) => pending.component !== component),
+      { component, name, previousValue },
+    ];
+  };
+
+  // React state updates in the parent are asynchronous. Reconcile tool-call
+  // acknowledgements against the resources received back through props so the
+  // chat never says "applied" while the Workbench still shows an empty card.
+  useEffect(() => {
+    const currentValues: Record<AppliedComponent, unknown> = {
+      problem: renderedProblem,
+      behaviour: renderedBehaviour,
+      persona: renderedPersona,
+      rubric: currentRubric,
+    };
+    const currentNames: Record<AppliedComponent, string | undefined> = {
+      problem: renderedProblem?.metadata?.name,
+      behaviour: renderedBehaviour?.metadata?.name,
+      persona: renderedPersona?.metadata?.name,
+      rubric: currentRubric?.metadata?.name,
+    };
+    const confirmed: PendingAppliedConfirmation[] = [];
+
+    pendingAppliedConfirmationsRef.current = pendingAppliedConfirmationsRef.current.filter((pending) => {
+      const currentValue = currentValues[pending.component];
+      const stateWasCommitted = Boolean(currentValue) && currentValue !== pending.previousValue;
+      const expectedNameMatches = !pending.name || currentNames[pending.component] === pending.name;
+      if (stateWasCommitted && expectedNameMatches) {
+        confirmed.push(pending);
+        return false;
+      }
+      return true;
+    });
+
+    confirmed.forEach(({ component, name }) => {
+      const label = component.charAt(0).toUpperCase() + component.slice(1);
+      pushMessage("system", `✓ ${label} applied${name ? ` ("${name}")` : ""}.`);
+    });
+  }, [currentRubric, pushMessage, renderedBehaviour, renderedPersona, renderedProblem]);
 
   const stripAvatar = (spec: Record<string, unknown>): ProblemSpec => {
     const cleanSpec = { ...spec };
@@ -449,26 +516,26 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         };
         if (call.name === "apply_problem") {
           const { name, spec } = takeName();
+          queueAppliedConfirmation("problem", name, renderedProblemRef.current);
           onApplyProblem(normalizeProcessFields(stripAvatar(spec)), name);
-          pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_behaviour") {
           const { name, spec } = takeName();
+          queueAppliedConfirmation("behaviour", name, renderedBehaviourRef.current);
           onApplyBehaviour(normalizeProcessFields(spec), name);
-          pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_persona") {
           const { name, spec } = takeName();
+          queueAppliedConfirmation("persona", name, renderedPersonaRef.current);
           onApplyPersona(spec, name);
-          pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_rubric") {
           const rubric = args as unknown as RubricDefinition;
           const schemaError = rubricSchema ? validateAgainstRubricSchema(rubric, rubricSchema) : "rubric schema is unavailable";
           const semanticError = schemaError ? null : validateRubricSemantics(rubric);
           if (!schemaError && !semanticError) {
+            queueAppliedConfirmation("rubric", rubric.metadata.name, currentRubricRef.current);
             onApplyRubric(rubric);
-            pushMessage("system", `✓ Rubric applied ("${rubric.metadata.name}").`);
             output = { status: "applied" };
           } else {
             const errorMessage = schemaError || semanticError;
