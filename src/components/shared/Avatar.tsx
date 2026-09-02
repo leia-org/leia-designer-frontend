@@ -14,7 +14,7 @@ interface AvatarProps {
 
 const sizeStyles = {
   sm: { dimension: 32, fontSize: 12 },
-  md: { dimension: 48, fontSize: 14 },
+  md: { dimension: 78, fontSize: 14 },
   lg: { dimension: 64, fontSize: 18 },
 };
 
