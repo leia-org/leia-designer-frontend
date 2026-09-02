@@ -455,7 +455,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
 
     let numberOfErrors:number=0;
-    let checkAttributes:boolean=false;
+    let checkAttributes:boolean=true;
    
     
 
@@ -469,7 +469,8 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const checkForEmptyField =(field:string)=>{
     if(field===''){ 
       numberOfErrors=numberOfErrors+1;
-      return <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
+      
+      if(checkAttributes) return <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
   }
 
   const checkForProcessField= (process:string[])=>{
@@ -481,7 +482,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         || process?.length!<1){ 
           
           numberOfErrors=numberOfErrors+1;
-          return <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
+          if(checkAttributes) return <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
 
   }
 
@@ -489,11 +490,11 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
     if (solutionFormat===''){ 
       numberOfErrors=numberOfErrors+1;
-      return <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
+      if(checkAttributes) return <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
 
     if(!validSolutionFormatValues.includes(solutionFormat)) {
       numberOfErrors=numberOfErrors+1;
-      return <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
+      if(checkAttributes) return <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
   }
 
   const handleJsonChange = (value: string | undefined) => {
@@ -548,7 +549,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
       if (validationError) return;
     }
 
-    console.log(numberOfErrors);
+    
     if(numberOfErrors!==0) return;
 
     onSave(
