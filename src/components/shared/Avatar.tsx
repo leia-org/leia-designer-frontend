@@ -15,7 +15,7 @@ interface AvatarProps {
 const sizeStyles = {
   sm: { dimension: 32, fontSize: 12 },
   md: { dimension: 48, fontSize: 14 },
-  lg: { dimension: 64, fontSize: 18 },
+  lg: { dimension: 78, fontSize: 20 },
 };
 
 const getInitials = (value: string): string => {
