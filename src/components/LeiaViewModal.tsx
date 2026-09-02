@@ -1,5 +1,5 @@
 import type React from "react";
-import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -37,6 +37,7 @@ import {
 } from "../lib/avatar";
 import InfographicViewer from "./InfographicViewer";
 import { Avatar } from "./shared/Avatar";
+import { RubricPreview } from "./RubricPreview";
 
 const SyntaxHighlighter = lazy(() =>
   import("react-syntax-highlighter").then((module) => ({ default: module.Prism })),
@@ -91,7 +92,7 @@ interface LeiaViewModalProps {
 type AvatarRegenerationTarget = "leias" | "problems" | "personas";
 type InfographicRegenerationTarget = "infographic" | "infographicSolution";
 type RegenerationTarget = AvatarRegenerationTarget | InfographicRegenerationTarget | "all";
-type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
+type ViewMode = "problem" | "persona" | "behaviour" | "rubric" | "infographics";
 
 function getUserId(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -122,6 +123,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const [displayLeia, setDisplayLeia] = useState<Leia | null>(leia);
   const [regenerateAnchor, setRegenerateAnchor] = useState<HTMLElement | null>(null);
   const [regeneratingTarget, setRegeneratingTarget] = useState<RegenerationTarget | null>(null);
+  const [tabsOverflow, setTabsOverflow] = useState(false);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
   const [imageApiKeyId, setImageApiKeyId] = useState<string>("");
   const { user } = useAuth();
   const {
@@ -153,6 +156,29 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
     });
   }, [geminiApiKeys, getDefaultKey]);
 
+  useEffect(() => {
+    const tabsRoot = tabsRef.current;
+    if (!isOpen || !tabsRoot) return;
+
+    const updateTabsOverflow = () => {
+      const scroller = tabsRoot.querySelector<HTMLElement>(".MuiTabs-scroller");
+      setTabsOverflow(Boolean(scroller && scroller.scrollWidth > scroller.clientWidth + 1));
+    };
+
+    updateTabsOverflow();
+    const resizeObserver = new ResizeObserver(updateTabsOverflow);
+    resizeObserver.observe(tabsRoot);
+    const mutationObserver = new MutationObserver(updateTabsOverflow);
+    mutationObserver.observe(tabsRoot, { childList: true, subtree: true });
+    window.addEventListener("resize", updateTabsOverflow);
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener("resize", updateTabsOverflow);
+    };
+  }, [isOpen, displayLeia?.spec?.rubric, user?.role]);
+
   if (!isOpen || !displayLeia) return null;
 
   const problemResource = displayLeia.spec?.problem;
@@ -160,6 +186,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const problem = problemResource?.spec;
   const persona = personaResource?.spec;
   const behaviour = displayLeia.spec?.behaviour?.spec;
+  const rubric = displayLeia.spec?.rubric;
   const isAdmin = user?.role === "admin";
   const canRegenerateLeia = isAdmin || getUserId(displayLeia.user) === user?.id;
   const canRegenerateProblem = isAdmin || getUserId(problemResource?.user) === user?.id;
@@ -441,15 +468,18 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         </Stack>
       </DialogTitle>
       <Tabs
+        ref={tabsRef}
         value={viewMode}
         onChange={(_, value: ViewMode) => setViewMode(value)}
         variant="scrollable"
-        scrollButtons="auto"
+        scrollButtons={tabsOverflow}
+        allowScrollButtonsMobile
         sx={{ px: 2, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}
       >
         <Tab value="problem" label="Problem" />
         <Tab value="persona" label="Persona" />
         {user?.role === "admin" && <Tab value="behaviour" label="Behaviour" />}
+        {rubric && <Tab value="rubric" label="Rubric" />}
         <Tab value="infographics" label="Infographics" />
       </Tabs>
       <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
@@ -555,6 +585,13 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
               </ContentSection>
             )}
             {behaviour?.tooltip && <ContentSection title="Initial Tooltip"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour.tooltip}</Typography></ContentSection>}
+          </Stack>
+        )}
+
+        {viewMode === "rubric" && rubric && (
+          <Stack spacing={2.5}>
+            <Typography variant="subtitle1" fontWeight={700}>{rubric.metadata.name}</Typography>
+            <RubricPreview spec={rubric.spec} />
           </Stack>
         )}
 

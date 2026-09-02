@@ -8,6 +8,7 @@ export interface ProblemChatTool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  strict?: boolean;
 }
 
 export interface ProblemChatToolCall {
