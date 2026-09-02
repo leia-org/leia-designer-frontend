@@ -1048,6 +1048,7 @@ export const LeiaSearch: React.FC = () => {
                       component="li"
                       key={leia.id}
                       id={index === 1 ? "first-leia" : undefined}
+                      className={isTryMenuOpen ? "try-settings-open" : undefined}
                       sx={{
                         px: { xs: 2, md: 2.5 },
                         py: 2,
@@ -1060,19 +1061,19 @@ export const LeiaSearch: React.FC = () => {
                         gap: 2,
                         position: "relative",
                         transition: "background-color 180ms ease, padding-bottom 240ms ease",
-                        "&:hover": { bgcolor: "surfaces.hover" },
+                        "&:hover, &.try-settings-open": { bgcolor: "surfaces.hover" },
                         "@media (hover: hover) and (pointer: fine)": {
                           "& .leia-card-actions": {
                             opacity: 0,
                             pointerEvents: "none",
                           },
-                          "&:hover .leia-card-actions, &:focus-within .leia-card-actions, &:has(.driver-active-element) .leia-card-actions": {
+                          "&:hover .leia-card-actions, &:focus-within .leia-card-actions, &:has(.driver-active-element) .leia-card-actions, &.try-settings-open .leia-card-actions": {
                             opacity: 1,
                             pointerEvents: "auto",
                           },
                         },
                         "@media (min-width: 1536px) and (hover: hover) and (pointer: fine)": {
-                          "&:hover, &:focus-within, &:has(.driver-active-element)": {
+                          "&:hover, &:focus-within, &:has(.driver-active-element), &.try-settings-open": {
                             pb: 9,
                           },
                           "& .leia-card-actions": {
