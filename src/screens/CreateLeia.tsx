@@ -2497,7 +2497,6 @@ const openGenerateProblemModal = () => {
                 onSave={(data, apiVersion, resourceName) => {
                   const resource = editingResource.resource;
                   if (!resource) return;
-                  if (resource === "problem") setRubricDraft(null);
 
                   setLeiaConfig((previous) => {
                     const current = previous[resource];
