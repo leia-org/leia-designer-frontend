@@ -1091,7 +1091,7 @@ export const LeiaSearch: React.FC = () => {
                         fallbackSrc={leiaAvatarFallback}
                         alt={`${leia.metadata.name} avatar`}
                         label={leia.metadata.name}
-                        size="md"
+                        size="lg"
                       />
                       <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
