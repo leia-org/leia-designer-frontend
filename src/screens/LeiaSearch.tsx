@@ -1058,8 +1058,31 @@ export const LeiaSearch: React.FC = () => {
                         alignItems: { xl: "center" },
                         justifyContent: "space-between",
                         gap: 2,
-                        transition: "background-color 120ms ease",
+                        position: "relative",
+                        transition: "background-color 180ms ease, padding-bottom 240ms ease",
                         "&:hover": { bgcolor: "surfaces.hover" },
+                        "@media (hover: hover) and (pointer: fine)": {
+                          "& .leia-card-actions": {
+                            opacity: 0,
+                            pointerEvents: "none",
+                          },
+                          "&:hover .leia-card-actions, &:focus-within .leia-card-actions, &:has(.driver-active-element) .leia-card-actions": {
+                            opacity: 1,
+                            pointerEvents: "auto",
+                          },
+                        },
+                        "@media (min-width: 1536px) and (hover: hover) and (pointer: fine)": {
+                          "&:hover, &:focus-within, &:has(.driver-active-element)": {
+                            pb: 9,
+                          },
+                          "& .leia-card-actions": {
+                            position: "absolute",
+                            bottom: 16,
+                            right: 20,
+                            zIndex: 1,
+                            flexWrap: "nowrap",
+                          },
+                        },
                       }}
                     >
                       <Avatar
@@ -1120,7 +1143,6 @@ export const LeiaSearch: React.FC = () => {
                           <Typography
                             sx={{
                               mt: 0.75,
-                              maxWidth: 760,
                               fontSize: 13,
                               color: "text.secondary",
                               lineHeight: 1.5,
@@ -1146,12 +1168,16 @@ export const LeiaSearch: React.FC = () => {
                       </Box>
 
                       <Stack
+                        className="leia-card-actions"
                         direction="row"
                         spacing={0.75}
                         useFlexGap
                         flexWrap="wrap"
                         alignItems="center"
-                        sx={{ flexShrink: 0 }}
+                        sx={{
+                          flexShrink: 0,
+                          transition: "opacity 180ms ease",
+                        }}
                       >
                         <Tooltip title="Design from this LEIA">
                           <Button
