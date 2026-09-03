@@ -19,7 +19,7 @@ import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia"
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
-import type { unknown } from "zod";
+//import type { unknown } from "zod";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
@@ -45,7 +45,7 @@ let mermaidParserPromise: Promise<MermaidParser> | null = null;
 
 //Handle errors
 let numberOfErrors:number=0;
-let checkAttributes:boolean=false;
+
 
 const loadMermaidParser = async (): Promise<MermaidParser> => {
   if (!mermaidParserPromise) {
@@ -461,33 +461,23 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
 
   const checkForSolutionFormatField= (solutionFormat:string)=>{
+
     const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
-    
-  
-    if(!validSolutionFormatValues.includes(solutionFormat) || solutionFormat==='') {
-      
-      if(checkAttributes) return true;
-      else return false;
-    }
+
+    if(!validSolutionFormatValues.includes(solutionFormat) || solutionFormat==='') return true;
+    return false;
   }
 
   const checkForProcessField= (process:string[])=>{
 
     if((process!.includes('other') && process!.length>1)
         || process?.filter(p=>!process.includes(p)).length>0
-        || process?.length!<1){ 
-               
-          if(checkAttributes) return true;
-          else return false;      
-    }
+        || process?.length!<1) return true;
     return false;
   }
 
   const checkForEmptyField =(field:string)=>{
-    if(field===''){ 
-      if(checkAttributes) return true;
-      else return false;
-    }
+    if(field==='') return true;
     return false;
   }
    
@@ -529,7 +519,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const handleSave = async () => {
 
     numberOfErrors=0;
-    checkAttributes=true;
+    
     
     
 
