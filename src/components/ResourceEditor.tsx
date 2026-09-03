@@ -19,6 +19,7 @@ import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia"
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
+//import type { unknown } from "zod";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
@@ -41,6 +42,10 @@ type MermaidParser = {
 };
 
 let mermaidParserPromise: Promise<MermaidParser> | null = null;
+
+//Handle errors
+let numberOfErrors:number=0;
+
 
 const loadMermaidParser = async (): Promise<MermaidParser> => {
   if (!mermaidParserPromise) {
@@ -349,6 +354,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   useEffect(() => {
     setResourceName(initialData?.metadata?.name ?? "");
     setResourceNameError(null);
+    
 
     if (initialData?.spec) {
       const editableSpec = stripAvatar(initialData.spec);
@@ -452,6 +458,49 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     setVisualData((previous: any) => ({ ...previous, [field]: value }));
   };
 
+
+
+  const checkForSolutionFormatField= (solutionFormat:string)=>{
+
+    const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
+
+    if(!validSolutionFormatValues.includes(solutionFormat) || solutionFormat==='') return true;
+    return false;
+  }
+
+  const checkForProcessField= (process:string[])=>{
+
+    if((process!.includes('other') && process!.length>1)
+        || process?.filter(p=>!process.includes(p)).length>0
+        || process?.length!<1) return true;
+    return false;
+  }
+
+  const checkForEmptyField =(field:string)=>{
+    if(field==='') return true;
+    return false;
+  }
+   
+  const checkDatatoSave=(dataToSave:Object)=>{
+    for (const [key, value] of Object.entries(dataToSave)){
+      if(key=='process' && checkForProcessField(value)) {
+        numberOfErrors=numberOfErrors+1;
+        continue;}
+      if(key==='solutionFormat' &&checkForSolutionFormatField(value)) {
+        numberOfErrors=numberOfErrors+1;
+        continue;}
+
+      if(checkForEmptyField(value)) numberOfErrors=numberOfErrors+1;
+        
+  }
+}
+
+  
+
+  
+
+ 
+
   const handleJsonChange = (value: string | undefined) => {
     setJsonContent(value || "");
     setJsonError(null);
@@ -468,6 +517,13 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   };
 
   const handleSave = async () => {
+
+    numberOfErrors=0;
+    
+    
+    
+
+
     const normalizedResourceName = resourceName.trim();
     if (!normalizedResourceName) {
       setResourceNameError("Resource name is required");
@@ -486,6 +542,8 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
       }
     }
 
+    checkDatatoSave(dataToSave!);
+
     if (resourceType === "problem") {
       const solution = extractMermaidSolution(dataToSave);
       if (solution && dataToSave && typeof dataToSave === "object" && !Array.isArray(dataToSave)) {
@@ -495,6 +553,9 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
       setMermaidError(validationError);
       if (validationError) return;
     }
+
+    
+    if(numberOfErrors!==0) return;
 
     onSave(
       restoreOriginalAvatar(stripAvatar(dataToSave), initialData),
@@ -512,7 +573,9 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           onChange={(event) => handleVisualChange("fullName", event.target.value)}
           placeholder="e.g., Dr. Alice Johnson"
         />
+        {checkForEmptyField(visualData.fullName || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
+      
       <Field label="First Name">
         <HighlightableInput
           type="text"
@@ -520,7 +583,9 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           onChange={(event) => handleVisualChange("firstName", event.target.value)}
           placeholder="e.g., Alice"
         />
+        {checkForEmptyField(visualData.firstName || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
+      
       <Field label="Description">
         <HighlightableTextarea
           value={visualData.description || ""}
@@ -528,6 +593,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Describe the persona..."
         />
+        {checkForEmptyField(visualData.description) && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Personality">
         <HighlightableTextarea
@@ -536,6 +602,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Describe personality traits..."
         />
+        {checkForEmptyField(visualData.personality || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
         <Field label="Subject Pronoun">
@@ -545,6 +612,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             onChange={(event) => handleVisualChange("subjectPronoum", event.target.value)}
             placeholder="e.g., she, he, they"
           />
+          {checkForEmptyField(visualData.subjectPronoum || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
         </Field>
         <Field label="Object Pronoun">
           <HighlightableInput
@@ -553,6 +621,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             onChange={(event) => handleVisualChange("objectPronoum", event.target.value)}
             placeholder="e.g., her, him, them"
           />
+          {checkForEmptyField(visualData.objectPronoum || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
         </Field>
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
@@ -563,6 +632,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             onChange={(event) => handleVisualChange("possesivePronoum", event.target.value)}
             placeholder="e.g., hers, his, theirs"
           />
+          {checkForEmptyField(visualData.possesivePronoum || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
         </Field>
         <Field label="Possessive Adjective">
           <HighlightableInput
@@ -571,6 +641,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             onChange={(event) => handleVisualChange("possesiveAdjective", event.target.value)}
             placeholder="e.g., her, his, their"
           />
+          {checkForEmptyField(visualData.possesiveAdjective || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
         </Field>
       </Box>
     </Stack>
@@ -618,6 +689,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Describe the problem..."
         />
+        {checkForEmptyField(visualData.description || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Persona Background">
         <HighlightableTextarea
@@ -626,6 +698,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={2}
           placeholder="Background context for the persona..."
         />
+        {checkForEmptyField(visualData.personaBackground || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Details">
         <HighlightableTextarea
@@ -634,6 +707,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Additional details..."
         />
+        {checkForEmptyField(visualData.details || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Solution">
         <HighlightableTextarea
@@ -652,6 +726,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             />
           </Box>
         )}
+        {checkForEmptyField(visualData.solution || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Initial Solution">
         <HighlightableTextarea
@@ -660,6 +735,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Initial Solution..."
         />
+        {checkForEmptyField(visualData.initialSolution || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <TextField
         select
@@ -676,6 +752,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <MenuItem value="json">JSON</MenuItem>
         <MenuItem value="xml">XML</MenuItem>
       </TextField>
+      {checkForSolutionFormatField(visualData.solutionFormat || "") && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
       <Field label="Evaluation Prompt">
         <HighlightableTextarea
           value={visualData.evaluationPrompt || ""}
@@ -683,8 +760,11 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={2}
           placeholder="Prompt for evaluating the solution..."
         />
+        {checkForEmptyField(visualData.evaluationPrompt || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
+      {checkForProcessField(visualData.process || []) && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
+      
       <ProblemWidgetsEditor
         widgets={(visualData.widgets as ProblemWidget[]) ?? []}
         onChange={(widgets) => handleVisualChange("widgets", widgets.length > 0 ? widgets : undefined)}
@@ -701,6 +781,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Describe the behaviour..."
         />
+        {checkForEmptyField(visualData.description || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Role">
         <HighlightableInput
@@ -709,6 +790,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           onChange={(event) => handleVisualChange("role", event.target.value)}
           placeholder="e.g., Facilitator"
         />
+        {checkForEmptyField(visualData.role || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Tooltip">
         <HighlightableTextarea
@@ -717,8 +799,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={2}
           placeholder="Tooltip text for this behaviour..."
         />
+        {checkForEmptyField(visualData.tooltip || "") && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
+      {checkForProcessField(visualData.process || []) && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
     </Stack>
   );
 

@@ -470,6 +470,87 @@ export const CreateLeia: React.FC = () => {
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
 
+
+
+  //Errores de Atributos
+  const [personaAttributeErrors, setPersonaAttributeErrors]=useState<string[]>([]);
+  const [problemAttributeErrors, setProblemAttributeErrors]=useState<string[]>([]);
+  const [behaviourAttributeErrors, setbehaviourAttributeErrors]=useState<string[]>([]);
+
+  
+
+  //Function to check leia attributes. Returns the number of errors found 
+
+    const CheckLeiaAttributes= (leia:LeiaConfig)=>{
+
+      return checkPersonaAttributtes(leia.persona!)+ 
+      checkProblemAttributes(leia.problem!) + 
+      checkBehaviourAttributes(leia.behaviour!);
+      
+  }
+
+  //Returns number of errors in leia's persona and stores the errors in an array to render them later
+  const checkPersonaAttributtes=(persona:Persona)=>{
+
+    let localPersonaAttrributes:string[]=[];
+        for (const [key, value] of Object.entries(persona.spec)){
+          
+          if(value==='') localPersonaAttrributes.push(`persona's field -${key}- is empty`);
+
+        }
+        setPersonaAttributeErrors(localPersonaAttrributes);
+        return localPersonaAttrributes.length;
+        
+
+  }
+  //Idem
+  const checkProblemAttributes=(problem:Problem)=>{
+
+
+    let localProblemAttributes:string[]=[];
+        for (const [key, value] of Object.entries(problem.spec)){
+
+          if(value==='') localProblemAttributes.push(`problem's field -${key} is empty`);
+
+        }
+
+    let problemProcessaux:Array<string>=problem.spec.process;
+    const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+
+    if((problemProcessaux!.includes('other') && problemProcessaux!.length>1)
+        || problemProcessaux?.filter(p=>!validProccesValues.includes(p)).length>0
+        || problemProcessaux?.length!<1) localProblemAttributes.push(`problem's field -process- does not have a correct value`);
+
+
+        
+    const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
+    if(!validSolutionFormatValues.includes(problem.spec.solutionFormat)) localProblemAttributes.push(`problem's field -solutionFormat- does not have a correct value`)
+
+    setProblemAttributeErrors(localProblemAttributes);
+    return localProblemAttributes.length;
+  }
+  //Idem
+  const checkBehaviourAttributes= (behaviour:Behaviour)=>{
+
+    let localBehaviourAttributes:string[]=[];
+        for (const [key, value] of Object.entries(behaviour.spec)){
+
+          if(value==='') localBehaviourAttributes.push(`behaviour's field -${key} is empty`);
+        }
+    const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+    let behaviourProcessaux:Array<string>=behaviour.spec.process;
+    if((behaviourProcessaux!.includes('other') && behaviourProcessaux!.length>1)
+        || behaviourProcessaux?.filter(p=>!validProccesValues.includes(p)).length>0
+        || behaviourProcessaux?.length!<1) localBehaviourAttributes.push(`behaviour's field -process- does not have a correct value`);
+        
+    setbehaviourAttributeErrors(localBehaviourAttributes);
+    return localBehaviourAttributes.length;
+
+  }
+
+
+
+
   const hasDraftContent = useMemo(() => {
     const hasSelectedComponent = Boolean(
       leiaConfig.persona || leiaConfig.problem || leiaConfig.behaviour,
@@ -1848,7 +1929,14 @@ const openGenerateProblemModal = () => {
           },
           leia: { name: previous.leia.name, version: "1.0.0" },
         }));
-      setCurrentStep(2);
+
+        
+
+        if(CheckLeiaAttributes(leiaConfig)===0) setCurrentStep(2);
+
+          
+
+      
     }
   };
 
@@ -2350,6 +2438,39 @@ const openGenerateProblemModal = () => {
             />
           </Box>
         </Box>
+
+        
+
+        
+
+        {personaAttributeErrors.map(p=> (
+
+          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
+              {p}
+          </Alert>
+
+        ))}
+
+
+        {problemAttributeErrors.map(p=> (
+
+          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
+              {p}
+          </Alert>))
+        }
+
+        {behaviourAttributeErrors.map(p=> (
+
+          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
+              {p}
+          </Alert>))
+        }
+
+
+        
+
+
+
 
         {editingResource.resource && (
           <Dialog
