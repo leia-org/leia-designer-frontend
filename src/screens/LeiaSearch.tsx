@@ -88,6 +88,7 @@ export const LeiaSearch: React.FC = () => {
   }, [queryText, versionFilter, visibilityFilter, selectedLabelFilter]);
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
+  const [retry, setRetry] = useState(false);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
   const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
   const [nameActivityReplication, setNameActivityReplication] = useState("");
@@ -146,7 +147,7 @@ export const LeiaSearch: React.FC = () => {
       controller.abort();
       clearTimeout(t);
     };
-  }, [params]);
+  }, [params, retry]);
   useEffect(() => {
     const fetchLabels = async () => {
       try {
@@ -978,7 +979,11 @@ export const LeiaSearch: React.FC = () => {
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
           <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" action={
+              <Button color="inherit" size="small" onClick={ () => setRetry((prev) => !prev)}>
+                Retry
+              </Button>
+            } sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
               <Stack alignItems="center" spacing={1.5} sx={{ py: 10 }}>
