@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,6 +14,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Skeleton,
   Stack,
   TextField,
   Tooltip,
@@ -48,6 +48,61 @@ import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 type VersionFilter = "" | "latest";
 
+const LeiaListSkeleton: React.FC<{ count?: number }> = ({ count = 4 }) => (
+  <Box
+    component="ul"
+    sx={{
+      m: 0,
+      p: 0,
+      listStyle: "none",
+      overflow: "visible",
+      bgcolor: "background.paper",
+      border: "1px solid",
+      borderColor: "divider",
+      borderRadius: 1.5,
+    }}
+  >
+    {Array.from({ length: count }).map((_, index) => (
+      <Box
+        component="li"
+        key={`leia-skeleton-${index}`}
+        sx={{
+          px: { xs: 2, md: 2.5 },
+                        py: 2,
+                        borderBottom: index < count - 1 ? "1px solid" : 0,
+                        borderColor: "divider",
+                        display: "flex",
+                        flexDirection: { xs: "column", xl: "row" },
+                        alignItems: { xl: "center" },
+                        justifyContent: "space-between",
+                        gap: 2,
+                        position: "relative",
+                      }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%", minWidth: 0 }}>
+          <Skeleton variant="circular" width={78} height={78} />
+
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center" sx={{ mb: 1 }}>
+              <Skeleton variant="text" width={180} height={22} />
+              <Skeleton variant="rounded" width={52} height={22} />
+              <Skeleton variant="rounded" width={96} height={22} />
+            </Stack>
+
+            <Skeleton variant="text" height={18} sx={{ width: "92%", mb: 0.5 }} />
+            <Skeleton variant="text" height={18} sx={{ width: "72%" }} />
+
+            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1.25, color: "text.disabled" }}>
+              <Skeleton variant="circular" width={12} height={12} />
+              <Skeleton variant="text" width={140} height={14} />
+            </Stack>
+          </Box>
+        </Box>
+      </Box>
+    ))}
+  </Box>
+);
+
 export const LeiaSearch: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -75,8 +130,12 @@ export const LeiaSearch: React.FC = () => {
   const [labels, setLabels] = useState<Label[]>([]);
   const [leias, setLeias] = useState<Leia[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(8); // Numero inicial de LEIAS visibles
   const [error, setError] = useState<string | null>(null);
   const [initializingId, setInitializingId] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const ITEMS_PER_BATCH = 3; // Numero de LEIAS a cargar cada vez q se llega al final
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
@@ -125,16 +184,19 @@ export const LeiaSearch: React.FC = () => {
     const fetchLeias = async () => {
       try {
         setLoading(true);
+        setLoadingMore(false);
         setError(null);
+        setVisibleCount(ITEMS_PER_BATCH);
         const response = await api.get<Leia[]>("/api/v1/leias", {
           params,
           signal: controller.signal,
         });
         if (!active) return;
         setLeias(response.data || []);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!active) return;
-        if (err?.name === "CanceledError") return;
+        const errorName = err && typeof err === "object" && "name" in err ? String(err.name) : "";
+        if (errorName === "CanceledError") return;
         setError("Could not load LEIAs");
       } finally {
         if (active) setLoading(false);
@@ -147,6 +209,35 @@ export const LeiaSearch: React.FC = () => {
       clearTimeout(t);
     };
   }, [params]);
+
+  useEffect(() => {
+    if (!leias.length || loading) return;
+
+    const target = sentinelRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (!firstEntry?.isIntersecting || loadingMore || visibleCount >= leias.length) return;
+
+        setLoadingMore(true);
+        window.setTimeout(() => {
+          setVisibleCount((prev) => Math.min(prev + ITEMS_PER_BATCH, leias.length));
+          setLoadingMore(false);
+        }, 250);
+      },
+      {
+        root: null,
+        rootMargin: '200px 0px',
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [leias.length, loading, loadingMore, visibleCount]);
+
   useEffect(() => {
     const fetchLabels = async () => {
       try {
@@ -978,13 +1069,11 @@ export const LeiaSearch: React.FC = () => {
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
           <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+            
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
-              <Stack alignItems="center" spacing={1.5} sx={{ py: 10 }}>
-                <CircularProgress size={28} />
-                <Typography variant="body2" color="text.secondary">Loading library…</Typography>
-              </Stack>
+              <LeiaListSkeleton count={8} />
             ) : leias.length === 0 ? (
               <Stack alignItems="center" spacing={1} sx={{ py: 10, color: "text.secondary" }}>
                 <LibraryBooksOutlinedIcon sx={{ fontSize: 32, color: "text.disabled" }} />
@@ -1008,7 +1097,7 @@ export const LeiaSearch: React.FC = () => {
                   borderRadius: 1.5,
                 }}
               >
-                {leias.map((leia, index) => {
+                {leias.slice(0, visibleCount).map((leia, index) => {
                   const description =
                     leia.spec?.problem?.spec?.description ||
                     leia.spec?.persona?.spec?.description ||
@@ -1302,6 +1391,35 @@ export const LeiaSearch: React.FC = () => {
                     </Box>
                   );
                 })}
+
+                {loadingMore && visibleCount < leias.length && (
+                  <Box
+                    component="li"
+                    sx={{
+                      px: { xs: 2, md: 2.5 },
+                      py: 2,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1.5,
+                      bgcolor: "background.paper",
+                    }}
+                  >
+                    <LeiaListSkeleton count={3} />
+                  </Box>
+                )}
+
+                {visibleCount < leias.length && (
+                  <Box
+                    ref={sentinelRef}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      py: 2,
+                      minHeight: 12,
+                    }}
+                  />
+                )}
               </Box>
             )}
           </Box>
