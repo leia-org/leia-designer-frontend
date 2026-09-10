@@ -316,6 +316,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
     <Dialog
       open={isOpen}
       onClose={onClose}
+      disableRestoreFocus
       fullWidth
       maxWidth="lg"
       sx={{ "& .MuiDialog-paper": { height: { xs: "92vh", md: "80vh" }, maxHeight: "none" } }}
