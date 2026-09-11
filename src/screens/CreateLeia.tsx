@@ -211,10 +211,22 @@ const copyProcess = (value: unknown): string[] =>
     ? value.filter((process): process is string => typeof process === "string")
     : [];
 
+const haveSameProcess = (left: unknown, right: unknown): boolean => {
+  const normalize = (value: unknown) => [...new Set(copyProcess(value))].sort();
+  const leftProcess = normalize(left);
+  const rightProcess = normalize(right);
+  return (
+    leftProcess.length === rightProcess.length &&
+    leftProcess.every((process, index) => process === rightProcess[index])
+  );
+};
+
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuth();
+  const canEditBehaviour =
+    currentUser?.role === "admin" || currentUser?.role === "advanced";
   const tourRef = useRef<ReturnType<typeof driver> | null>(null);
   const {
     apiKeys,
@@ -1163,6 +1175,7 @@ export const CreateLeia: React.FC = () => {
     resource: Persona | Problem | Behaviour,
     resourceType: "persona" | "problem" | "behaviour",
   ) => {
+    if (resourceType === "behaviour" && !canEditBehaviour) return;
     setDeleteModal({
       isOpen: true,
       resource,
@@ -1275,7 +1288,7 @@ const openGenerateProblemModal = () => {
   };
 
   const openGenerateBehaviourModal = () => {
-    if (!leiaConfig.behaviour) {
+    if (!canEditBehaviour || !leiaConfig.behaviour) {
       return;
     }
     setGenerateBehaviourSubject(DEFAULT_BEHAVIOUR_GENERATION_SUBJECT);
@@ -1358,7 +1371,7 @@ const openGenerateProblemModal = () => {
 
   // Función para generar un behaviour similar con IA
   const handleGenerateBehaviour = async () => {
-    if (!generateBehaviourSubject.trim() || !leiaConfig.behaviour) {
+    if (!canEditBehaviour || !generateBehaviourSubject.trim() || !leiaConfig.behaviour) {
       return;
     }
 
@@ -1656,6 +1669,11 @@ const openGenerateProblemModal = () => {
           resourceName && resourceName !== value?.metadata?.name,
         );
 
+        if (key === "behaviour" && !canEditBehaviour && (value?.edited || isRenamed)) {
+          setError("Only advanced users and administrators can edit Behaviour resources. Select an existing Behaviour instead.");
+          return;
+        }
+
         if (value && (value.edited || isRenamed)) {
           const newResource: {
             apiVersion: string;
@@ -1915,6 +1933,7 @@ const openGenerateProblemModal = () => {
 
   const applyChatBehaviour = useCallback(
     (spec: Record<string, unknown>, name?: string) => {
+      if (!canEditBehaviour) return;
       setLeiaConfig((prev) => {
         const process = copyProcess(prev.problem?.spec?.process ?? spec.process);
 
@@ -1937,7 +1956,7 @@ const openGenerateProblemModal = () => {
         };
       });
     },
-    [currentUser],
+    [canEditBehaviour, currentUser],
   );
 
   const applyChatPersona = useCallback(
@@ -1971,6 +1990,46 @@ const openGenerateProblemModal = () => {
       return { ok: true, name: persona.metadata?.name };
     },
     [personas],
+  );
+
+  const handleUseExistingProblem = useCallback(
+    (id: string): { ok: boolean; name?: string; process?: string[]; error?: string } => {
+      const problem = problems.find((item) => item.id === id);
+      if (!problem) return { ok: false, error: `No problem with id '${id}' is available.` };
+      setLeiaConfig((previous) => ({
+        ...previous,
+        problem,
+        // Selecting a problem is followed by an explicit behaviour search.
+        // Keeping the old one here caused unrelated exercise behaviours to leak.
+        behaviour: previous.problem?.id === problem.id ? previous.behaviour : null,
+      }));
+      return {
+        ok: true,
+        name: problem.metadata?.name,
+        process: copyProcess(problem.spec?.process),
+      };
+    },
+    [problems],
+  );
+
+  const handleUseExistingBehaviour = useCallback(
+    (id: string, problemProcess?: string[]): { ok: boolean; name?: string; error?: string } => {
+      const behaviour = behaviours.find((item) => item.id === id);
+      if (!behaviour) return { ok: false, error: `No behaviour with id '${id}' is available.` };
+      const expectedProcess = problemProcess ?? leiaConfig.problem?.spec?.process;
+      if (!expectedProcess) {
+        return { ok: false, error: "Select or create the problem before selecting its behaviour." };
+      }
+      if (!haveSameProcess(behaviour.spec?.process, expectedProcess)) {
+        return {
+          ok: false,
+          error: "The behaviour process must exactly match the selected problem process.",
+        };
+      }
+      setLeiaConfig((previous) => ({ ...previous, behaviour }));
+      return { ok: true, name: behaviour.metadata?.name };
+    },
+    [behaviours, leiaConfig.problem],
   );
 
   const handleAssistantLeiaName = useCallback(
@@ -2145,6 +2204,7 @@ const openGenerateProblemModal = () => {
     const canTest = Boolean(resolveTestRunnerConfiguration()) && !chatOptionsLoading;
 
     const editResource = (resource: "persona" | "problem" | "behaviour") => {
+      if (resource === "behaviour" && !canEditBehaviour) return;
       const current = leiaConfig[resource];
       if (!current) return;
       setEditingResource({
@@ -2243,10 +2303,15 @@ const openGenerateProblemModal = () => {
               currentProblem={leiaConfig.problem}
               currentBehaviour={leiaConfig.behaviour}
               currentPersona={leiaConfig.persona}
+              problems={problems}
+              behaviours={behaviours}
               personas={personas}
+              canEditBehaviour={canEditBehaviour}
               onApplyProblem={applyChatProblem}
               onApplyBehaviour={applyChatBehaviour}
               onApplyPersona={applyChatPersona}
+              onUseProblem={handleUseExistingProblem}
+              onUseBehaviour={handleUseExistingBehaviour}
               onUsePersona={handleUseExistingPersona}
               onSetLeiaName={handleAssistantLeiaName}
               modelName={chatModelName}
@@ -2272,12 +2337,14 @@ const openGenerateProblemModal = () => {
               onTitleChange={handleLeiaNameChange}
               titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}
               testAction={testAction}
+              canEditBehaviour={canEditBehaviour}
               onComponentClick={editResource}
             />
           </Box>
         </Box>
 
-        {editingResource.resource && (
+        {editingResource.resource &&
+          (editingResource.resource !== "behaviour" || canEditBehaviour) && (
           <Dialog
             open
             onClose={() => setEditingResource({ resource: null, content: null, apiVersion: "v1" })}
@@ -2292,6 +2359,7 @@ const openGenerateProblemModal = () => {
                 onSave={(data, apiVersion, resourceName) => {
                   const resource = editingResource.resource;
                   if (!resource) return;
+                  if (resource === "behaviour" && !canEditBehaviour) return;
 
                   setLeiaConfig((previous) => {
                     const current = previous[resource];
@@ -2351,6 +2419,7 @@ const openGenerateProblemModal = () => {
       resource: "leia" | "persona" | "problem" | "behaviour",
       value: string,
     ) => {
+      if (resource === "behaviour" && !canEditBehaviour) return;
       if (resource === "leia") setLeiaNameManuallyEdited(true);
       setCustomizations((previous) => ({
         ...previous,
@@ -2380,8 +2449,13 @@ const openGenerateProblemModal = () => {
               value={name}
               onChange={(event) => updateName(resource, event.target.value)}
               placeholder={"Enter " + title.toLowerCase() + " name"}
+              disabled={resource === "behaviour" && !canEditBehaviour}
               error={Boolean(validationErrors?.[resource])}
-              helperText={validationErrors?.[resource]}
+              helperText={
+                resource === "behaviour" && !canEditBehaviour
+                  ? "Select an existing Behaviour. Only advanced users and administrators can edit the base resource."
+                  : validationErrors?.[resource]
+              }
               fullWidth
             />
             {currentUser?.role === "admin" && (
@@ -3130,7 +3204,7 @@ const openGenerateProblemModal = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={showGenerateBehaviourModal} onClose={closeGenerateBehaviourModal} fullWidth maxWidth="sm">
+      <Dialog open={showGenerateBehaviourModal && canEditBehaviour} onClose={closeGenerateBehaviourModal} fullWidth maxWidth="sm">
         <DialogTitle>Generate Similar Behaviour</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>

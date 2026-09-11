@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
@@ -72,7 +72,7 @@ const componentScoped = (description: string) => ({
 // The editor-driving tools. apply_problem's parameters ARE the full Problem
 // spec (structured output via function calling, like the workbench widget
 // tools). get_current_problem lets the model read the editor to iterate.
-const CHAT_TOOLS: ProblemChatTool[] = [
+const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "get_current_problem",
     description:
@@ -80,9 +80,27 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     parameters: { type: "object", properties: {} },
   },
   {
+    name: "list_problems",
+    description:
+      "Lists existing problems that can be reused. You MUST call this, wait for its result and inspect it before apply_problem. Reuse a semantically suitable problem instead of creating a near-duplicate.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "use_problem",
+    description:
+      "Selects an existing problem by id from list_problems. Prefer this when its scenario, learning objective and expected solution materially match the user's request.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Problem id returned by list_problems." },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "apply_problem",
     description:
-      "Writes a COMPLETE problem into the editor, replacing the current one. Fill every field you reasonably can.\n\n" +
+      "Writes a NEW, COMPLETE problem into the editor, replacing the current one. Call list_problems first and use this only when no existing problem is semantically suitable. Fill every field you reasonably can.\n\n" +
       "`extends` / `overrides` / `constrainedTo` customize the persona / behaviour / problem this activity is paired with. Each is keyed by component (`persona`, `behaviour`, `problem`); each component is `{ spec: { ...fields }, apiVersion?: \"v1\" }`. extends ADDS to a spec, overrides REPLACES fields, constrainedTo CONSTRAINS/limits. persona.spec fields: fullName, firstName, description, personality, subjectPronoum, objectPronoum, possesivePronoum, possesiveAdjective. behaviour.spec fields: description, role, process. Use them ONLY when the user asks to customize the persona/behaviour for this problem; otherwise leave them as {}. Example:\n" +
       '{ "extends": { "persona": { "spec": { "personality": ["amigable", "despistado"] } } }, "overrides": { "behaviour": { "spec": { "role": "alumno de instituto" } } }, "constrainedTo": { "behaviour": { "spec": { "process": ["requirements-elicitation"] }, "apiVersion": "v1" } } }\n\n' +
       "Add `widgets` ONLY when the activity needs an interactive tool (e.g. a coding exercise needs the code editor). Available widgets and their tool functions:\n" +
@@ -168,9 +186,27 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     parameters: { type: "object", properties: {} },
   },
   {
+    name: "list_behaviours",
+    description:
+      "Lists existing behaviours that can be reused. You MUST call this, wait for its result and inspect it before apply_behaviour. Select one whose role and process fit the final problem instead of creating a near-duplicate.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "use_behaviour",
+    description:
+      "Selects an existing behaviour by id from list_behaviours. Its process must exactly match the selected problem process.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Behaviour id returned by list_behaviours." },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "apply_behaviour",
     description:
-      "Writes a NEW, COMPLETE behaviour into the editor, replacing the current one. It must be written specifically for the exact current Problem, including its real task, subject, technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. The behaviour defines the role the AI plays opposite the student (e.g. a client being interviewed, a teammate). Use {{persona.firstName}}-style template tags where natural. Its `process` MUST exactly match the Problem `process`; call get_current_problem first when a problem already exists. Set `name` so the instructor doesn't have to rename it.",
+      "Writes a NEW, COMPLETE behaviour into the editor. Call list_behaviours first and use this only when no existing behaviour has a compatible role and the exact same process as the selected problem. Avoid exercise-specific details when a reusable role definition is enough. Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -196,7 +232,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_persona",
     description:
-      "Writes a COMPLETE persona into the editor, replacing the current one. The persona is the character the AI embodies (name, background, personality, pronouns). Set `name` so the instructor doesn't have to rename it.",
+      "Writes a NEW, COMPLETE persona into the editor, replacing the current one. Call list_personas first and use this only when no existing persona is suitable. The persona is the character the AI embodies (name, background, personality, pronouns). Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -216,7 +252,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "list_personas",
     description:
-      "Lists existing personas the instructor can reuse. Prefer a suitable existing persona and only create a new one when none fits.",
+      "Lists existing personas the instructor can reuse. You MUST call this, wait for its result and inspect it before apply_persona. Prefer a suitable existing persona and only create a new one when none fits.",
     parameters: { type: "object", properties: {} },
   },
   {
@@ -248,6 +284,19 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   },
 ];
 
+const buildChatTools = (canEditBehaviour: boolean): ProblemChatTool[] =>
+  AUTHORING_CHAT_TOOLS.filter(
+    (tool) => canEditBehaviour || tool.name !== "apply_behaviour",
+  ).map((tool) =>
+    !canEditBehaviour && tool.name === "apply_problem"
+      ? {
+          ...tool,
+          description:
+            `${tool.description}\n\nThe current user cannot author the base Behaviour resource. Select an existing one with use_behaviour. The Problem may still customize that selected behaviour through extends, overrides or constrainedTo when the activity requires it.`,
+        }
+      : tool,
+  );
+
 export type ProblemChatRole = "user" | "assistant" | "system";
 
 export interface ProblemChatMessage {
@@ -267,11 +316,16 @@ interface ProblemChatPanelProps {
   currentProblem: Problem | null;
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
+  problems: Problem[];
+  behaviours: Behaviour[];
   personas: Persona[];
+  canEditBehaviour: boolean;
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
-  onUsePersona: (id: string) => { ok: boolean; name?: string };
+  onUseProblem: (id: string) => { ok: boolean; name?: string; process?: string[]; error?: string };
+  onUseBehaviour: (id: string, problemProcess?: string[]) => { ok: boolean; name?: string; error?: string };
+  onUsePersona: (id: string) => { ok: boolean; name?: string; error?: string };
   onSetLeiaName?: (name: string) => void;
   modelName: string;
   apiKeyId: string | null;
@@ -283,10 +337,15 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblem,
   currentBehaviour,
   currentPersona,
+  problems,
+  behaviours,
   personas,
+  canEditBehaviour,
   onApplyProblem,
   onApplyBehaviour,
   onApplyPersona,
+  onUseProblem,
+  onUseBehaviour,
   onUsePersona,
   onSetLeiaName,
   modelName,
@@ -303,6 +362,11 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const chatIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const inspectedLibrariesRef = useRef<Set<"problem" | "behaviour" | "persona">>(new Set());
+  const chatTools = useMemo(
+    () => buildChatTools(canEditBehaviour),
+    [canEditBehaviour],
+  );
 
   useEffect(() => {
     onChatStateChange?.({ messages, input });
@@ -315,6 +379,10 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviourRef.current = currentBehaviour;
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
+  const problemsRef = useRef<Problem[]>(problems);
+  problemsRef.current = problems;
+  const behavioursRef = useRef<Behaviour[]>(behaviours);
+  behavioursRef.current = behaviours;
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
@@ -373,23 +441,29 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     // if the session was re-opened; it only attaches each one once.
     let response = await sendProblemChatMessage(chatId, {
       message,
-      tools: CHAT_TOOLS,
+      tools: chatTools,
       fileIds: attachments.map((a) => a.fileId),
     });
-    for (let i = 0; i < 8; i++) {
+    let activeProblemProcess: string[] | undefined = currentProblemRef.current
+      ? Array.from(currentProblemRef.current.spec?.process ?? [])
+      : undefined;
+    for (let i = 0; i < 14; i++) {
       const calls = response.toolCalls;
       if (!Array.isArray(calls) || calls.length === 0) break;
 
-      // Tool calls may be returned in parallel. Applying the problem first is
-      // important because it invalidates the previous behaviour; the new,
-      // activity-specific behaviour must be applied afterwards.
+      // Tool calls may be returned in parallel. Resolve the problem before the
+      // behaviour so compatibility is checked against the final selection.
       const priority: Record<string, number> = {
         get_current_problem: 0,
         get_current_behaviour: 0,
         get_current_persona: 0,
+        list_problems: 0,
+        list_behaviours: 0,
         list_personas: 0,
         apply_problem: 10,
+        use_problem: 10,
         apply_behaviour: 20,
+        use_behaviour: 20,
         apply_persona: 30,
         use_persona: 30,
         set_leia_name: 40,
@@ -397,6 +471,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       const orderedCalls = [...calls].sort(
         (left, right) => (priority[left.name] ?? 100) - (priority[right.name] ?? 100),
       );
+      const inspectedBeforeThisResponse = new Set(inspectedLibrariesRef.current);
 
       const results: ProblemChatToolResult[] = orderedCalls.map((call) => {
         let output: unknown;
@@ -411,16 +486,34 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           return { name: typeof name === "string" && name.trim() ? name.trim() : undefined, spec: rest };
         };
         if (call.name === "apply_problem") {
+          if (!inspectedBeforeThisResponse.has("problem")) {
+            output = { error: "call list_problems and inspect its result before creating a new problem" };
+            return { callId: call.callId, output };
+          }
           const { name, spec } = takeName();
-          onApplyProblem(stripAvatar(spec), name);
+          const problemSpec = stripAvatar(spec);
+          activeProblemProcess = Array.from(problemSpec.process ?? []);
+          onApplyProblem(problemSpec, name);
           pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_behaviour") {
+          if (!canEditBehaviour) {
+            output = { error: "this user cannot author or modify behaviours; use an existing behaviour" };
+            return { callId: call.callId, output };
+          }
+          if (!inspectedBeforeThisResponse.has("behaviour")) {
+            output = { error: "call list_behaviours and inspect its result before creating a new behaviour" };
+            return { callId: call.callId, output };
+          }
           const { name, spec } = takeName();
           onApplyBehaviour(spec, name);
           pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_persona") {
+          if (!inspectedBeforeThisResponse.has("persona")) {
+            output = { error: "call list_personas and inspect its result before creating a new persona" };
+            return { callId: call.callId, output };
+          }
           const { name, spec } = takeName();
           onApplyPersona(spec, name);
           pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
@@ -440,16 +533,76 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           output = currentBehaviourRef.current?.spec ?? null;
         } else if (call.name === "get_current_persona") {
           output = currentPersonaRef.current?.spec ?? null;
+        } else if (call.name === "list_problems") {
+          inspectedLibrariesRef.current.add("problem");
+          output = problemsRef.current
+            .filter((problem) => problem.id && !problem.id.startsWith("generated-"))
+            .map((problem) => ({
+              id: problem.id,
+              name: problem.metadata?.name,
+              description:
+                typeof problem.spec?.description === "string"
+                  ? problem.spec.description.slice(0, 240)
+                  : undefined,
+              details:
+                typeof problem.spec?.details === "string"
+                  ? problem.spec.details.slice(0, 240)
+                  : undefined,
+              solutionPreview:
+                typeof problem.spec?.solution === "string"
+                  ? problem.spec.solution.slice(0, 240)
+                  : undefined,
+              process: problem.spec?.process,
+              solutionFormat: problem.spec?.solutionFormat,
+            }));
+        } else if (call.name === "use_problem") {
+          const id = typeof args.id === "string" ? args.id : "";
+          const result = onUseProblem(id);
+          if (result.ok) {
+            activeProblemProcess = result.process;
+            pushMessage("system", `✓ Using existing problem${result.name ? ` ("${result.name}")` : ""}.`);
+            output = { status: "selected", name: result.name };
+          } else {
+            output = { error: result.error || `no problem with id '${id}'` };
+          }
+        } else if (call.name === "list_behaviours") {
+          inspectedLibrariesRef.current.add("behaviour");
+          output = behavioursRef.current
+            .filter((behaviour) => behaviour.id && !behaviour.id.startsWith("generated-"))
+            .map((behaviour) => ({
+              id: behaviour.id,
+              name: behaviour.metadata?.name,
+              role: behaviour.spec?.role,
+              description:
+                typeof behaviour.spec?.description === "string"
+                  ? behaviour.spec.description.slice(0, 240)
+                  : undefined,
+              tooltip: behaviour.spec?.tooltip,
+              process: behaviour.spec?.process,
+            }));
+        } else if (call.name === "use_behaviour") {
+          const id = typeof args.id === "string" ? args.id : "";
+          const result = onUseBehaviour(id, activeProblemProcess);
+          if (result.ok) {
+            pushMessage("system", `✓ Using existing behaviour${result.name ? ` ("${result.name}")` : ""}.`);
+            output = { status: "selected", name: result.name };
+          } else {
+            output = { error: result.error || `no behaviour with id '${id}'` };
+          }
         } else if (call.name === "list_personas") {
-          output = personasRef.current.map((persona) => ({
-            id: persona.id,
-            name: persona.metadata?.name,
-            firstName: persona.spec?.firstName,
-            description:
-              typeof persona.spec?.description === "string"
-                ? persona.spec.description.slice(0, 240)
-                : undefined,
-          }));
+          inspectedLibrariesRef.current.add("persona");
+          output = personasRef.current
+            .filter((persona) => persona.id && !persona.id.startsWith("generated-"))
+            .map((persona) => ({
+              id: persona.id,
+              name: persona.metadata?.name,
+              firstName: persona.spec?.firstName,
+              description:
+                typeof persona.spec?.description === "string"
+                  ? persona.spec.description.slice(0, 240)
+                  : undefined,
+              personality: persona.spec?.personality,
+            }));
         } else if (call.name === "use_persona") {
           const id = typeof args.id === "string" ? args.id : "";
           const result = onUsePersona(id);
@@ -457,7 +610,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             pushMessage("system", `✓ Using existing persona${result.name ? ` ("${result.name}")` : ""}.`);
             output = { status: "selected", name: result.name };
           } else {
-            output = { error: `no persona with id '${id}'` };
+            output = { error: result.error || `no persona with id '${id}'` };
           }
         } else {
           output = { error: `unknown tool '${call.name}'` };
@@ -465,7 +618,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         return { callId: call.callId, output };
       });
 
-      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: CHAT_TOOLS });
+      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: chatTools });
     }
     return response.message ?? "";
   };
@@ -475,6 +628,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     if (!text || sending) return;
     setError(null);
     setInput("");
+    inspectedLibrariesRef.current.clear();
     pushMessage("user", text);
     setSending(true);
     try {
@@ -505,8 +659,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       <Stack ref={transcriptRef} spacing={1.5} sx={{ flex: 1, minHeight: 160, overflowY: "auto", px: 2, py: 1.5 }}>
         {messages.length === 0 ? (
           <Typography variant="caption" color="text.disabled" fontStyle="italic">
-            Attach a PDF of a past exercise or describe what you want, and I'll build the whole
-            LEIA — problem, behaviour and persona — writing each into its editor and suggesting a LEIA title.
+            Attach a PDF of a past exercise or describe what you want. I'll first search the
+            existing problem, behaviour and persona library, reuse the best matches, and create only what is missing.
             E.g. "{EXAMPLE_PROMPT}".
           </Typography>
         ) : (

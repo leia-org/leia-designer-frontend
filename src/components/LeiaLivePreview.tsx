@@ -28,6 +28,7 @@ interface LeiaLivePreviewProps {
   onTitleChange: (value: string) => void;
   titleSuggested?: boolean;
   testAction: React.ReactNode;
+  canEditBehaviour?: boolean;
   onComponentClick?: (component: "persona" | "behaviour" | "problem") => void;
 }
 
@@ -128,6 +129,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   onTitleChange,
   titleSuggested = false,
   testAction,
+  canEditBehaviour = true,
   onComponentClick,
 }) => {
   const persona = leia?.spec?.persona;
@@ -207,7 +209,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
           icon={<PsychologyOutlinedIcon sx={{ fontSize: 17 }} />}
           title="Behaviour"
           subtitle={behaviour?.metadata?.name}
-          onClick={behaviour ? () => onComponentClick?.("behaviour") : undefined}
+          onClick={behaviour && canEditBehaviour ? () => onComponentClick?.("behaviour") : undefined}
         >
           {behaviour ? (
             <Stack spacing={1}>
