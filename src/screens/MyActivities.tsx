@@ -1351,6 +1351,9 @@ export const MyActivities: React.FC = () => {
                         <Box sx={{ borderTop: 1, borderColor: "divider" }} />
                         {experiment.leias && experiment.leias.length > 0 ? (
                           <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
+                            <Typography variant="body2" color="text.secondary" sx={{ px: 2.5, pt: 2 }}>
+                              Add each Reflective LEIA immediately after its normal LEIA. Enable the reflective interview in Workbench settings.
+                            </Typography>
                             {experiment.leias.map((leiaConfig, leiaIndex) => {
                               const leia = typeof leiaConfig.leia === "object" ? leiaConfig.leia : null;
                               const leiaKey = experiment.id + "-" + leiaConfig.id;

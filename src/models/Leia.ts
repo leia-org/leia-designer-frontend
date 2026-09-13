@@ -47,7 +47,10 @@ export interface Behaviour {
     process: [
       string
     ],
-    tooltip?: string
+    tooltip?: string,
+    reflective?: boolean,
+    evaluationPrompt?: string,
+    stoppingPrompt?: string
   },
   isPublished: boolean,
   createdAt: string,
@@ -183,7 +186,10 @@ export interface Leia {
         process: [
           string
         ],
-        tooltip?: string
+        tooltip?: string,
+        reflective?: boolean,
+        evaluationPrompt?: string,
+        stoppingPrompt?: string
       },
       createdAt: string,
       updatedAt: string,

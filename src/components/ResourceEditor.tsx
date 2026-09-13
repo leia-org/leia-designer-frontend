@@ -694,6 +694,21 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const renderBehaviourForm = () => (
     <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
+      <FormControlLabel label="Reflective LEIA" control={<Checkbox
+        checked={visualData.reflective === true}
+        onChange={(event) => handleVisualChange("reflective", event.target.checked)}
+      />} />
+      {visualData.reflective && <>
+        <TextField label="Evaluation objective" required multiline minRows={3}
+          value={visualData.evaluationPrompt || ""}
+          onChange={(event) => handleVisualChange("evaluationPrompt", event.target.value)} />
+        <TextField label="Stopping instructions" required multiline minRows={2}
+          value={visualData.stoppingPrompt || ""}
+          onChange={(event) => handleVisualChange("stoppingPrompt", event.target.value)} />
+        <Alert severity="info">Place this LEIA immediately after a normal LEIA in the activity.
+          Use {"{{reflectiveContext.previousConversation}}"} and {"{{reflectiveContext.previousSolution}}"}
+          in the behaviour to reference the previous session. No new solution is requested.</Alert>
+      </>}
       <Field label="Description">
         <HighlightableTextarea
           value={visualData.description || ""}
