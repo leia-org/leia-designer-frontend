@@ -6,9 +6,18 @@ export interface Experiment {
   name: string;
   isPublished: boolean;
   leias: LeiaConfig[];
+  orchestration?: ActivityOrchestration;
   user: User | string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ActivityOrchestration {
+  mode: "single" | "multi";
+  maxInternalTurns: number;
+  openingLeiaId: string | null;
+  problemLeiaId: string | null;
+  sharedTask: string;
 }
 
 export interface LeiaConfig {

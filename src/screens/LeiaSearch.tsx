@@ -608,6 +608,15 @@ export const LeiaSearch: React.FC = () => {
   };
 
   const handleDefaultTry = async (leia: Leia) => {
+    const hasActiveApiKeys = apiKeys.some((key) => key.isActive !== false);
+    if (!isApiKeysLoading && !apiKeysError && !hasActiveApiKeys) {
+      toast.error("Configure an API key before testing a LEIA", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     const existing = tryConfigByLeia[leia.id];
     const validModels = getTryModels(leia);
     if (
@@ -696,7 +705,14 @@ export const LeiaSearch: React.FC = () => {
       autoClose: 3000,
     });
 
-    const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL;
+    const workbenchBaseUrl = import.meta.env.VITE_WORKBENCH_URL?.trim();
+    if (!workbenchBaseUrl) {
+      toast.error("Workbench URL is not configured", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
     const replicationUrl = `${workbenchBaseUrl.replace(
       /\/$/, "" )}/login?redirect=/replications/${encodeURIComponent(
       activityReplication.data.replication.id)}`;
@@ -1032,6 +1048,7 @@ export const LeiaSearch: React.FC = () => {
                       component="li"
                       key={leia.id}
                       id={index === 1 ? "first-leia" : undefined}
+                      className={isTryMenuOpen ? "try-settings-open" : undefined}
                       sx={{
                         px: { xs: 2, md: 2.5 },
                         py: 2,
@@ -1042,8 +1059,31 @@ export const LeiaSearch: React.FC = () => {
                         alignItems: { xl: "center" },
                         justifyContent: "space-between",
                         gap: 2,
-                        transition: "background-color 120ms ease",
-                        "&:hover": { bgcolor: "surfaces.hover" },
+                        position: "relative",
+                        transition: "background-color 180ms ease, padding-bottom 240ms ease",
+                        "&:hover, &.try-settings-open": { bgcolor: "surfaces.hover" },
+                        "@media (hover: hover) and (pointer: fine)": {
+                          "& .leia-card-actions": {
+                            opacity: 0,
+                            pointerEvents: "none",
+                          },
+                          "&:hover .leia-card-actions, &:focus-within .leia-card-actions, &:has(.driver-active-element) .leia-card-actions, &.try-settings-open .leia-card-actions": {
+                            opacity: 1,
+                            pointerEvents: "auto",
+                          },
+                        },
+                        "@media (min-width: 1536px) and (hover: hover) and (pointer: fine)": {
+                          "&:hover, &:focus-within, &:has(.driver-active-element), &.try-settings-open": {
+                            pb: 9,
+                          },
+                          "& .leia-card-actions": {
+                            position: "absolute",
+                            bottom: 16,
+                            right: 20,
+                            zIndex: 1,
+                            flexWrap: "nowrap",
+                          },
+                        },
                       }}
                     >
                       <Avatar
@@ -1051,7 +1091,7 @@ export const LeiaSearch: React.FC = () => {
                         fallbackSrc={leiaAvatarFallback}
                         alt={`${leia.metadata.name} avatar`}
                         label={leia.metadata.name}
-                        size="md"
+                        size="lg"
                       />
                       <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
@@ -1104,7 +1144,6 @@ export const LeiaSearch: React.FC = () => {
                           <Typography
                             sx={{
                               mt: 0.75,
-                              maxWidth: 760,
                               fontSize: 13,
                               color: "text.secondary",
                               lineHeight: 1.5,
@@ -1130,12 +1169,16 @@ export const LeiaSearch: React.FC = () => {
                       </Box>
 
                       <Stack
+                        className="leia-card-actions"
                         direction="row"
                         spacing={0.75}
                         useFlexGap
                         flexWrap="wrap"
                         alignItems="center"
-                        sx={{ flexShrink: 0 }}
+                        sx={{
+                          flexShrink: 0,
+                          transition: "opacity 180ms ease",
+                        }}
                       >
                         <Tooltip title="Design from this LEIA">
                           <Button
@@ -1167,7 +1210,10 @@ export const LeiaSearch: React.FC = () => {
                             onClick={() => void handleDefaultTry(leia)}
                             disabled={initializingId === leia.id}
                             id={index === 1 ? "try-button" : undefined}
-                            sx={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                            sx={{
+                              borderTopRightRadius: showNoApiKeys ? undefined : 0,
+                              borderBottomRightRadius: showNoApiKeys ? undefined : 0,
+                            }}
                           >
                             {initializingId === leia.id ? "Starting…" : "Test LEIA"}
                           </Button>
@@ -1230,7 +1276,7 @@ export const LeiaSearch: React.FC = () => {
                             Add to activity
                           </Button>
                         )}
-                        {user?.role === "admin" && (
+                        {(user?.role === "admin" || user?.role === "advanced") && (
                           <Button
                             size="small"
                             variant="outlined"

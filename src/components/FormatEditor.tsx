@@ -155,8 +155,9 @@ export const FormatEditor: React.FC<FormatEditorProps> = memo(
     const editorConfig = getEditorConfig(format);
 
     return (
-      <Box sx={{ height: "100%", position: "relative" }}>
+      <Box sx={{ height: "100%", minHeight: 0, overflow: "hidden", position: "relative" }}>
         <Editor
+          height="100%"
           value={value}
           onChange={(nextValue) => onChange(nextValue || "")}
           language={monacoLanguage}
