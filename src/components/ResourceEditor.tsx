@@ -19,7 +19,6 @@ import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia"
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
-//import type { unknown } from "zod";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
