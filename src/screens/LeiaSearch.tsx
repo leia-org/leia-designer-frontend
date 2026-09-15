@@ -1042,6 +1042,7 @@ export const LeiaSearch: React.FC = () => {
           sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}
         >
           <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+            
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
