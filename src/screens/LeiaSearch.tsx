@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -35,6 +34,7 @@ import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import { PageShell } from "../components/shared/PageShell";
 import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
+import { LeiaListSkeleton } from "../components/LeiaListSkeleton";
 import type { Leia, Persona, Problem, Behaviour, Label } from "../models/Leia";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
@@ -75,9 +75,13 @@ export const LeiaSearch: React.FC = () => {
   const [labels, setLabels] = useState<Label[]>([]);
   const [leias, setLeias] = useState<Leia[]>([]);
   const [loading, setLoading] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initializingId, setInitializingId] = useState<string | null>(null);
-
+  const isFetchingRef = useRef(false);
+  const nextCursorRef = useRef<string | null>(nextCursor);
+  
   const params = useMemo(() => {
     const p: Record<string, string> = {};
     if (queryText.trim()) p.text = queryText.trim();
@@ -86,6 +90,15 @@ export const LeiaSearch: React.FC = () => {
     if (selectedLabelFilter) p.labelId = selectedLabelFilter;
     return p;
   }, [queryText, versionFilter, visibilityFilter, selectedLabelFilter]);
+
+  const buildRequestParams = useCallback(
+    (cursor?: string | null) => {
+      const requestParams: Record<string, string> = { ...params };
+      if (cursor) requestParams.lastLeiaId = cursor;
+      return requestParams;
+    },
+    [params]
+  );
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
@@ -118,23 +131,27 @@ export const LeiaSearch: React.FC = () => {
   const tourRef = useRef<ReturnType<typeof driver> | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
 
-
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
     const fetchLeias = async () => {
       try {
         setLoading(true);
+        setLoadingMore(false);
         setError(null);
-        const response = await api.get<Leia[]>("/api/v1/leias", {
+
+        const response = await api.get<{ leias: Leia[]; nextCursor: string | null }>('/api/v1/leias', {
           params,
           signal: controller.signal,
         });
+
         if (!active) return;
-        setLeias(response.data || []);
-      } catch (err: any) {
+        setLeias(response.data.leias || []);
+        setNextCursor(response.data.nextCursor || null);
+      } catch (err: unknown) {
         if (!active) return;
-        if (err?.name === "CanceledError") return;
+        const errorName = err && typeof err === 'object' && 'name' in err ? String(err.name) : '';
+        if (errorName === "CanceledError") return;
         setError("Could not load LEIAs");
       } finally {
         if (active) setLoading(false);
@@ -147,6 +164,51 @@ export const LeiaSearch: React.FC = () => {
       clearTimeout(t);
     };
   }, [params]);
+
+  const loadMoreLeias = useCallback(async () => {
+    if (!nextCursor || loadingMore || loading) return;
+
+    try {
+      setLoadingMore(true);
+      const response = await api.get<{ leias: Leia[]; nextCursor: string | null }>('/api/v1/leias', {
+        params: buildRequestParams(nextCursor),
+      });
+
+      setLeias((prev) => [...prev, ...(response.data.leias || [])]);
+      setNextCursor(response.data.nextCursor || null);
+    } catch (err: unknown) {
+      const errorName = err && typeof err === 'object' && 'name' in err ? String(err.name) : '';
+      if (errorName === "CanceledError") return;
+      setError("Could not load LEIAs");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [buildRequestParams, loading, loadingMore, nextCursor]);
+
+  useEffect(() => {
+    isFetchingRef.current = loading || loadingMore;
+    nextCursorRef.current = nextCursor;
+  }, [loading, loadingMore, nextCursor]);
+
+  useEffect(() => {
+    const handleWindowScroll = () => {
+      if (!nextCursorRef.current || isFetchingRef.current) return;
+
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+
+      if ((scrollTop + windowHeight) / documentHeight >= 0.8) {
+        isFetchingRef.current = true;
+        void loadMoreLeias();
+      }
+    };
+
+    window.addEventListener("scroll", handleWindowScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleWindowScroll);
+  }, [loadMoreLeias]);
+
+
   useEffect(() => {
     const fetchLabels = async () => {
       try {
@@ -909,7 +971,7 @@ export const LeiaSearch: React.FC = () => {
           </DialogActions>
         </Dialog>
       )}
-      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
         <Box
           sx={{
             flexShrink: 0,
@@ -976,15 +1038,14 @@ export const LeiaSearch: React.FC = () => {
           </Stack>
         </Box>
 
-        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
+        <Box
+          sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}
+        >
           <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
-              <Stack alignItems="center" spacing={1.5} sx={{ py: 10 }}>
-                <CircularProgress size={28} />
-                <Typography variant="body2" color="text.secondary">Loading library…</Typography>
-              </Stack>
+              <LeiaListSkeleton count={8} />
             ) : leias.length === 0 ? (
               <Stack alignItems="center" spacing={1} sx={{ py: 10, color: "text.secondary" }}>
                 <LibraryBooksOutlinedIcon sx={{ fontSize: 32, color: "text.disabled" }} />
@@ -1302,6 +1363,34 @@ export const LeiaSearch: React.FC = () => {
                     </Box>
                   );
                 })}
+
+                {loadingMore && nextCursor && (
+                  <Box
+                    component="li"
+                    sx={{
+                      px: { xs: 2, md: 2.5 },
+                      py: 2,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1.5,
+                      bgcolor: "background.paper",
+                    }}
+                  >
+                    <LeiaListSkeleton count={3} />
+                  </Box>
+                )}
+
+                {nextCursor && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      py: 2,
+                      minHeight: 12,
+                    }}
+                  />
+                )}
               </Box>
             )}
           </Box>
