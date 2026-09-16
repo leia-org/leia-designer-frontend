@@ -9,6 +9,8 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import { isSolutionFormatFieldValid } from "../components/ResourceEditor";
+import { isProcessFieldValid } from "../components/ResourceEditor";
 import {
   Alert,
   Accordion,
@@ -495,7 +497,7 @@ export const CreateLeia: React.FC = () => {
     let localPersonaAttrributes:string[]=[];
         for (const [key, value] of Object.entries(persona.spec)){
           
-          if(value==='') localPersonaAttrributes.push(`persona's field -${key}- is empty`);
+          if(!value) localPersonaAttrributes.push(`persona's field -${key}- is empty`);
 
         }
         setPersonaAttributeErrors(localPersonaAttrributes);
@@ -510,21 +512,16 @@ export const CreateLeia: React.FC = () => {
     let localProblemAttributes:string[]=[];
         for (const [key, value] of Object.entries(problem.spec)){
 
-          if(value==='') localProblemAttributes.push(`problem's field -${key} is empty`);
+          if(!value) localProblemAttributes.push(`problem's field -${key} is empty`);
 
         }
 
     let problemProcessaux:Array<string>=problem.spec.process;
-    const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
-
-    if((problemProcessaux!.includes('other') && problemProcessaux!.length>1)
-        || problemProcessaux?.filter(p=>!validProccesValues.includes(p)).length>0
-        || problemProcessaux?.length!<1) localProblemAttributes.push(`problem's field -process- does not have a correct value`);
+    
+    if(!isProcessFieldValid(problemProcessaux)) localProblemAttributes.push(`problem's field -process- does not have a correct value`);
 
 
-        
-    const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
-    if(!validSolutionFormatValues.includes(problem.spec.solutionFormat)) localProblemAttributes.push(`problem's field -solutionFormat- does not have a correct value`)
+    if(!isSolutionFormatFieldValid(problem.spec.solutionFormat)) localProblemAttributes.push(`problem's field -solutionFormat- does not have a correct value`)
 
     setProblemAttributeErrors(localProblemAttributes);
     return localProblemAttributes.length;
@@ -535,13 +532,11 @@ export const CreateLeia: React.FC = () => {
     let localBehaviourAttributes:string[]=[];
         for (const [key, value] of Object.entries(behaviour.spec)){
 
-          if(value==='') localBehaviourAttributes.push(`behaviour's field -${key} is empty`);
+          if(!value) localBehaviourAttributes.push(`behaviour's field -${key} is empty`);
         }
-    const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+    
     let behaviourProcessaux:Array<string>=behaviour.spec.process;
-    if((behaviourProcessaux!.includes('other') && behaviourProcessaux!.length>1)
-        || behaviourProcessaux?.filter(p=>!validProccesValues.includes(p)).length>0
-        || behaviourProcessaux?.length!<1) localBehaviourAttributes.push(`behaviour's field -process- does not have a correct value`);
+    if(!isProcessFieldValid(behaviourProcessaux)) localBehaviourAttributes.push(`behaviour's field -process- does not have a correct value`);
         
     setbehaviourAttributeErrors(localBehaviourAttributes);
     return localBehaviourAttributes.length;

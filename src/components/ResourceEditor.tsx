@@ -45,6 +45,28 @@ let mermaidParserPromise: Promise<MermaidParser> | null = null;
 //Handle errors
 let numberOfErrors:number=0;
 
+//Functions to check attributes
+
+export const isSolutionFormatFieldValid= (solutionFormat:string|null|undefined)=>{
+
+    const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
+
+    if(!solutionFormat || !validSolutionFormatValues.includes(solutionFormat) || solutionFormat==='') return false;
+    return true;
+  }
+  
+
+export const isProcessFieldValid= (process:string[])=>{
+     const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
+
+    if((process.includes('other') && process.length>1)
+        || process?.filter(p=>!validProccesValues.includes(p)).length>0
+        || process?.length!<1) return false;
+    return true;
+}
+
+ 
+
 
 const loadMermaidParser = async (): Promise<MermaidParser> => {
   if (!mermaidParserPromise) {
@@ -457,37 +479,18 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     setVisualData((previous: any) => ({ ...previous, [field]: value }));
   };
 
-
-
-  const isSolutionFormatFieldValid= (solutionFormat:string|null|undefined)=>{
-
-    const validSolutionFormatValues:Array<string>=['text', 'mermaid', 'yaml', 'markdown', 'html', 'json', 'xml'];
-
-    if(!solutionFormat || !validSolutionFormatValues.includes(solutionFormat) || solutionFormat==='') return true;
-    return false;
-  }
-
-  const isProcessFieldValid= (process:string[])=>{
-     const validProccesValues:Array<String>=['other', 'game', 'requirements-elicitation'];
-
-    if((process!.includes('other') && process!.length>1)
-        || process?.filter(p=>!validProccesValues.includes(p)).length>0
-        || process?.length!<1) return true;
-    return false;
-  }
-
  
-   
   const checkDatatoSave=(dataToSave:Object)=>{
     for (const [key, value] of Object.entries(dataToSave)){
-      if(key=='process' && isProcessFieldValid(value)) {
+      if(key=='process' && !isProcessFieldValid(value)) {
         numberOfErrors=numberOfErrors+1;
-        continue;}
-      if(key==='solutionFormat' &&isSolutionFormatFieldValid(value)) {
-        numberOfErrors=numberOfErrors+1;
-        continue;}
+      }
 
-      if(!value) numberOfErrors=numberOfErrors+1;
+      else if(key==='solutionFormat' && !isSolutionFormatFieldValid(value)) {
+        numberOfErrors=numberOfErrors+1;
+      }
+
+      else if(!value) numberOfErrors=numberOfErrors+1;
         
   }
 }
@@ -749,7 +752,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         <MenuItem value="json">JSON</MenuItem>
         <MenuItem value="xml">XML</MenuItem>
       </TextField>
-      {isSolutionFormatFieldValid(visualData.solutionFormat || "") && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
+      {!isSolutionFormatFieldValid(visualData.solutionFormat || "") && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
       <Field label="Evaluation Prompt">
         <HighlightableTextarea
           value={visualData.evaluationPrompt || ""}
@@ -760,7 +763,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         {!visualData.evaluationPrompt && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
-      {isProcessFieldValid(visualData.process || []) && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
+      {!isProcessFieldValid(visualData.process || []) && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
       
       <ProblemWidgetsEditor
         widgets={(visualData.widgets as ProblemWidget[]) ?? []}
@@ -799,7 +802,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         {!visualData.tooltip && <Alert severity="error" sx={{width:'fit-content'}}>Empty field</Alert>}
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
-      {isProcessFieldValid(visualData.process || []) && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
+      {!isProcessFieldValid(visualData.process || []) && <Alert severity="error" sx={{width:'fit-content'}}>Incorrect value</Alert>}
     </Stack>
   );
 
