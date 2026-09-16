@@ -9,6 +9,8 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import { isSolutionFormatFieldValid } from "../components/ResourceEditor";
+import { isProcessFieldValid } from "../components/ResourceEditor";
 import {
   Alert,
   Accordion,
@@ -469,6 +471,80 @@ export const CreateLeia: React.FC = () => {
   const [showAddToActivityModal, setShowAddToActivityModal] = useState(false);
   const [createdLeiaResource, setCreatedLeiaResource] =
     useState<LeiaResource | null>(null);
+
+
+
+  //Errores de Atributos
+  const [personaAttributeErrors, setPersonaAttributeErrors]=useState<string[]>([]);
+  const [problemAttributeErrors, setProblemAttributeErrors]=useState<string[]>([]);
+  const [behaviourAttributeErrors, setbehaviourAttributeErrors]=useState<string[]>([]);
+
+  
+
+  //Function to check leia attributes. Returns the number of errors found 
+
+    const CheckLeiaAttributes= (leia:LeiaConfig)=>{
+
+      return checkPersonaAttributtes(leia.persona!)+ 
+      checkProblemAttributes(leia.problem!) + 
+      checkBehaviourAttributes(leia.behaviour!);
+      
+  }
+
+  //Returns number of errors in leia's persona and stores the errors in an array to render them later
+  const checkPersonaAttributtes=(persona:Persona)=>{
+
+    let localPersonaAttrributes:string[]=[];
+        for (const [key, value] of Object.entries(persona.spec)){
+          
+          if(!value) localPersonaAttrributes.push(`persona's field -${key}- is empty`);
+
+        }
+        setPersonaAttributeErrors(localPersonaAttrributes);
+        return localPersonaAttrributes.length;
+        
+
+  }
+  //Idem
+  const checkProblemAttributes=(problem:Problem)=>{
+
+
+    let localProblemAttributes:string[]=[];
+        for (const [key, value] of Object.entries(problem.spec)){
+
+          if(!value) localProblemAttributes.push(`problem's field -${key} is empty`);
+
+        }
+
+    let problemProcessaux:Array<string>=problem.spec.process;
+    
+    if(!isProcessFieldValid(problemProcessaux)) localProblemAttributes.push(`problem's field -process- does not have a correct value`);
+
+
+    if(!isSolutionFormatFieldValid(problem.spec.solutionFormat)) localProblemAttributes.push(`problem's field -solutionFormat- does not have a correct value`)
+
+    setProblemAttributeErrors(localProblemAttributes);
+    return localProblemAttributes.length;
+  }
+  //Idem
+  const checkBehaviourAttributes= (behaviour:Behaviour)=>{
+
+    let localBehaviourAttributes:string[]=[];
+        for (const [key, value] of Object.entries(behaviour.spec)){
+
+          if(!value) localBehaviourAttributes.push(`behaviour's field -${key} is empty`);
+        }
+    
+    let behaviourProcessaux:Array<string>=behaviour.spec.process;
+    if(!isProcessFieldValid(behaviourProcessaux)) localBehaviourAttributes.push(`behaviour's field -process- does not have a correct value`);
+        
+    setbehaviourAttributeErrors(localBehaviourAttributes);
+    return localBehaviourAttributes.length;
+
+  }
+
+
+
 
   const hasDraftContent = useMemo(() => {
     const hasSelectedComponent = Boolean(
@@ -1848,7 +1924,14 @@ const openGenerateProblemModal = () => {
           },
           leia: { name: previous.leia.name, version: "1.0.0" },
         }));
-      setCurrentStep(2);
+
+        
+
+        if(CheckLeiaAttributes(leiaConfig)===0) setCurrentStep(2);
+
+          
+
+      
     }
   };
 
@@ -2350,6 +2433,39 @@ const openGenerateProblemModal = () => {
             />
           </Box>
         </Box>
+
+        
+
+        
+
+        {personaAttributeErrors.map(p=> (
+
+          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
+              {p}
+          </Alert>
+
+        ))}
+
+
+        {problemAttributeErrors.map(p=> (
+
+          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
+              {p}
+          </Alert>))
+        }
+
+        {behaviourAttributeErrors.map(p=> (
+
+          <Alert severity="error" sx={{marginTop:2, width:'fit-content'}}>
+              {p}
+          </Alert>))
+        }
+
+
+        
+
+
+
 
         {editingResource.resource && (
           <Dialog
