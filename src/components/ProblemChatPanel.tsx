@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
+import type { RubricDefinition } from "../models/Rubric";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
@@ -25,6 +26,9 @@ import {
   type ProblemChatToolResult,
   type UploadedFile,
 } from "../lib/problemChat";
+import { validateRubricSemantics } from "../lib/rubrics";
+import { getRubricSchema, validateAgainstRubricSchema, type JsonSchema } from "../lib/rubricSchema";
+import { normalizeProcessFields } from "../lib/process";
 
 // Widget catalog context for the model: available widgetTypes + their tool
 // functions, so it can decide whether the activity needs a widget (e.g. a
@@ -101,7 +105,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         solution: { type: "string", description: "The expected solution, in the chosen solutionFormat." },
         initialSolution: {
           type: "string",
-          description: "Optional starting solution shown to the student (empty string if none).",
+          description: "Optional starting solution shown to the student. Use an empty string when none is needed; it will not be persisted.",
         },
         solutionFormat: {
           type: "string",
@@ -110,12 +114,12 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         },
         evaluationPrompt: {
           type: "string",
-          description: "Optional instructions for grading the student's solution (empty string if none).",
+          description: "Optional instructions for grading the student's solution. Use an empty string when none is needed; it will not be persisted.",
         },
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Activity process tags. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
+          description: "Activity process tags. 'other' is exclusive: never combine it with 'requirements-elicitation' or 'game'. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
         },
         extends: componentScoped(
           "ADD to the paired persona/behaviour/problem spec (e.g. add persona personality traits). Empty object {} unless asked to compose.",
@@ -180,7 +184,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Must exactly match the current Problem process tags.",
+          description: "Must exactly match the current Problem process tags. 'other' must be the only value when used.",
         },
         tooltip: { type: "string", description: "Short helper tooltip describing this behaviour." },
       },
@@ -212,6 +216,19 @@ const CHAT_TOOLS: ProblemChatTool[] = [
       },
       required: ["firstName", "description"],
     },
+  },
+  {
+    name: "get_current_rubric",
+    description:
+      "Returns the rubric currently prepared for the LEIA. Call it before revising an existing rubric.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "apply_rubric",
+    description:
+      "Writes a COMPLETE structured evaluation rubric for the exact current Problem. Levels must be ordered from worst to best, section weights must total 100, and every criterion must contain exactly one descriptor for every section level.",
+    parameters: { type: "object", properties: {} },
+    strict: true,
   },
   {
     name: "list_personas",
@@ -263,14 +280,27 @@ export interface ProblemChatState {
 type ChatRole = ProblemChatRole;
 type ChatMessage = ProblemChatMessage;
 
+type AppliedComponent = "problem" | "behaviour" | "persona" | "rubric";
+
+interface PendingAppliedConfirmation {
+  component: AppliedComponent;
+  name?: string;
+  previousValue: unknown;
+}
+
 interface ProblemChatPanelProps {
   currentProblem: Problem | null;
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
+  currentRubric: RubricDefinition | null;
+  renderedProblem: Problem | null;
+  renderedBehaviour: Behaviour | null;
+  renderedPersona: Persona | null;
   personas: Persona[];
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
+  onApplyRubric: (rubric: RubricDefinition) => void;
   onUsePersona: (id: string) => { ok: boolean; name?: string };
   onSetLeiaName?: (name: string) => void;
   modelName: string;
@@ -283,10 +313,15 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblem,
   currentBehaviour,
   currentPersona,
+  currentRubric,
+  renderedProblem,
+  renderedBehaviour,
+  renderedPersona,
   personas,
   onApplyProblem,
   onApplyBehaviour,
   onApplyPersona,
+  onApplyRubric,
   onUsePersona,
   onSetLeiaName,
   modelName,
@@ -300,9 +335,11 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rubricSchema, setRubricSchema] = useState<JsonSchema | null>(null);
   const chatIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const pendingAppliedConfirmationsRef = useRef<PendingAppliedConfirmation[]>([]);
 
   useEffect(() => {
     onChatStateChange?.({ messages, input });
@@ -315,10 +352,29 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviourRef.current = currentBehaviour;
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
+  const currentRubricRef = useRef<RubricDefinition | null>(currentRubric);
+  currentRubricRef.current = currentRubric;
+  const renderedProblemRef = useRef<Problem | null>(renderedProblem);
+  renderedProblemRef.current = renderedProblem;
+  const renderedBehaviourRef = useRef<Behaviour | null>(renderedBehaviour);
+  renderedBehaviourRef.current = renderedBehaviour;
+  const renderedPersonaRef = useRef<Persona | null>(renderedPersona);
+  renderedPersonaRef.current = renderedPersona;
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
-  const ready = Boolean(modelName && apiKeyId);
+  useEffect(() => {
+    getRubricSchema().then(setRubricSchema).catch(() => setError("Failed to load the rubric schema."));
+  }, []);
+
+  const chatTools = React.useMemo(() => CHAT_TOOLS.map((tool) => {
+    if (tool.name !== "apply_rubric" || !rubricSchema) return tool;
+    const parameters = { ...rubricSchema };
+    delete parameters.$id;
+    return { ...tool, parameters };
+  }), [rubricSchema]);
+
+  const ready = Boolean(modelName && apiKeyId && rubricSchema);
 
   // Changing the model/key invalidates the server-side session.
   useEffect(() => {
@@ -329,8 +385,54 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending]);
 
-  const pushMessage = (role: ChatRole, text: string) =>
-    setMessages((prev) => [...prev, { role, text }]);
+  const pushMessage = useCallback((role: ChatRole, text: string) =>
+    setMessages((prev) => [...prev, { role, text }]), []);
+
+  const queueAppliedConfirmation = (
+    component: AppliedComponent,
+    name: string | undefined,
+    previousValue: unknown,
+  ) => {
+    pendingAppliedConfirmationsRef.current = [
+      ...pendingAppliedConfirmationsRef.current.filter((pending) => pending.component !== component),
+      { component, name, previousValue },
+    ];
+  };
+
+  // React state updates in the parent are asynchronous. Reconcile tool-call
+  // acknowledgements against the resources received back through props so the
+  // chat never says "applied" while the Workbench still shows an empty card.
+  useEffect(() => {
+    const currentValues: Record<AppliedComponent, unknown> = {
+      problem: renderedProblem,
+      behaviour: renderedBehaviour,
+      persona: renderedPersona,
+      rubric: currentRubric,
+    };
+    const currentNames: Record<AppliedComponent, string | undefined> = {
+      problem: renderedProblem?.metadata?.name,
+      behaviour: renderedBehaviour?.metadata?.name,
+      persona: renderedPersona?.metadata?.name,
+      rubric: currentRubric?.metadata?.name,
+    };
+    const confirmed: PendingAppliedConfirmation[] = [];
+
+    pendingAppliedConfirmationsRef.current = pendingAppliedConfirmationsRef.current.filter((pending) => {
+      const currentValue = currentValues[pending.component];
+      const stateWasCommitted = Boolean(currentValue) && currentValue !== pending.previousValue;
+      const expectedNameMatches = !pending.name || currentNames[pending.component] === pending.name;
+      if (stateWasCommitted && expectedNameMatches) {
+        confirmed.push(pending);
+        return false;
+      }
+      return true;
+    });
+
+    confirmed.forEach(({ component, name }) => {
+      const label = component.charAt(0).toUpperCase() + component.slice(1);
+      pushMessage("system", `✓ ${label} applied${name ? ` ("${name}")` : ""}.`);
+    });
+  }, [currentRubric, pushMessage, renderedBehaviour, renderedPersona, renderedProblem]);
 
   const stripAvatar = (spec: Record<string, unknown>): ProblemSpec => {
     const cleanSpec = { ...spec };
@@ -373,7 +475,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     // if the session was re-opened; it only attaches each one once.
     let response = await sendProblemChatMessage(chatId, {
       message,
-      tools: CHAT_TOOLS,
+      tools: chatTools,
       fileIds: attachments.map((a) => a.fileId),
     });
     for (let i = 0; i < 8; i++) {
@@ -387,12 +489,14 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         get_current_problem: 0,
         get_current_behaviour: 0,
         get_current_persona: 0,
+        get_current_rubric: 0,
         list_personas: 0,
         apply_problem: 10,
         apply_behaviour: 20,
         apply_persona: 30,
         use_persona: 30,
-        set_leia_name: 40,
+        apply_rubric: 40,
+        set_leia_name: 50,
       };
       const orderedCalls = [...calls].sort(
         (left, right) => (priority[left.name] ?? 100) - (priority[right.name] ?? 100),
@@ -406,25 +510,38 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         } catch {
           args = {};
         }
-        const takeName = () => {
-          const { name, ...rest } = args as { name?: unknown };
+        const takeName = (): { name?: string; spec: Record<string, unknown> } => {
+          const { name, ...rest } = args;
           return { name: typeof name === "string" && name.trim() ? name.trim() : undefined, spec: rest };
         };
         if (call.name === "apply_problem") {
           const { name, spec } = takeName();
-          onApplyProblem(stripAvatar(spec), name);
-          pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
+          queueAppliedConfirmation("problem", name, renderedProblemRef.current);
+          onApplyProblem(normalizeProcessFields(stripAvatar(spec)), name);
           output = { status: "applied" };
         } else if (call.name === "apply_behaviour") {
           const { name, spec } = takeName();
-          onApplyBehaviour(spec, name);
-          pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
+          queueAppliedConfirmation("behaviour", name, renderedBehaviourRef.current);
+          onApplyBehaviour(normalizeProcessFields(spec), name);
           output = { status: "applied" };
         } else if (call.name === "apply_persona") {
           const { name, spec } = takeName();
+          queueAppliedConfirmation("persona", name, renderedPersonaRef.current);
           onApplyPersona(spec, name);
-          pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
+        } else if (call.name === "apply_rubric") {
+          const rubric = args as unknown as RubricDefinition;
+          const schemaError = rubricSchema ? validateAgainstRubricSchema(rubric, rubricSchema) : "rubric schema is unavailable";
+          const semanticError = schemaError ? null : validateRubricSemantics(rubric);
+          if (!schemaError && !semanticError) {
+            queueAppliedConfirmation("rubric", rubric.metadata.name, currentRubricRef.current);
+            onApplyRubric(rubric);
+            output = { status: "applied" };
+          } else {
+            const errorMessage = schemaError || semanticError;
+            pushMessage("system", `⚠ Rubric was not applied: ${errorMessage}`);
+            output = { error: errorMessage };
+          }
         } else if (call.name === "set_leia_name") {
           const name = typeof args.name === "string" ? args.name.trim() : "";
           if (name) {
@@ -440,6 +557,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           output = currentBehaviourRef.current?.spec ?? null;
         } else if (call.name === "get_current_persona") {
           output = currentPersonaRef.current?.spec ?? null;
+        } else if (call.name === "get_current_rubric") {
+          output = currentRubricRef.current;
         } else if (call.name === "list_personas") {
           output = personasRef.current.map((persona) => ({
             id: persona.id,
@@ -465,7 +584,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         return { callId: call.callId, output };
       });
 
-      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: CHAT_TOOLS });
+      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: chatTools });
     }
     return response.message ?? "";
   };
@@ -506,7 +625,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         {messages.length === 0 ? (
           <Typography variant="caption" color="text.disabled" fontStyle="italic">
             Attach a PDF of a past exercise or describe what you want, and I'll build the whole
-            LEIA — problem, behaviour and persona — writing each into its editor and suggesting a LEIA title.
+            LEIA — problem, behaviour, persona and rubric — applying each component and suggesting a LEIA title.
             E.g. "{EXAMPLE_PROMPT}".
           </Typography>
         ) : (
