@@ -724,7 +724,8 @@ export const Chat = () => {
       </Box>
       {hasWidgets && (
         <Box sx={{ width: "50%", display: "flex", flexDirection: "column", overflow: "hidden", bgcolor: "#171717", color: "common.white", borderLeft: 1, borderColor: "#262626" }}>
-          <VoiceModeWithWidgets widgets={widgetDefs}>
+          {/* This preview's sessionId isn't a real workbench Session, so a scenario-source widget's fetch 404s and falls back to its static config. */}
+          <VoiceModeWithWidgets widgets={widgetDefs} sessionId={sessionId}>
             {({ rightSlot, leftSlot }) => (
               <>
                 <ToolsBridge onTools={handleToolsSync} />
