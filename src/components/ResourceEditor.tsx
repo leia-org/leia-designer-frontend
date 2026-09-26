@@ -19,6 +19,12 @@ import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia"
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
+import {
+  DESIGN_PATTERN_OPTIONS,
+  DESIGN_PATTERN_EVALUATION_PROMPT,
+  capitalizePatternName,
+  patternKeyFromSolution,
+} from "../widgets/designPatterns";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
@@ -68,7 +74,20 @@ const extractMermaidSolution = (data: unknown): string | null => {
   }
 
   const solution = unwrapMermaidCodeFence(problemData.solution);
-  return solution.length > 0 ? solution : null;
+  if (solution.length === 0) {
+    return null;
+  }
+
+  // A JSON-shaped solution (e.g. {"pattern": "State"}) is a structured marker
+  // for the evaluator, not a literal diagram — skip Mermaid validation for it.
+  try {
+    JSON.parse(solution);
+    return null;
+  } catch {
+    // not JSON: validate as a literal Mermaid diagram below
+  }
+
+  return solution;
 };
 
 const getMermaidErrorMessage = (error: unknown): string => {
@@ -330,6 +349,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
   const processOptions = [
     { value: "requirements-elicitation", label: "Requirements Elicitation" },
     { value: "game", label: "Game" },
+    { value: "design-patterns", label: "Design Patterns" },
     { value: "other", label: "Other" },
   ];
 
@@ -450,6 +470,47 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const handleVisualChange = (field: string, value: any) => {
     setVisualData((previous: any) => ({ ...previous, [field]: value }));
+  };
+
+  // Keeps "what pattern gets graded" (spec.solution) and "what code the
+  // student sees" (any widget's scenarioSource.pattern) from drifting apart.
+  const handlePatternSelect = (pattern: string) => {
+    if (!pattern) return; // "— custom —": no-op, don't clear existing data
+
+    const displayName = capitalizePatternName(pattern);
+
+    setVisualData((prev: any) => {
+      const next = {
+        ...prev,
+        solution: JSON.stringify({ pattern: displayName }),
+        solutionFormat: "mermaid",
+      };
+
+      if (!prev.evaluationPrompt || !String(prev.evaluationPrompt).trim()) {
+        next.evaluationPrompt = DESIGN_PATTERN_EVALUATION_PROMPT;
+      }
+
+      const widgets = Array.isArray(prev.widgets) ? prev.widgets : [];
+      const hasScenarioWidget = widgets.some(
+        (w: ProblemWidget) => w.params && "scenarioSource" in (w.params as Record<string, unknown>),
+      );
+      if (hasScenarioWidget) {
+        next.widgets = widgets.map((w: ProblemWidget) => {
+          if (!w.params || !("scenarioSource" in (w.params as Record<string, unknown>))) {
+            return w;
+          }
+          return {
+            ...w,
+            params: {
+              ...w.params,
+              scenarioSource: { ...(w.params.scenarioSource as object), pattern },
+            },
+          };
+        });
+      }
+
+      return next;
+    });
   };
 
   const handleJsonChange = (value: string | undefined) => {
@@ -609,6 +670,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
     </Stack>
   );
 
+  const isDesignPatternProblem: boolean = Array.isArray(visualData.process)
+    ? visualData.process.includes("design-patterns")
+    : false;
+
   const renderProblemForm = () => (
     <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
       <Field label="Description">
@@ -635,6 +700,21 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           placeholder="Additional details..."
         />
       </Field>
+      {isDesignPatternProblem && (
+        <TextField
+          select
+          label="Design Pattern to evaluate"
+          value={patternKeyFromSolution(visualData.solution) ?? ""}
+          onChange={(e) => handlePatternSelect(e.target.value)}
+          helperText="Sets Solution to the expected pattern, Solution Format to Mermaid, fills in the reusable evaluation prompt below (only if empty), and syncs the pattern into any widget below with a scenario source."
+          fullWidth
+        >
+          <MenuItem value="">— custom / not a pattern exercise —</MenuItem>
+          {DESIGN_PATTERN_OPTIONS.map((p) => (
+            <MenuItem key={p} value={p}>{capitalizePatternName(p)}</MenuItem>
+          ))}
+        </TextField>
+      )}
       <Field label="Solution">
         <HighlightableTextarea
           value={visualData.solution || ""}
