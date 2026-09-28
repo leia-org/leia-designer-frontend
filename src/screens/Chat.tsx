@@ -253,6 +253,7 @@ export const Chat = () => {
   const [savingTranscription, setSavingTranscription] = useState(false);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const openingRequestedRef = useRef(false);
   const [transcription, setTranscription] = useState(false);
   const [experimentId, setExperimentId] = useState<string | null>(null);
   const [leiaConfigId, setLeiaConfigId] = useState<string | null>(null);
@@ -407,7 +408,7 @@ export const Chat = () => {
     }
   }, [sendingMessage, scrollToBottom]);
 
-  const addMessage = (newMessage: Message) => {
+  const addMessage = useCallback((newMessage: Message) => {
     setMessages((prev) => {
       const next = [...prev, newMessage];
       localStorage.setItem(
@@ -416,7 +417,7 @@ export const Chat = () => {
       );
       return next;
     });
-  };
+  }, [sessionId]);
 
   // Runs one user turn against the runner, looping while the model returns
   // tool calls. Each call is executed via the local widget tools registry and
@@ -475,6 +476,25 @@ export const Chat = () => {
     },
     [sessionId],
   );
+
+  useEffect(() => {
+    if (!sessionId || openingRequestedRef.current) return;
+    const navigationState = (location.state as NavigationState | null) || parseSavedNavigationState();
+    const leia = navigationState?.leia as { spec?: { behaviour?: { spec?: { conversationDynamics?: { speaksFirst?: { enabled?: boolean } } } } } } | undefined;
+    if (!leia?.spec?.behaviour?.spec?.conversationDynamics?.speaksFirst?.enabled || navigationState?.experimentTranscription) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem("sessionMessages") || "{}");
+      if (saved.sessionId === sessionId && saved.messages?.length > 0) return;
+    } catch { /* No saved messages. */ }
+    openingRequestedRef.current = true;
+    setSendingMessage(true);
+    void runMessageTurn("Begin the conversation with your opening message.")
+      .then((text) => {
+        if (text) addMessage({ text, timestamp: new Date(), isLeia: true });
+      })
+      .catch(() => toast.error("Could not start the conversation"))
+      .finally(() => setSendingMessage(false));
+  }, [sessionId, location.state, runMessageTurn, addMessage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -48,9 +48,10 @@ export interface Behaviour {
       string
     ],
     tooltip?: string,
-    reflective?: boolean,
-    evaluationPrompt?: string,
-    stoppingPrompt?: string
+    conversationDynamics?: {
+      stoppingCondition?: { enabled?: boolean, prompt?: string },
+      speaksFirst?: { enabled?: boolean, prompt?: string }
+    }
   },
   isPublished: boolean,
   createdAt: string,
@@ -187,9 +188,10 @@ export interface Leia {
           string
         ],
         tooltip?: string,
-        reflective?: boolean,
-        evaluationPrompt?: string,
-        stoppingPrompt?: string
+        conversationDynamics?: {
+          stoppingCondition?: { enabled?: boolean, prompt?: string },
+          speaksFirst?: { enabled?: boolean, prompt?: string }
+        }
       },
       createdAt: string,
       updatedAt: string,

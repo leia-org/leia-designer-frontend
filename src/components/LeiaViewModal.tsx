@@ -547,10 +547,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
             <ContentSection title="Behaviour Configuration">
               <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour?.description || "No description available"}</Typography>
             </ContentSection>
-            {behaviour?.reflective && <>
-              <ContentSection title="Reflective LEIA — evaluation objective"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{behaviour.evaluationPrompt}</Typography></ContentSection>
-              <ContentSection title="Stopping instructions"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{behaviour.stoppingPrompt}</Typography></ContentSection>
-            </>}
+            {behaviour?.conversationDynamics?.stoppingCondition?.enabled && <ContentSection title="Stopping condition"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{behaviour.conversationDynamics.stoppingCondition.prompt}</Typography></ContentSection>}
+            {behaviour?.conversationDynamics?.speaksFirst?.enabled && <ContentSection title="LEIA speaks first"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{behaviour.conversationDynamics.speaksFirst.prompt || "Yes"}</Typography></ContentSection>}
             {behaviour?.role && <ContentSection title="Role"><Typography variant="body2">{behaviour.role}</Typography></ContentSection>}
             {behaviour?.process && (
               <ContentSection title="Process">

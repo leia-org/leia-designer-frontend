@@ -385,7 +385,13 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
             constrainedTo: {},
           };
         case "behaviour":
-          return { description: "", role: "", process: [], tooltip: "" };
+          return {
+            description: "", role: "", process: [], tooltip: "",
+            conversationDynamics: {
+              stoppingCondition: { enabled: false, prompt: "" },
+              speaksFirst: { enabled: false, prompt: "" },
+            },
+          };
         default:
           return {};
       }
@@ -450,6 +456,20 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const handleVisualChange = (field: string, value: any) => {
     setVisualData((previous: any) => ({ ...previous, [field]: value }));
+  };
+
+  const handleConversationDynamicChange = (
+    dynamic: "stoppingCondition" | "speaksFirst",
+    field: "enabled" | "prompt",
+    value: boolean | string,
+  ) => {
+    setVisualData((previous: any) => ({
+      ...previous,
+      conversationDynamics: {
+        ...previous.conversationDynamics,
+        [dynamic]: { ...previous.conversationDynamics?.[dynamic], [field]: value },
+      },
+    }));
   };
 
   const handleJsonChange = (value: string | undefined) => {
@@ -694,21 +714,6 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const renderBehaviourForm = () => (
     <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
-      <FormControlLabel label="Reflective LEIA" control={<Checkbox
-        checked={visualData.reflective === true}
-        onChange={(event) => handleVisualChange("reflective", event.target.checked)}
-      />} />
-      {visualData.reflective && <>
-        <TextField label="Evaluation objective" required multiline minRows={3}
-          value={visualData.evaluationPrompt || ""}
-          onChange={(event) => handleVisualChange("evaluationPrompt", event.target.value)} />
-        <TextField label="Stopping instructions" required multiline minRows={2}
-          value={visualData.stoppingPrompt || ""}
-          onChange={(event) => handleVisualChange("stoppingPrompt", event.target.value)} />
-        <Alert severity="info">Place this LEIA immediately after a normal LEIA in the activity.
-          Use {"{{reflectiveContext.previousConversation}}"} and {"{{reflectiveContext.previousSolution}}"}
-          in the behaviour to reference the previous session. No new solution is requested.</Alert>
-      </>}
       <Field label="Description">
         <HighlightableTextarea
           value={visualData.description || ""}
@@ -734,6 +739,34 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         />
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
+      <Alert severity="info">To use {"{{reflectiveContext.previousConversation}}"} or {"{{reflectiveContext.previousSolution}}"}, place this LEIA after another LEIA in the activity.</Alert>
+      <Box component="section" sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 2 }}>
+        <Stack spacing={2}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={600}>Conversation dynamics</Typography>
+          </Box>
+          <Box>
+            <FormControlLabel label="Set stopping condition" control={<Checkbox
+              checked={visualData.conversationDynamics?.stoppingCondition?.enabled === true}
+              onChange={(event) => handleConversationDynamicChange("stoppingCondition", "enabled", event.target.checked)}
+            />} />
+            {visualData.conversationDynamics?.stoppingCondition?.enabled && <TextField
+              label="Stopping condition prompt" required multiline minRows={2} fullWidth sx={{ mt: 1 }}
+              value={visualData.conversationDynamics?.stoppingCondition?.prompt || ""}
+              onChange={(event) => handleConversationDynamicChange("stoppingCondition", "prompt", event.target.value)} />}
+          </Box>
+          <Box>
+            <FormControlLabel label="LEIA speaks first" control={<Checkbox
+              checked={visualData.conversationDynamics?.speaksFirst?.enabled === true}
+              onChange={(event) => handleConversationDynamicChange("speaksFirst", "enabled", event.target.checked)}
+            />} />
+            {visualData.conversationDynamics?.speaksFirst?.enabled && <TextField
+              label="What should LEIA say first? (optional)" multiline minRows={2} fullWidth sx={{ mt: 1 }}
+              value={visualData.conversationDynamics?.speaksFirst?.prompt || ""}
+              onChange={(event) => handleConversationDynamicChange("speaksFirst", "prompt", event.target.value)} />}
+          </Box>
+        </Stack>
+      </Box>
     </Stack>
   );
 
