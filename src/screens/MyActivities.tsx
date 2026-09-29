@@ -8,7 +8,7 @@ import { z } from "zod";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
-import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
+import { StageEditor } from "../components/StageEditor";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import AddIcon from "@mui/icons-material/Add";
@@ -1289,7 +1289,7 @@ export const MyActivities: React.FC = () => {
                           <Stack direction="row" spacing={0.5} alignItems="center">
                             <Box component="img" src="/logo/leia_puzzle_black.png" alt="" sx={{ width: 16, height: 16 }} />
                             <Typography variant="caption" color="text.secondary">
-                              {experiment.leias?.length || 0} LEIAs
+                              {experiment.stages?.length ?? experiment.leias?.length ?? 0} stages
                             </Typography>
                           </Stack>
                         </Stack>
@@ -1336,7 +1336,7 @@ export const MyActivities: React.FC = () => {
 
                     <Collapse in={expanded}>
                       <Box sx={{ borderTop: 1, borderColor: "divider" }}>
-                        <ActivityOrchestrationEditor
+                        <StageEditor
                           experiment={experiment}
                           onSaved={(updatedExperiment) =>
                             setExperiments((previous) =>

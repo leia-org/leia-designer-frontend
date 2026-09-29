@@ -1,11 +1,20 @@
 import type { Leia } from "./Leia";
 import type { User } from "./User";
 
+export interface Stage {
+  id: string;
+  type: 'LEIAStage' | 'MultiLEIAStage' | 'StaticContentStage';
+  version: 1;
+  title: string;
+  config: { leiaId?: string; leiaIds?: string[]; content?: string; orchestration?: ActivityOrchestration };
+}
+
 export interface Experiment {
   id: string;
   name: string;
   isPublished: boolean;
   leias: LeiaConfig[];
+  stages?: Stage[];
   orchestration?: ActivityOrchestration;
   user: User | string;
   createdAt: string;

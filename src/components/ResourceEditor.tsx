@@ -739,7 +739,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         />
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
-      <Alert severity="info">To use {"{{reflectiveContext.previousConversation}}"} or {"{{reflectiveContext.previousSolution}}"}, place this LEIA after another LEIA in the activity.</Alert>
+      <Alert severity="info">To use {"{{previousStage.previousConversation}}"} or {"{{previousStage.previousSolution}}"}, place this LEIA in a stage following a stage that produces these artifacts.</Alert>
       <Box component="section" sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 2 }}>
         <Stack spacing={2}>
           <Box>
