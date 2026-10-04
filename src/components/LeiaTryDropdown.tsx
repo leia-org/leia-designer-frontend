@@ -18,11 +18,13 @@ import type { ApiKey } from "../models/ApiKeys";
 import openAiIcon from "../assets/providers/openai.svg";
 import geminiIcon from "../assets/providers/gemini.svg";
 import ollamaIcon from "../assets/providers/ollama.svg";
+import almaIcon from "../assets/providers/alma.svg";
 
 const providerIcons: Record<string, string> = {
   openai: openAiIcon,
   gemini: geminiIcon,
   ollama: ollamaIcon,
+  alma: almaIcon,
 };
 
 interface LeiaTryDropdownProps {
