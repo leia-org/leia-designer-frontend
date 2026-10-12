@@ -91,7 +91,19 @@ const LabelGroup = ({
                 }}
               >
                 <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                  <Chip label={label.name} size="small" variant="outlined" sx={labelChipSx(label)} />
+                  <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0, flex: 1 }}>
+                    <Chip label={label.name} size="small" variant="outlined" sx={labelChipSx(label)} />
+                    {!label.isGlobal && typeof label.user === "object" && label.user?.email && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                        sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
+                      >
+                        {label.user.email}
+                      </Typography>
+                    )}
+                  </Stack>
                   <Stack direction="row" spacing={0.25}>
                     <Tooltip title="Edit label">
                       <span>
