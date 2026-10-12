@@ -101,6 +101,7 @@ export const LeiaSearch: React.FC = () => {
   );
 
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
+  const [retry, setRetry] = useState(false);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
   const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
   const [nameActivityReplication, setNameActivityReplication] = useState("");
@@ -131,6 +132,15 @@ export const LeiaSearch: React.FC = () => {
   const tourRef = useRef<ReturnType<typeof driver> | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
 
+  const handleRetry = useCallback(() => {
+    if (error === "Unauthorized: Login or API key required") {
+      navigate("/login");
+      return;
+    }
+
+    setRetry((prev) => !prev);
+  }, [error, navigate]);
+
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -150,8 +160,20 @@ export const LeiaSearch: React.FC = () => {
         setNextCursor(response.data.nextCursor || null);
       } catch (err: unknown) {
         if (!active) return;
-        const errorName = err && typeof err === 'object' && 'name' in err ? String(err.name) : '';
+        const errorName = err && typeof err === "object" && "name" in err ? String(err.name) : "";
         if (errorName === "CanceledError") return;
+
+        const backendMessage = err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string; error?: string } } }).response?.data?.message
+            || (err as { response?: { data?: { message?: string; error?: string } } }).response?.data?.error
+          : undefined;
+        if (
+          backendMessage === "Unauthorized: Login or API key required"
+        ) {
+          setError(backendMessage);
+          return;
+        }
+
         setError("Could not load LEIAs");
       } finally {
         if (active) setLoading(false);
@@ -1042,8 +1064,13 @@ export const LeiaSearch: React.FC = () => {
           sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}
         >
           <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
-            
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" action={
+              <Button color="inherit" size="small" onClick={handleRetry}>
+                {error === "Unauthorized: Login or API key required"
+                  ? "Go to login"
+                  : "Retry"}
+              </Button>
+            } sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
               <LeiaListSkeleton count={8} />
