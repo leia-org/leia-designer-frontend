@@ -185,7 +185,7 @@ export const LeiaSearch: React.FC = () => {
       controller.abort();
       clearTimeout(t);
     };
-  }, [params]);
+  }, [params, retry]);
 
   const loadMoreLeias = useCallback(async () => {
     if (!nextCursor || loadingMore || loading) return;
