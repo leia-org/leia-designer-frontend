@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -91,6 +92,8 @@ type LabelOption = {
   color: string;
   secundaryColor: string;
   isGlobal: boolean;
+  action?: "create";
+  createName?: string;
 };
 
 interface LeiaConfig {
@@ -2561,8 +2564,40 @@ const openGenerateProblemModal = () => {
               inputValue={labelSearchInput}
               disabled={loading || Boolean(labelsError)}
               onInputChange={(_, value) => setLabelSearchInput(value)}
+              filterOptions={(options, state) => {
+                const filteredOptions = options.filter((option) =>
+                  option.label.toLowerCase().includes(state.inputValue.trim().toLowerCase()),
+                );
+                const candidate = state.inputValue.trim();
+                const hasExactMatch = options.some(
+                  (option) => option.label.toLowerCase() === candidate.toLowerCase(),
+                );
+
+                if (candidate && !hasExactMatch) {
+                  filteredOptions.push({
+                    value: "__create_label__",
+                    label: `Create label "${candidate}"`,
+                    color: "transparent",
+                    secundaryColor: "inherit",
+                    isGlobal: false,
+                    action: "create",
+                    createName: candidate,
+                  });
+                }
+
+                return filteredOptions;
+              }}
               onChange={(_, nextValues) => {
                 const values = nextValues as Array<LabelOption | string>;
+                const createLabelOption = values.find(
+                  (value) => typeof value !== "string" && value.action === "create",
+                );
+                if (createLabelOption && typeof createLabelOption !== "string") {
+                  setNewLabelName(createLabelOption.createName || "");
+                  setCreateLabelError(null);
+                  setShowCreateLabelModal(true);
+                  return;
+                }
                 const newLabel = values.find((value) => typeof value === "string");
                 if (typeof newLabel === "string") {
                   const candidate = newLabel.trim();
@@ -2588,9 +2623,15 @@ const openGenerateProblemModal = () => {
               }
               renderOption={(props, option) => (
                 <Box component="li" {...props}>
-                  <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: option.color, mr: 1 }} />
+                  {option.action === "create" ? (
+                    <AddOutlinedIcon fontSize="small" color="primary" sx={{ mr: 1 }} />
+                  ) : (
+                    <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: option.color, mr: 1 }} />
+                  )}
                   <Typography variant="body2">{option.label}</Typography>
-                  {option.isGlobal && <Chip label="Global" size="small" sx={{ ml: "auto" }} />}
+                  {option.action !== "create" && option.isGlobal && (
+                    <Chip label="Global" size="small" sx={{ ml: "auto" }} />
+                  )}
                 </Box>
               )}
               renderInput={(params) => (
