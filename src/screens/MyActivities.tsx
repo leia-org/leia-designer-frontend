@@ -9,6 +9,7 @@ import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
 import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
+import { ActivityListSkeleton } from "../components/ActivityListSkeleton";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import AddIcon from "@mui/icons-material/Add";
@@ -75,13 +76,17 @@ const TranscriptionArraySchema = z
 export const MyActivities: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [experiments, setExperiments] = useState<Experiment[] | null>(null);
   const [loadingExperiments, setLoadingExperiments] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [errorLoadingExperiments, setErrorLoadingExperiments] = useState("");
   const [creatingNewExperiment, setCreatingNewExperiment] = useState(false);
   const [newExperimentName, setNewExperimentName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const isFetchingRef = useRef(false);
+  const nextCursorRef = useRef<string | null>(null);
 
   // LEIA accordion and viewing state
   const [expandedExperiments, setExpandedExperiments] = useState<Set<string>>(
@@ -144,10 +149,11 @@ export const MyActivities: React.FC = () => {
     setLoadingExperiments(true);
     setErrorLoadingExperiments("");
     try {
-      const response = await api.get("/api/v1/experiments/user/me", {
+      const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/user/me", {
         params: { populated: true },
       });
-      setExperiments(response.data);
+      setExperiments(response.data.experiments);
+      setNextCursor(response.data.nextCursor || null);
     } catch (error) {
       if (error instanceof Error) {
         setErrorLoadingExperiments(
@@ -160,10 +166,55 @@ export const MyActivities: React.FC = () => {
       setLoadingExperiments(false);
     }
   };
+  const loadMoreActivities =useCallback(async () => {
+    if (!nextCursor || loadingMore || loadingExperiments) return;
+    setErrorLoadingExperiments("");
+    try {
+      setLoadingMore(true);
+      const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/user/me", {
+        params: { populated: true, lastActivityId: nextCursor },
+      });
+      setExperiments((prev) => [...prev ?? [], ...(response.data.experiments ?? [])]);
+      setNextCursor(response.data.nextCursor || null);
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorLoadingExperiments(
+          "Error loading more activities: " + error.message
+        );
+      } else {
+        setErrorLoadingExperiments("Error loading more activities");
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingExperiments, loadingMore, nextCursor]);
 
   useEffect(() => {
     fetchExperiments();
   }, []);
+
+  useEffect(() => {
+    isFetchingRef.current = loadingExperiments || loadingMore;
+    nextCursorRef.current = nextCursor;
+  }, [loadingExperiments, loadingMore, nextCursor]);
+
+    useEffect(() => {
+      const handleWindowScroll = () => {
+        if (!nextCursorRef.current || isFetchingRef.current) return;
+  
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+  
+        if ((scrollTop + windowHeight) / documentHeight >= 0.8) {
+          isFetchingRef.current = true;
+          void loadMoreActivities();
+        }
+      };
+  
+      window.addEventListener("scroll", handleWindowScroll, { passive: true });
+      return () => window.removeEventListener("scroll", handleWindowScroll);
+    }, [loadMoreActivities]);
 
   const handleCreateExperiment = async () => {
     if (!newExperimentName.trim()) return;
@@ -1221,10 +1272,7 @@ export const MyActivities: React.FC = () => {
 
       <Container maxWidth="lg" sx={{ flex: 1, py: 3 }}>
         {loadingExperiments ? (
-          <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 320 }}>
-            <CircularProgress />
-            <Typography color="text.secondary">Loading activities...</Typography>
-          </Stack>
+          <ActivityListSkeleton count={8} />
         ) : errorLoadingExperiments ? (
           <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 320 }}>
             <Alert severity="error" sx={{ maxWidth: 520 }}>
@@ -1592,6 +1640,28 @@ export const MyActivities: React.FC = () => {
                   </Paper>
                 );
               })}
+              {loadingMore && 
+              <Box
+                                  sx={{
+                                    px: { xs: 2, md: 2.5 },
+                                    py: 2,
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    borderRadius: 1.5,
+                                    bgcolor: "background.paper",
+                                  }}
+                                ><ActivityListSkeleton count={4} /></Box>}
+                                {nextCursor && (
+                                                  <Box
+                                                    sx={{
+                                                      display: "flex",
+                                                      alignItems: "center",
+                                                      justifyContent: "center",
+                                                      py: 2,
+                                                      minHeight: 12,
+                                                    }}
+                                                  />
+                                                )}
             </Stack>
           )
         ) : null}
