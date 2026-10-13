@@ -719,6 +719,27 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         />
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
+      <Field label="Conversation Dynamics">
+        <Stack spacing={0.25}>
+          {[
+            { key: "leiaSpeaksFirst", label: "LEIA Speaks First", field: "firstMessage", prompt: "What should LEIA say first?" },
+            { key: "stoppingCondition", label: "Stopping condition", field: "condition", prompt: "When should LEIA end the conversation?" },
+          ].map(({ key, label, field, prompt }) => {
+            const dynamics = visualData.conversationDynamics || {};
+            const dynamic = dynamics[key] || { enabled: false, config: {} };
+            const update = (patch: Record<string, unknown>) => handleVisualChange("conversationDynamics", {
+              ...dynamics, [key]: { ...dynamic, ...patch },
+            });
+            return <Stack key={key} spacing={1}>
+              <FormControlLabel label={<Typography variant="body2">{label}</Typography>} sx={{ m: 0 }} control={<Checkbox size="small" checked={dynamic.enabled === true}
+                onChange={(_, enabled) => update({ enabled })} />} />
+              {dynamic.enabled && <TextField label={prompt} multiline minRows={2} required
+                value={dynamic.config?.[field] || ""}
+                onChange={(event) => update({ config: { ...dynamic.config, [field]: event.target.value } })} />}
+            </Stack>;
+          })}
+        </Stack>
+      </Field>
     </Stack>
   );
 
