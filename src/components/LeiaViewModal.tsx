@@ -555,7 +555,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                 </Box>
               </ContentSection>
             )}
-            {behaviour?.tooltip && <ContentSection title="Initial Tooltip"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour.tooltip}</Typography></ContentSection>}
+            {behaviour?.tooltip && <ContentSection title="First Message Suggestion"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour.tooltip}</Typography></ContentSection>}
           </Stack>
         )}
 
