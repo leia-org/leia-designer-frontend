@@ -15,7 +15,7 @@ export interface Label {
   name: string,
   color: string,
   secundaryColor: string,
-  user: string,
+  user: string | User | null,
   isGlobal: boolean,
 }
 

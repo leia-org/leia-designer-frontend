@@ -849,8 +849,12 @@ export const LeiaSearch: React.FC = () => {
       await api.delete(`/api/v1/leias/${leia.id}`);
 
       // Refrescar la lista de LEIAs
-      const response = await api.get<Leia[]>("/api/v1/leias", { params });
-      setLeias(response.data || []);
+      const response = await api.get<{ leias: Leia[]; nextCursor: string | null }>(
+        "/api/v1/leias",
+        { params },
+      );
+      setLeias(response.data.leias || []);
+      setNextCursor(response.data.nextCursor || null);
 
       // Cerrar modal
       setDeleteModal({
@@ -898,17 +902,22 @@ export const LeiaSearch: React.FC = () => {
     }
   };
   const updateLeiaLabels = async (leiaId: string, labelsIds: string[]) => {
-      try {
-        await api.patch(`/api/v1/leias/${leiaId}/labels`, {
-          labelsIds: labelsIds,
-        });
-        // Refrescar la lista de LEIAs
-      const response = await api.get<Leia[]>("/api/v1/leias", { params });
-      setLeias(response.data || []);
-      } catch (error) {
-        console.error("Error updating labels:", error);
-      }
-    };
+    try {
+      await api.patch(`/api/v1/leias/${leiaId}/labels`, {
+        labelsIds,
+      });
+
+      // Refresh the list using the paginated response shape returned by the API.
+      const response = await api.get<{ leias: Leia[]; nextCursor: string | null }>(
+        "/api/v1/leias",
+        { params },
+      );
+      setLeias(response.data.leias || []);
+      setNextCursor(response.data.nextCursor || null);
+    } catch (error) {
+      console.error("Error updating labels:", error);
+    }
+  };
   const closeDeleteModal = useCallback(() => {
     setDeleteModal({
       isOpen: false,

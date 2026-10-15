@@ -25,6 +25,7 @@ import {
 import type { Label } from "../models/Leia";
 import api from "../lib/axios";
 import { PageShell } from "../components/shared/PageShell";
+import { useAuth } from "../context";
 
 type LabelGroupProps = {
   title: string;
@@ -35,6 +36,7 @@ type LabelGroupProps = {
   onSelect: (labelId: string) => void;
   onEdit: (label: Label) => void;
   onDelete: (label: Label) => void;
+  canModify: boolean;
 };
 
 const labelChipSx = (label: Label) => ({
@@ -54,6 +56,7 @@ const LabelGroup = ({
   onSelect,
   onEdit,
   onDelete,
+  canModify,
 }: LabelGroupProps) => (
   <Paper variant="outlined" sx={{ p: 2.25, minHeight: 250 }}>
     <Stack spacing={1.5}>
@@ -91,29 +94,43 @@ const LabelGroup = ({
                 }}
               >
                 <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                  <Chip label={label.name} size="small" variant="outlined" sx={labelChipSx(label)} />
+                  <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0, flex: 1 }}>
+                    <Chip label={label.name} size="small" variant="outlined" sx={labelChipSx(label)} />
+                    {!label.isGlobal && typeof label.user === "object" && label.user?.email && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                        sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
+                      >
+                        {label.user.email}
+                      </Typography>
+                    )}
+                  </Stack>
                   <Stack direction="row" spacing={0.25}>
-                    <Tooltip title="Edit label">
-                      <span>
-                        <IconButton
-                          aria-label={`Edit ${label.name}`}
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onEdit(label);
-                          }}
-                          disabled={mergeMode}
-                        >
+                    {canModify && (
+                      <Tooltip title="Edit label">
+                        <span>
+                          <IconButton
+                            aria-label={`Edit ${label.name}`}
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onEdit(label);
+                            }}
+                            disabled={mergeMode}
+                          >
                           <EditOutlinedIcon fontSize="small" />
                         </IconButton>
                       </span>
-                    </Tooltip>
-                    <Tooltip title="Delete label">
-                      <span>
-                        <IconButton
-                          aria-label={`Delete ${label.name}`}
-                          size="small"
-                          color="error"
+                    </Tooltip>)}
+                    {canModify && (
+                      <Tooltip title="Delete label">
+                        <span>
+                          <IconButton
+                            aria-label={`Delete ${label.name}`}
+                            size="small"
+                            color="error"
                           onClick={(event) => {
                             event.stopPropagation();
                             onDelete(label);
@@ -123,7 +140,7 @@ const LabelGroup = ({
                           <DeleteOutlineIcon fontSize="small" />
                         </IconButton>
                       </span>
-                    </Tooltip>
+                    </Tooltip>)}
                   </Stack>
                 </Stack>
               </Paper>
@@ -148,7 +165,8 @@ export const LabelManagement = () => {
   const [labelToEdit, setLabelToEdit] = useState<Label | null>(null);
   const [labelToDelete, setLabelToDelete] = useState<Label | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
+  const user = useAuth().user;
+   
   const loadLabels = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -307,6 +325,7 @@ export const LabelManagement = () => {
                 onSelect={toggleLabelSelection}
                 onEdit={(label) => setLabelToEdit({ ...label })}
                 onDelete={setLabelToDelete}
+                canModify={user?.role === "admin"}
               />
               <LabelGroup
                 title="Private labels"
@@ -317,6 +336,7 @@ export const LabelManagement = () => {
                 onSelect={toggleLabelSelection}
                 onEdit={(label) => setLabelToEdit({ ...label })}
                 onDelete={setLabelToDelete}
+                canModify= {true}
               />
             </Box>
           </>

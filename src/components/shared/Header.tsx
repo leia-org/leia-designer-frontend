@@ -67,9 +67,9 @@ export const Header: React.FC<HeaderProps> = ({
     },
     {
       label: "Manage labels",
-      href: "/administration/labels",
+      href: "/labels",
       icon: <LabelOutlinedIcon fontSize="small" />,
-      show: user?.role === "admin",
+      show: true,
       id: "manageLabels-button",
     },
     {
