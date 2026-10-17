@@ -47,7 +47,9 @@ export function useTestConversationDynamics(sessionId?: string) {
   }, [refresh]);
 
   const opening = state?.conversationDynamics.leiaSpeaksFirst;
+  const stopping = state?.conversationDynamics.stoppingCondition;
   return { state, error, refresh,
+    conversationClosed: stopping?.enabled === true && stopping.satisfied === true,
     ready: !!state && !error && (!opening?.enabled || opening.completed),
     canFinish: !!state?.conversationDynamics.canFinish && !error };
 }

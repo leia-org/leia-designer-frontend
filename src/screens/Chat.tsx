@@ -495,7 +495,7 @@ export const Chat = () => {
     e.preventDefault();
 
     const messageText = newMessageText.trim();
-    if (!messageText || sendingMessage || !dynamics.ready) return;
+    if (!messageText || sendingMessage || !dynamics.ready || dynamics.conversationClosed) return;
 
     setNewMessageText("");
     if (inputRef.current) {
@@ -767,9 +767,12 @@ export const Chat = () => {
           >
             <TextField
               inputRef={inputRef}
-              value={newMessageText}
+              disabled={!dynamics.ready || dynamics.conversationClosed}
+              value={dynamics.conversationClosed ? "" : newMessageText}
               onChange={handleTextareaChange}
-              placeholder="Type a message... (Shift+Enter for new line)"
+              placeholder={dynamics.conversationClosed
+                ? "The conversation has ended."
+                : "Type a message... (Shift+Enter for new line)"}
               multiline
               variant="standard"
               fullWidth
@@ -779,7 +782,7 @@ export const Chat = () => {
             />
             <Button
               type="submit"
-              disabled={!newMessageText.trim() || sendingMessage || !dynamics.ready}
+              disabled={!newMessageText.trim() || sendingMessage || !dynamics.ready || dynamics.conversationClosed}
               variant="contained"
             >
               Send
