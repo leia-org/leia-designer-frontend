@@ -3,6 +3,7 @@ import { useParams, useLocation } from "react-router-dom";
 import PersonIcon from "@mui/icons-material/Person";
 import {
   Avatar as MuiAvatar,
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -15,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
 import { Avatar } from "../components/shared/Avatar";
 import api from "../lib/axios";
+import { useTestConversationDynamics } from "../hooks/useTestConversationDynamics";
 import { toast, ToastContainer } from "react-toastify";
 import type { LeiaConfig } from "../models/Experiment";
 import type { ProblemWidget } from "../models/Leia";
@@ -245,6 +247,7 @@ export const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { sessionId } = useParams();
+  const dynamics = useTestConversationDynamics(sessionId);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessageText, setNewMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -263,6 +266,18 @@ export const Chat = () => {
   const [personaAvatar, setPersonaAvatar] = useState("");
   const [personaAvatarFallback, setPersonaAvatarFallback] = useState("");
   const [personaName, setPersonaName] = useState("Persona");
+
+  useEffect(() => {
+    if (!dynamics.state) return;
+    const saved = dynamics.state.messages.map((message) => ({ ...message, timestamp: new Date(message.timestamp) }));
+    setMessages((current) => {
+      // Polling can return the previous transcript while a turn is in flight.
+      // Keep optimistic messages until the server has caught up with them.
+      if (saved.length < current.length) return current;
+      localStorage.setItem("sessionMessages", JSON.stringify({ sessionId, messages: saved }));
+      return saved;
+    });
+  }, [dynamics.state, sessionId]);
 
   // Mount the activity's widgets in a side panel (text mode). Any non-left
   // slot is shown on the right so a "main"-slotted widget still appears.
@@ -480,7 +495,7 @@ export const Chat = () => {
     e.preventDefault();
 
     const messageText = newMessageText.trim();
-    if (!messageText) return;
+    if (!messageText || sendingMessage || !dynamics.ready) return;
 
     setNewMessageText("");
     if (inputRef.current) {
@@ -511,10 +526,7 @@ export const Chat = () => {
         isLeia: true,
       });
     } finally {
-      localStorage.setItem(
-        "sessionMessages",
-        JSON.stringify({ sessionId, messages })
-      );
+      await dynamics.refresh();
       setSendingMessage(false);
     }
   };
@@ -618,7 +630,7 @@ export const Chat = () => {
         showNavigation={false}
         rightContent={
           <Stack direction="row" spacing={1} alignItems="center">
-            <Button variant="outlined" color="inherit" onClick={handleOpenSolutionEditor}>
+            <Button variant="outlined" color="inherit" onClick={handleOpenSolutionEditor} disabled={!dynamics.canFinish || sendingMessage}>
               Solution Editor
             </Button>
             <Button variant="outlined" onClick={() => setShowInstructions(!showInstructions)}>
@@ -642,6 +654,9 @@ export const Chat = () => {
         }
       />
       <ToastContainer />
+      {dynamics.error && <Alert severity="error" action={<Button onClick={() => void dynamics.refresh()}>Retry</Button>}>{dynamics.error}</Alert>}
+      {!dynamics.error && !dynamics.ready && <Alert severity="info">Preparing the conversation...</Alert>}
+      {dynamics.ready && !dynamics.canFinish && <Alert severity="info">Continue the conversation until LEIA decides it has ended before evaluating your solution.</Alert>}
 
       {showInstructions && problemDescription && (
         <Box sx={{ px: 2, py: 2, bgcolor: "surfaces.accent", borderBottom: 1, borderColor: "primary.light" }}>
@@ -764,7 +779,7 @@ export const Chat = () => {
             />
             <Button
               type="submit"
-              disabled={!newMessageText.trim()}
+              disabled={!newMessageText.trim() || sendingMessage || !dynamics.ready}
               variant="contained"
             >
               Send
