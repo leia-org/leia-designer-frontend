@@ -710,12 +710,12 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           placeholder="e.g., Facilitator"
         />
       </Field>
-      <Field label="Tooltip">
+      <Field label="First Message Suggestion">
         <HighlightableTextarea
           value={visualData.tooltip || ""}
           onChange={(event) => handleVisualChange("tooltip", event.target.value)}
           rows={2}
-          placeholder="Tooltip text for this behaviour..."
+          placeholder="It will be shown to the user before sending the first message on the chat, it can be copied by clicking on it"
         />
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
