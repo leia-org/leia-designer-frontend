@@ -8,7 +8,15 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "node server.cjs"
+    "start": "node server.cjs",
+    "deploy": "npm run deploy:workers",
+    "deploy:workers": "npm run build && wrangler deploy --config wrangler.workers.jsonc",
+    "preview:workers": "npm run build && wrangler dev --config wrangler.workers.jsonc",
+    "deploy:pages": "npm run build && wrangler pages deploy",
+    "preview:pages": "npm run build && wrangler pages dev",
+    "build:pre": "tsc -b && vite build --mode pre",
+    "deploy:preview": "node scripts/cloudflare-preview.mjs",
+    "test:preview": "node --test tests/cloudflare-preview.test.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -38,6 +46,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@types/validator": "^13.15.2",
@@ -48,6 +57,10 @@
     "globals": "^16.3.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "wrangler": "^4.151.1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }
