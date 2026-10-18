@@ -132,7 +132,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
         },
         process: {
           type: "array",
-          items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
+          items: { type: "string", enum: ["requirements-elicitation", "game", "design-patterns", "other"] },
           description: "Activity process tags. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
         },
         extends: componentScoped(
@@ -215,7 +215,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
         role: { type: "string", description: "Role name the AI plays (e.g. 'cliente', 'alumno de instituto')." },
         process: {
           type: "array",
-          items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
+          items: { type: "string", enum: ["requirements-elicitation", "game", "design-patterns", "other"] },
           description: "Must exactly match the current Problem process tags.",
         },
         tooltip: { type: "string", description: "Short helper tooltip describing this behaviour." },

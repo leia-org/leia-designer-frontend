@@ -10,5 +10,9 @@ export {
   JsonParamsForm,
 } from "./catalog";
 export { CodeEditorWidget } from "./CodeEditorWidget";
+export { CodeEditorWithTreeWidget } from "./CodeEditorWithTreeWidget";
+export { MermaidViewerWidget } from "./MermaidViewerWidget";
+export { ProjectTreeWidget } from "./ProjectTreeWidget";
+export type { ProjectTreeNode } from "./ProjectTreeWidget";
 export type { SlotId, WidgetDefinition, ToolsMap } from "./types";
 export type { FrontendTool } from "./luke-types";

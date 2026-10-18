@@ -413,10 +413,10 @@ export const CreateLeia: React.FC = () => {
 
   // Estados para filtros de process
   const [problemProcess, setProblemProcess] = useState<
-    "all" | "requirements-elicitation" | "game" | "other"
+    "all" | "requirements-elicitation" | "game" | "design-patterns" | "other"
   >("all");
   const [behaviourProcess, setBehaviourProcess] = useState<
-    "all" | "requirements-elicitation" | "game" | "other"
+    "all" | "requirements-elicitation" | "game" | "design-patterns" | "other"
   >("all");
 
   // Estado para controlar la visibilidad/publicación de la LEIA
@@ -1023,7 +1023,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadProblems = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "design-patterns" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility };
@@ -1041,7 +1041,7 @@ export const CreateLeia: React.FC = () => {
 
   const loadBehaviours = async (
     visibility: "all" | "public" | "private" = "all",
-    process: "all" | "requirements-elicitation" | "game" | "other" = "all",
+    process: "all" | "requirements-elicitation" | "game" | "design-patterns" | "other" = "all",
   ) => {
     try {
       const params: Record<string, string> = { visibility, process };
@@ -1154,14 +1154,14 @@ export const CreateLeia: React.FC = () => {
 
   // Funciones para manejar cambios de process
   const handleProblemProcessChange = (
-    process: "all" | "requirements-elicitation" | "game" | "other",
+    process: "all" | "requirements-elicitation" | "game" | "design-patterns" | "other",
   ) => {
     setProblemProcess(process);
     loadProblems(problemVisibility, process); // Solo recargar problems
   };
 
   const handleBehaviourProcessChange = (
-    process: "all" | "requirements-elicitation" | "game" | "other",
+    process: "all" | "requirements-elicitation" | "game" | "design-patterns" | "other",
   ) => {
     setBehaviourProcess(process);
     loadBehaviours(behaviourVisibility, process); // Solo recargar behaviours
@@ -2166,8 +2166,8 @@ const openGenerateProblemModal = () => {
   );
 
   const MuiProcessSelector: React.FC<{
-    value: "all" | "requirements-elicitation" | "game" | "other";
-    onChange: (value: "all" | "requirements-elicitation" | "game" | "other") => void;
+    value: "all" | "requirements-elicitation" | "game" | "design-patterns" | "other";
+    onChange: (value: "all" | "requirements-elicitation" | "game" | "design-patterns" | "other") => void;
   }> = ({ value, onChange }) => (
     <TextField
       select
@@ -2176,7 +2176,7 @@ const openGenerateProblemModal = () => {
       value={value}
       onChange={(event) =>
         onChange(
-          event.target.value as "all" | "requirements-elicitation" | "game" | "other",
+          event.target.value as "all" | "requirements-elicitation" | "game" | "design-patterns" | "other",
         )
       }
       sx={{ minWidth: 132 }}
@@ -2184,6 +2184,7 @@ const openGenerateProblemModal = () => {
       <MenuItem value="all">All</MenuItem>
       <MenuItem value="requirements-elicitation">Req. elicitation</MenuItem>
       <MenuItem value="game">Game</MenuItem>
+      <MenuItem value="design-patterns">Design Patterns</MenuItem>
       <MenuItem value="other">Other</MenuItem>
     </TextField>
   );

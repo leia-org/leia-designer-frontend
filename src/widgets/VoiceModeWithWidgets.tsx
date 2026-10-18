@@ -14,6 +14,7 @@ export interface VoiceModeRenderArgs {
 
 interface VoiceModeWithWidgetsProps {
     widgets: WidgetDefinition[];
+    sessionId?: string | null;
     children: (args: VoiceModeRenderArgs) => ReactNode;
 }
 
@@ -30,9 +31,9 @@ function InnerBridge({ children }: { children: (args: VoiceModeRenderArgs) => Re
 
 // Mounts a set of widgets in a WidgetsProvider and exposes their composed
 // tools map plus the rendered slot nodes via a render-prop.
-export function VoiceModeWithWidgets({ widgets, children }: VoiceModeWithWidgetsProps) {
+export function VoiceModeWithWidgets({ widgets, sessionId, children }: VoiceModeWithWidgetsProps) {
     return (
-        <WidgetsProvider widgets={widgets}>
+        <WidgetsProvider widgets={widgets} sessionId={sessionId}>
             <InnerBridge>{children}</InnerBridge>
         </WidgetsProvider>
     );
