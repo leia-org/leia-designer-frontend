@@ -38,6 +38,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Test preview routing
+        run: npm run test:preview
+
       - name: Build
         env:
           CI: true
