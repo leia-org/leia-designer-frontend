@@ -174,6 +174,14 @@ existente de `pre.designer.leia.ovh` debe migrarse de Heroku a esta ruta una vez
 validado el preview `pre`; los registros específicos de los backends se conservan.
 Cloudflare gestiona el DNS y el certificado de los dominios de preview.
 
+Para conservar un CNAME explícito del entorno estable, apuntarlo a
+`pre-leia-designer-frontend.experimentia.workers.dev` con proxy activado.
+El dominio wildcard del Worker selecciona el preview `pre` por el hostname.
+No modificar los registros DNS específicos de las APIs. La sitekey del build
+y el secreto de Turnstile en Auth deben pertenecer al mismo widget de pre;
+autorizar `designer.leia.ovh` y `workbench.leia.ovh` permite también sus
+subdominios de PR.
+
 El comando de previews obtiene el número de PR mediante la API pública de
 GitHub, sin tokens adicionales. Detiene el despliegue si GitHub no responde o
 si hay una asociación ambigua. `develop` siempre usa el nombre `pre` y `main`
