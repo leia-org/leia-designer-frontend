@@ -1,12 +1,12 @@
 # LEIA Designer frontend
 
-Aplicación React, TypeScript y Vite. El build genera `dist/`, que se puede
-publicar en Cloudflare Workers con Static Assets o en Cloudflare Pages.
-Los servicios de API y autenticación se despliegan por separado.
+React, TypeScript, and Vite application. Builds produce `dist/`, which can be
+deployed to Cloudflare Workers with Static Assets or to Cloudflare Pages.
+The API and authentication services are deployed separately.
 
-## Desarrollo
+## Development
 
-Requiere Node.js 22 o posterior. `.nvmrc` selecciona Node.js 22.
+Requires Node.js 22 or later. `.nvmrc` selects Node.js 22.
 
 ```sh
 nvm use
@@ -15,104 +15,102 @@ cp .env.example .env
 npm run dev
 ```
 
-## Configuración de producción
+## Production configuration
 
-Para un build local, copiar `.env.production.example` a `.env.production.local`
-y sustituir los dominios de ejemplo por los reales. En Cloudflare, definir estas
-mismas variables en la configuración del **build**, tanto para producción como
-para los previews que se vayan a utilizar.
+For a local build, copy `.env.production.example` to `.env.production.local`
+and replace the example domains with the actual ones. In Cloudflare, configure
+these values as **build variables** for production and any previews you use.
 
-| Variable | Valor |
+| Variable | Value |
 | --- | --- |
-| `VITE_APP_BACKEND` | URL HTTPS de la API de Designer, sin barra final. |
-| `VITE_AUTH_SERVICE_BACKEND` | URL HTTPS del servicio de autenticación, sin barra final. |
-| `VITE_WORKBENCH_URL` | URL HTTPS del frontend Workbench. |
-| `VITE_TURNSTILE_ENABLED` | `true`, o `false` si también está desactivado en el backend. |
-| `VITE_CLOUDFLARE_SITE_KEY` | Clave pública de Turnstile para el dominio desplegado. |
+| `VITE_APP_BACKEND` | HTTPS URL of the Designer API, without a trailing slash. |
+| `VITE_AUTH_SERVICE_BACKEND` | HTTPS URL of the authentication service, without a trailing slash. |
+| `VITE_WORKBENCH_URL` | HTTPS URL of the Workbench frontend. |
+| `VITE_IMAGE_PUBLIC_URL` | Public HTTPS URL used to serve images. |
+| `VITE_TURNSTILE_ENABLED` | `true`, or `false` if Turnstile is also disabled in the backend. |
+| `VITE_CLOUDFLARE_SITE_KEY` | Public Turnstile site key for the deployed hostname. |
 
-Vite incorpora `VITE_*` al JavaScript público durante la compilación. Cambiar
-estas variables requiere otro build y despliegue; configurarlas solo como
-variables de ejecución del Worker no cambia el frontend. Las claves privadas y
-la clave secreta de Turnstile pertenecen a los backends.
+Vite embeds `VITE_*` values in the public JavaScript bundle during the build.
+Changing them requires a new build and deployment. Worker runtime variables
+alone do not update the frontend. Private keys and the Turnstile secret belong
+in the backend services.
 
-Autorizar el origen HTTPS del frontend en el CORS de las APIs y el dominio en
-Turnstile. Para Workbench, permitir también ese origen en el servidor Socket.IO.
+Allow the frontend's HTTPS origin in the APIs' CORS configuration and authorize
+its hostname in Turnstile. Workbench also needs its origin allowed by Socket.IO.
 
-## Llamadas API al dominio del frontend
+## API requests reaching the frontend hostname
 
-Si una petición como `/api/v1/apikeys` sale hacia el dominio del frontend,
-comprobar `VITE_AUTH_SERVICE_BACKEND` en las variables del **build**. Esa ruta
-pertenece al servicio de autenticación; `VITE_APP_BACKEND` apunta a la API de
-esta aplicación. Ambas deben contener URLs absolutas, con `https://`.
-Guardar las variables en Cloudflare y ejecutar un nuevo build y despliegue.
+If a request such as `/api/v1/apikeys` reaches the frontend hostname, check
+`VITE_AUTH_SERVICE_BACKEND` in the **build variables**. That route belongs to
+the authentication service; `VITE_APP_BACKEND` points to this application's API.
+Both values must be absolute HTTP(S) URLs. Save the build variables in Cloudflare,
+then rebuild and redeploy.
 
-Los builds de Workers y Pages fallan si faltan URLs requeridas o si no son
-URLs HTTP(S), o si Turnstile está habilitado sin clave pública. Así se evita
-publicar un frontend que use por error rutas relativas para llamar a la API.
+Workers and Pages builds fail when required backend URLs are missing or invalid,
+or when Turnstile is enabled without a public site key. This prevents deployments
+that would accidentally use relative API URLs.
 
-## Turnstile sin clave en el frontend
+## Missing Turnstile site key
 
-Si aparece `Invalid or missing type for parameter "sitekey"`, añadir
-`VITE_CLOUDFLARE_SITE_KEY` en **Settings > Build > Build Variables and Secrets**
-y volver a compilar y desplegar. Usar la clave pública del widget de Turnstile
-que corresponde al backend, con el dominio del frontend autorizado. Configurarla
-solo en **Variables & Secrets** del Worker o en `vars` de Wrangler no la incorpora
-al JavaScript de Vite.
+If Turnstile reports `Invalid or missing type for parameter "sitekey"`, add
+`VITE_CLOUDFLARE_SITE_KEY` under **Settings > Build > Build Variables and Secrets**,
+then rebuild and redeploy. The public site key and the backend's secret must
+belong to the same widget, with the frontend hostname authorized.
 
-Cuando Turnstile está habilitado y falta la clave pública, el formulario muestra
-un aviso y mantiene el acceso pendiente de verificación.
+Adding the value only to the Worker's **Variables & Secrets** or Wrangler's
+`vars` does not include it in the Vite bundle.
 
 ## Cloudflare Workers
 
-`wrangler.workers.jsonc` publica `dist/` como Static Assets y activa el fallback de SPA
-para que las rutas de React Router funcionen al abrirlas directamente o recargar.
+`wrangler.workers.jsonc` serves `dist/` as Static Assets and enables the SPA
+fallback so React Router routes work when opened directly or refreshed.
 
 ```sh
 npx wrangler login
 npm run deploy:workers
 ```
 
-`npm run deploy` es un alias de `deploy:workers`. El nombre del Worker es
-`leia-designer-frontend`; se puede cambiar en `wrangler.workers.jsonc`.
-Para comprobar el build con el runtime local de Cloudflare:
+`npm run deploy` is an alias for `deploy:workers`. The Worker name is
+`leia-designer-frontend`; change it in `wrangler.workers.jsonc` if needed.
+To test the build with Cloudflare's local runtime:
 
 ```sh
 npm run preview:workers
 ```
 
-Para conectar el repositorio a **Workers Builds**:
+Connect this repository to **Workers Builds** with these settings:
 
-| Ajuste | Valor |
+| Setting | Value |
 | --- | --- |
-| Rama de producción | `main` |
-| Directorio raíz | Raíz de este repositorio |
+| Production branch | `main` |
+| Root directory | Repository root |
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy --config wrangler.workers.jsonc` |
 | Node.js | `NODE_VERSION=22` |
 
-Añadir las variables `VITE_*` del apartado anterior a las variables del build.
-El nombre del proyecto de Workers debe coincidir con `name` en `wrangler.workers.jsonc`.
+Add the `VITE_*` values listed above to the build variables. The Workers project
+name must match `name` in `wrangler.workers.jsonc`.
 
 ## Cloudflare Pages
 
-En Pages, conectar este repositorio con estos ajustes:
+Connect this repository to Pages with these settings:
 
-| Ajuste | Valor |
+| Setting | Value |
 | --- | --- |
-| Rama de producción | `main` |
-| Directorio raíz | Raíz de este repositorio |
+| Production branch | `main` |
+| Root directory | Repository root |
 | Framework preset | React (Vite) |
 | Build command | `npm run build` |
 | Build output directory | `dist` |
 | Node.js | `NODE_VERSION=22` |
 
-Añadir las variables `VITE_*` en el entorno de compilación. Pages sirve la SPA
-automáticamente porque `dist/` contiene `index.html` y no tiene `404.html`.
-Pages utiliza `wrangler.jsonc`; los comandos de Workers seleccionan explícitamente
-`wrangler.workers.jsonc`, para mantener ambas opciones independientes.
+Set the `VITE_*` variables in the build environment. Pages serves the SPA
+automatically because `dist/` contains `index.html` and no `404.html`.
+Pages uses `wrangler.jsonc`; Workers commands explicitly select
+`wrangler.workers.jsonc` so the two deployment options remain independent.
 
-Para publicar desde terminal, crear el proyecto una sola vez (omitir la creación
-si ya existe) y desplegar:
+For a terminal deployment, create the project once, unless it already exists,
+then deploy:
 
 ```sh
 npx wrangler login
@@ -120,25 +118,25 @@ npx wrangler pages project create leia-designer-frontend --production-branch mai
 npm run deploy:pages
 ```
 
-Si el proyecto ya existe con otro nombre, actualizar `name` en
-`wrangler.jsonc`. Para probar Pages localmente:
+If the project already exists under another name, update `name` in
+`wrangler.jsonc`. To test Pages locally:
 
 ```sh
 npm run preview:pages
 ```
 
-## Validación
+## Validation
 
 ```sh
 npm run build
 npx wrangler deploy --config wrangler.workers.jsonc --dry-run
 ```
 
-Los comandos de despliegue compilan antes de publicar. Para CI se pueden usar
-`CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` en lugar del login interactivo.
-`npm start` mantiene el servidor Express para otros entornos; Cloudflare sirve
-los archivos de `dist/` directamente.
+Deployment commands build the application before publishing it. CI can use
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` instead of interactive login.
+`npm start` retains the Express server for other hosting environments;
+Cloudflare serves the files in `dist/` directly.
 
-Referencias: [Workers SPA](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/),
-[build de Pages](https://developers.cloudflare.com/pages/configuration/build-configuration/) y
-[rutas SPA de Pages](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering).
+References: [Workers SPA routing](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/),
+[Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/),
+and [Pages SPA routing](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering).
