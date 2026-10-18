@@ -140,3 +140,73 @@ Cloudflare serves the files in `dist/` directly.
 References: [Workers SPA routing](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/),
 [Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/),
 and [Pages SPA routing](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering).
+## Pre and linked pull request previews
+
+`main` serves production. `develop` automatically updates the stable pre site.
+Eligible PRs targeting `develop` are reconciled by **leia-org-bot** through the
+[central coordinator](https://github.com/leia-org/leia-infrastructure-docker/tree/main/previews)
+every five minutes. Authors must be active members of `leia-org`, and source
+branches must belong to this repository.
+
+| Source | URL |
+| --- | --- |
+| `develop` | `https://pre.designer.leia.ovh` |
+| Open PR targeting `develop`, such as #123 | `https://pre-123.designer.leia.ovh` |
+
+A frontend PR can open by itself: it uses the stable pre APIs and creates no
+backend application or database. The bot adds a managed environment block to its
+body and updates one status comment with services, commits and URLs.
+
+When a related backend PR exists, add its full GitHub URL to `pull_requests` in
+**either** PR's managed block, or reuse the first environment name. The bot
+validates and synchronizes both bodies. PR numbers and branch names never imply
+a link. A backend added later deploys first; the coordinator then rebuilds the
+unchanged frontend commit with the new API URL and republishes the same PR URL.
+Only selected backend services run. Unchanged services use pre. Designer opens
+stable Workbench by default unless a Workbench frontend PR is explicitly linked.
+
+Selected MongoDB services receive isolated copies of their pre data, seeded once.
+New records are not synchronized to pre, and calls handled by shared pre services
+can still modify pre. Use explicit full isolation for cross-service flows that
+need all writes and callbacks inside the preview. See the coordinator documentation
+for the manifest template, data behavior and service capacity limit.
+
+Closing a PR reconciles the remaining links and URLs. The coordinator removes its
+owned frontend preview and removes backend resources and copied data when they
+are no longer needed. Server capacity can queue backend environments; frontend-only
+previews do not consume that limit. The bot reports readiness and queued or failed
+states on the PR.
+
+### Native Cloudflare builds for stable pre
+
+Production build settings remain as documented above. Under **Settings > Builds >
+Previews Base**, keep preview builds enabled, set the pre `VITE_*` build values,
+and add `SKIP_DEPENDENCY_INSTALL=true`. Use these trusted dashboard commands so
+non-develop branches run neither dependency installation nor repository scripts
+and cannot overwrite the coordinator's planned API URLs:
+
+```sh
+# Build command
+if [ "$WORKERS_CI_BRANCH" = develop ]; then npm ci --include=dev && npm run build:pre; else echo "PR previews are managed by leia-org-bot"; fi
+# Preview command
+if [ "$WORKERS_CI_BRANCH" = develop ]; then npm run deploy:preview; else echo "PR previews are managed by leia-org-bot"; fi
+```
+
+Use `/` as the root directory. Preview build variables are independent of
+production values and are embedded by Vite at build time; do not put them in
+Wrangler's runtime `vars` block. Under **Domains**, enable **Production and Preview**
+for `designer.leia.ovh`; Cloudflare manages its wildcard preview domain and TLS.
+Keep the API services' specific DNS records intact. The pre Turnstile site key and
+Auth secret must belong to the same widget, with the preview hostnames authorized.
+The APIs and Workbench Socket.IO must allow the preview frontend origins.
+
+Stable pre sites and PR previews are public. Cloudflare Access is deferred; private
+email allowlists and deployment credentials are not stored in this repository.
+
+For a local build, copy `.env.pre.example` to `.env.pre.local` and fill in the
+public build values:
+
+```sh
+npm run test:preview
+npm run build:pre
+```
