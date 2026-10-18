@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const repository = 'leia-org/leia-designer-frontend';
 const hostname = 'designer.leia.ovh';
 
-export function resolvePreviewName(branch, pullRequests, expectedRepository = repository) {
+export function resolvePreviewName(branch, pullRequests, expectedRepository = repository, headSha) {
   if (!branch || branch === 'HEAD' || branch === 'main') {
     throw new Error('A named non-production branch is required. Production uses wrangler deploy.');
   }
@@ -13,7 +13,9 @@ export function resolvePreviewName(branch, pullRequests, expectedRepository = re
 
   const matches = pullRequests.filter((pr) =>
     pr.state === 'open' && pr.base?.ref === 'develop' &&
-    pr.head?.ref === branch && pr.head?.repo?.full_name === expectedRepository &&
+    pr.head?.ref === branch &&
+    (pr.head?.repo?.full_name === expectedRepository ||
+      (/^[a-f0-9]{40}$/.test(headSha || '') && pr.head?.sha === headSha)) &&
     Number.isSafeInteger(pr.number) && pr.number > 0
   );
   if (matches.length > 1) throw new Error('More than one open PR matches this branch.');
@@ -25,19 +27,22 @@ export function resolvePreviewName(branch, pullRequests, expectedRepository = re
 }
 
 export async function findPullRequests(branch, fetcher = fetch) {
-  const owner = repository.split('/')[0];
-  const url = new URL(`https://api.github.com/repos/${repository}/pulls`);
-  url.search = new URLSearchParams({ state: 'open', base: 'develop', head: `${owner}:${branch}`, per_page: '100' });
-  const response = await fetcher(url, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LEIA-Cloudflare-Previews' },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) {
-    throw new Error(`Cannot resolve the PR number from GitHub (HTTP ${response.status}). No preview was deployed.`);
+  const matches = [];
+  for (let page = 1; ; page += 1) {
+    const url = new URL(`https://api.github.com/repos/${repository}/pulls`);
+    url.search = new URLSearchParams({ state: 'open', base: 'develop', per_page: '100', page: String(page) });
+    const response = await fetcher(url, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LEIA-Cloudflare-Previews' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) {
+      throw new Error(`Cannot resolve the PR number from GitHub (HTTP ${response.status}). No preview was deployed.`);
+    }
+    const result = await response.json();
+    if (!Array.isArray(result)) throw new Error('Unexpected GitHub pull request response.');
+    matches.push(...result.filter((pr) => pr.head?.ref === branch));
+    if (result.length < 100) return matches;
   }
-  const result = await response.json();
-  if (!Array.isArray(result)) throw new Error('Unexpected GitHub pull request response.');
-  return result;
 }
 
 async function main() {
@@ -46,7 +51,8 @@ async function main() {
   // Reject main before making a network request or starting Wrangler.
   resolvePreviewName(branch, []);
   const pullRequests = branch === 'develop' ? [] : await findPullRequests(branch);
-  const name = resolvePreviewName(branch, pullRequests);
+  const headSha = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout?.trim();
+  const name = resolvePreviewName(branch, pullRequests, repository, headSha);
   const config = fileURLToPath(new URL('../wrangler.workers.jsonc', import.meta.url));
   const args = ['preview', '--config', config, '--name', name];
 
