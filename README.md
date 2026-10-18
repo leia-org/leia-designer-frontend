@@ -38,6 +38,18 @@ la clave secreta de Turnstile pertenecen a los backends.
 Autorizar el origen HTTPS del frontend en el CORS de las APIs y el dominio en
 Turnstile. Para Workbench, permitir también ese origen en el servidor Socket.IO.
 
+## Llamadas API al dominio del frontend
+
+Si una petición como `/api/v1/apikeys` sale hacia el dominio del frontend,
+comprobar `VITE_AUTH_SERVICE_BACKEND` en las variables del **build**. Esa ruta
+pertenece al servicio de autenticación; `VITE_APP_BACKEND` apunta a la API de
+esta aplicación. Ambas deben contener URLs absolutas, con `https://`.
+Guardar las variables en Cloudflare y ejecutar un nuevo build y despliegue.
+
+Los builds de Workers y Pages fallan si faltan URLs requeridas o si no son
+URLs HTTP(S), o si Turnstile está habilitado sin clave pública. Así se evita
+publicar un frontend que use por error rutas relativas para llamar a la API.
+
 ## Turnstile sin clave en el frontend
 
 Si aparece `Invalid or missing type for parameter "sitekey"`, añadir
