@@ -44,13 +44,14 @@ test('ambiguous PR mapping stops instead of overwriting an arbitrary preview', (
   assert.throws(() => resolvePreviewName('feature/example', [pr(1), pr(2)]), /More than one/);
 });
 
-test('GitHub lookup uses the exact branch and develop base without credentials', async () => {
+test('GitHub lookup filters exact branches including forks without credentials', async () => {
   const result = await findPullRequests('feature/a&b', async (url, options) => {
     assert.equal(url.hostname, 'api.github.com');
-    assert.equal(url.searchParams.get('head'), 'leia-org:feature/a&b');
+    assert.equal(url.searchParams.has('head'), false);
+    assert.equal(url.searchParams.get('page'), '1');
     assert.equal(url.searchParams.get('base'), 'develop');
     assert.equal(options.headers.Authorization, undefined);
-    return { ok: true, json: async () => [pr(123)] };
+    return { ok: true, json: async () => [pr(123, 'feature/a&b'), pr(456, 'other')] };
   });
   assert.equal(result[0].number, 123);
 });
@@ -58,4 +59,29 @@ test('GitHub lookup uses the exact branch and develop base without credentials',
 test('GitHub failures stop deployment and never select a misleading PR number', async () => {
   await assert.rejects(findPullRequests('feature/example', async () => ({ ok: false, status: 403 })), /HTTP 403/);
   await assert.rejects(findPullRequests('feature/example', async () => ({ ok: true, json: async () => ({}) })), /Unexpected/);
+});
+
+
+test('fork PRs require the exact checked out head commit', () => {
+  const sha = 'a'.repeat(40);
+  const fork = pr(101, 'feature/example', {
+    head: { ref: 'feature/example', sha, repo: { full_name: 'contributor/fork' } },
+  });
+  assert.equal(resolvePreviewName('feature/example', [fork], repo, sha), 'pre-101');
+  for (const head of [undefined, 'invalid', 'b'.repeat(40)]) {
+    assert.match(resolvePreviewName('feature/example', [fork], repo, head), /^branch-/);
+  }
+});
+
+test('GitHub lookup searches subsequent pages for older open PRs', async () => {
+  const seen = [];
+  const result = await findPullRequests('old-branch', async (url) => {
+    const page = url.searchParams.get('page');
+    seen.push(page);
+    return { ok: true, json: async () => page === '1'
+      ? Array.from({ length: 100 }, (_, i) => pr(i + 1, 'other'))
+      : [pr(101, 'old-branch')] };
+  });
+  assert.deepEqual(seen, ['1', '2']);
+  assert.equal(result[0].number, 101);
 });
