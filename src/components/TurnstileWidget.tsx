@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { isTurnstileEnabled, turnstileSiteKey } from "../config/turnstile";
 
 declare global {
   interface Window {
@@ -28,6 +29,10 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isTurnstileEnabled || !turnstileSiteKey) {
+      return;
+    }
+
     let widgetId: string | undefined;
     let intervalId: number | undefined;
 
@@ -37,7 +42,7 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
       }
 
       widgetId = window.turnstile.render(containerRef.current, {
-        sitekey: import.meta.env.VITE_CLOUDFLARE_SITE_KEY,
+        sitekey: turnstileSiteKey,
         callback: onTokenChange,
         "expired-callback": () => onTokenChange(""),
         "error-callback": () => onTokenChange(""),
@@ -64,6 +69,18 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
       }
     };
   }, [onTokenChange]);
+
+  if (!isTurnstileEnabled) {
+    return null;
+  }
+
+  if (!turnstileSiteKey) {
+    return (
+      <p role="alert" className="text-center text-sm text-red-600">
+        Verification is temporarily unavailable. Please try again later.
+      </p>
+    );
+  }
 
   return <div ref={containerRef} className="flex justify-center"></div>;
 };

@@ -38,6 +38,18 @@ la clave secreta de Turnstile pertenecen a los backends.
 Autorizar el origen HTTPS del frontend en el CORS de las APIs y el dominio en
 Turnstile. Para Workbench, permitir también ese origen en el servidor Socket.IO.
 
+## Turnstile sin clave en el frontend
+
+Si aparece `Invalid or missing type for parameter "sitekey"`, añadir
+`VITE_CLOUDFLARE_SITE_KEY` en **Settings > Build > Build Variables and Secrets**
+y volver a compilar y desplegar. Usar la clave pública del widget de Turnstile
+que corresponde al backend, con el dominio del frontend autorizado. Configurarla
+solo en **Variables & Secrets** del Worker o en `vars` de Wrangler no la incorpora
+al JavaScript de Vite.
+
+Cuando Turnstile está habilitado y falta la clave pública, el formulario muestra
+un aviso y mantiene el acceso pendiente de verificación.
+
 ## Cloudflare Workers
 
 `wrangler.workers.jsonc` publica `dist/` como Static Assets y activa el fallback de SPA

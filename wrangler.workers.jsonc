@@ -2,13 +2,6 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "leia-designer-frontend",
   "compatibility_date": "2026-10-18",
-  "vars": {
-    "VITE_APP_BACKEND": "https://backend.designer.leia.ovh",
-    "VITE_AUTH_SERVICE_BACKEND": "https://leia-auth-prod-f34210c27836.herokuapp.com",
-    "VITE_IMAGE_PUBLIC_URL": "https://images.leia.ovh",
-    "VITE_TURNSTILE_ENABLED": "true",
-    "VITE_WORKBENCH_URL": "https://workbench.leia.ovh"
-  },
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
