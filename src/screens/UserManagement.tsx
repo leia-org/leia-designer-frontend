@@ -66,7 +66,7 @@ const emptyForm = (): UserFormData => ({
   role: "instructor",
   password: "",
   confirmPassword: "",
-  useSystemApiKey: false,
+  useSystemApiKey: true,
 });
 
 const roleLabel = (role: UserResponse["role"]) => {

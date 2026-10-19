@@ -188,13 +188,13 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "list_behaviours",
     description:
-      "Lists existing behaviours that can be reused. You MUST call this, wait for its result and inspect it before apply_behaviour. Select one whose role and process fit the final problem instead of creating a near-duplicate.",
+      "Lists existing behaviours that can be reused. You MUST call this, wait for its result and inspect it before apply_behaviour. Reuse one only when its full instructions fit the exact selected Problem, including its real task and subject; a matching role, technology or process alone is not enough.",
     parameters: { type: "object", properties: {} },
   },
   {
     name: "use_behaviour",
     description:
-      "Selects an existing behaviour by id from list_behaviours. Its process must exactly match the selected problem process.",
+      "Selects an existing behaviour by id from list_behaviours only when its full instructions fit the exact selected Problem. Its process must exactly match the selected problem process, but matching process alone is not enough.",
     parameters: {
       type: "object",
       properties: {
@@ -206,7 +206,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_behaviour",
     description:
-      "Writes a NEW, COMPLETE behaviour into the editor. Call list_behaviours first and use this only when no existing behaviour has a compatible role and the exact same process as the selected problem. Avoid exercise-specific details when a reusable role definition is enough. Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
+      "Writes a NEW, COMPLETE behaviour into the editor for the exact current Problem. Include its real task, subject, and technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. Call list_behaviours first and use this only when no existing behaviour's full instructions fit this exact Problem. Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {

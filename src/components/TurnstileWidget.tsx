@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Box } from "@mui/material";
-import { turnstileSiteKey } from "../config/turnstile";
+import { Alert, Box } from "@mui/material";
+import { turnstileSiteKey, turnstileState } from "../config/turnstile";
 
 declare global {
   interface Window {
@@ -30,6 +30,10 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (turnstileState !== "ready") {
+      return;
+    }
+
     let widgetId: string | undefined;
     let intervalId: number | undefined;
 
@@ -66,6 +70,18 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
       }
     };
   }, [onTokenChange]);
+
+  if (turnstileState === "disabled") {
+    return null;
+  }
+
+  if (turnstileState === "unavailable") {
+    return (
+      <Alert severity="error" sx={{ justifyContent: "center" }}>
+        Verification is temporarily unavailable. Please try again later.
+      </Alert>
+    );
+  }
 
   return <Box ref={containerRef} sx={{ display: "flex", justifyContent: "center" }} />;
 };
