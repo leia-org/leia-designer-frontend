@@ -178,9 +178,9 @@ interface CreateLeiaDraftState {
   personaPublish: boolean;
 }
 
-const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Library management system";
 const DEFAULT_PROBLEM_GENERATION_DETAILS =
-  "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+  "Include catalog, loans, reservations, member accounts, and overdue notifications.";
 
 const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
 const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =

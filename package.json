@@ -16,7 +16,8 @@
     "preview:pages": "npm run build && wrangler pages dev",
     "build:pre": "tsc -b && vite build --mode pre",
     "deploy:preview": "node scripts/cloudflare-preview.mjs",
-    "test:preview": "node --test tests/cloudflare-preview.test.mjs"
+    "test:preview": "node --test tests/cloudflare-preview.test.mjs",
+    "test:turnstile": "node --test tests/turnstile-policy.test.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
