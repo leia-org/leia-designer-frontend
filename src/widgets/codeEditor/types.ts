@@ -24,7 +24,7 @@ export interface TestRunSummary {
 }
 
 /** Editor language. "text" is a plain-text editor with no execution/tests. */
-export type EditorLanguage = "javascript" | "python" | "text";
+export type EditorLanguage = "javascript" | "python" | "text" | "java" | "rust";
 
 export interface ProblemDef {
     /** Function name the user must implement. */
@@ -36,6 +36,7 @@ export interface ProblemDef {
         javascript: string;
         python: string;
         text?: string;
+        java: string;
     };
     tests: TestCase[];
 }

@@ -3,7 +3,7 @@ import type { FC, ComponentType } from "react";
 import { Editor } from "@monaco-editor/react";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import { Box, Button, IconButton, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Autocomplete, Box, Button, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import { CodeEditorWidget } from "./CodeEditorWidget";
 import type { SlotId, WidgetDefinition } from "./types";
 import type { EditorLanguage } from "./codeEditor/types";
@@ -60,9 +60,17 @@ interface CodeEditorParams {
   fnName: string;
   description: string;
   language: EditorLanguage;
-  starter: { javascript: string; python: string; text?: string };
+  starter: { javascript: string; python: string; java: string; rust: string; text?: string };
   tests: Array<{ name: string; args: unknown[]; expected: unknown }>;
 }
+
+const LANGUAGE_OPTIONS: { value: EditorLanguage; label: string }[] = [
+  { value: "javascript", label: "JavaScript" },
+  { value: "python", label: "Python" },
+  { value: "text", label: "Plain text" },
+  { value: "java", label: "Java" },
+  { value: "rust", label: "Rust" },
+];
 
 const CODE_EDITOR_DEFAULT: CodeEditorParams = {
   fnName: "twoSum",
@@ -73,6 +81,8 @@ const CODE_EDITOR_DEFAULT: CodeEditorParams = {
     javascript:
       "function twoSum(nums, target) {\n    // your code here\n    return [];\n}\n",
     python: "def twoSum(nums, target):\n    # your code here\n    return []\n",
+    java: "public int[] twoSum(int[] nums, int target) {\n    // your code here\n    return new int[0];\n}\n",
+    rust: "fn twoSum(nums: &[i32], target: i32) -> [i32; 2] {\n    // your code here\n    [0, 0]\n}\n",
     text: "",
   },
   tests: [
@@ -87,7 +97,7 @@ function asCodeEditorParams(value: Record<string, unknown> | undefined): CodeEdi
   if (!value) return def;
   const v = value as Partial<CodeEditorParams>;
   const language: EditorLanguage =
-    v.language === "python" || v.language === "text" ? v.language : "javascript";
+    v.language === "python" || v.language === "text" ||v.language === "rust" || v.language === "java" ? v.language : "javascript";
   return {
     fnName: typeof v.fnName === "string" ? v.fnName : def.fnName,
     description: typeof v.description === "string" ? v.description : def.description,
@@ -95,6 +105,8 @@ function asCodeEditorParams(value: Record<string, unknown> | undefined): CodeEdi
     starter: {
       javascript: v.starter?.javascript ?? def.starter.javascript,
       python: v.starter?.python ?? def.starter.python,
+      java: v.starter?.java ?? def.starter.java,
+      rust: v.starter?.rust ?? def.starter.rust,
       text: v.starter?.text ?? def.starter.text ?? "",
     },
     tests: Array.isArray(v.tests) ? v.tests : def.tests,
@@ -103,7 +115,6 @@ function asCodeEditorParams(value: Record<string, unknown> | undefined): CodeEdi
 
 const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) => {
   const params = asCodeEditorParams(value);
-
   const update = (patch: Partial<CodeEditorParams>) => {
     onChange({ ...params, ...patch });
   };
@@ -133,18 +144,17 @@ const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) =>
 
   return (
     <Stack spacing={2} sx={{ mt: 1 }}>
-      <TextField
-        select
-        label="Language"
-        size="small"
-        value={params.language}
-        onChange={(event) => update({ language: event.target.value as EditorLanguage })}
+      <Autocomplete
+        options={LANGUAGE_OPTIONS}
+        value={LANGUAGE_OPTIONS.find((option) => option.value === params.language) ?? null}
+        onChange={(_, option) => {
+          if (option) update({ language: option.value });
+        }}
+        renderInput={(inputParams) => (
+          <TextField {...inputParams} label="Language" placeholder="Search language..." size="small" />
+        )}
         fullWidth
-      >
-        <MenuItem value="javascript">JavaScript</MenuItem>
-        <MenuItem value="python">Python</MenuItem>
-        <MenuItem value="text">Plain text</MenuItem>
-      </TextField>
+      />
       <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
         The student works in this language and cannot change it. Plain text has no tests/execution.
       </Typography>
