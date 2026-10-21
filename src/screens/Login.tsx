@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
   Alert,
@@ -24,6 +24,8 @@ import { isTurnstileEnabled } from "../config/turnstile";
 
 export const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const chooseTestAccount = searchParams.get("testAccount") === "1";
   const { login, token } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,8 +41,8 @@ export const Login = () => {
   }, []);
 
   useEffect(() => {
-    if (token) navigate("/", { replace: true });
-  }, [navigate, token]);
+    if (token && !chooseTestAccount) navigate("/", { replace: true });
+  }, [navigate, token, chooseTestAccount]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
