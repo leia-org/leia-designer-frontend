@@ -1,6 +1,9 @@
 import { useState } from "react";
 import type { FC, ComponentType } from "react";
 import { Editor } from "@monaco-editor/react";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import { Box, Button, IconButton, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import { CodeEditorWidget } from "./CodeEditorWidget";
 import type { SlotId, WidgetDefinition } from "./types";
 import type { EditorLanguage } from "./codeEditor/types";
@@ -129,94 +132,87 @@ const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) =>
   const monacoLang = isText ? "plaintext" : params.language;
 
   return (
-    <div className="mt-2 space-y-3">
-      <div>
-        <label className="block text-xs font-medium text-gray-700">Language</label>
-        <select
-          value={params.language}
-          onChange={(e) => update({ language: e.target.value as EditorLanguage })}
-          className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-sm"
-        >
-          <option value="javascript">JavaScript</option>
-          <option value="python">Python</option>
-          <option value="text">Plain text</option>
-        </select>
-        <p className="mt-1 text-[11px] text-gray-500">
-          The student works in this language and cannot change it. Plain text has no tests/execution.
-        </p>
-      </div>
+    <Stack spacing={2} sx={{ mt: 1 }}>
+      <TextField
+        select
+        label="Language"
+        size="small"
+        value={params.language}
+        onChange={(event) => update({ language: event.target.value as EditorLanguage })}
+        fullWidth
+      >
+        <MenuItem value="javascript">JavaScript</MenuItem>
+        <MenuItem value="python">Python</MenuItem>
+        <MenuItem value="text">Plain text</MenuItem>
+      </TextField>
+      <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+        The student works in this language and cannot change it. Plain text has no tests/execution.
+      </Typography>
 
       {!isText && (
-        <div>
-          <label className="block text-xs font-medium text-gray-700">Function name</label>
-          <input
-            type="text"
-            value={params.fnName}
-            onChange={(e) => update({ fnName: e.target.value })}
-            className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-sm font-mono"
-            placeholder="twoSum"
-          />
-        </div>
+        <TextField
+          label="Function name"
+          value={params.fnName}
+          onChange={(event) => update({ fnName: event.target.value })}
+          placeholder="twoSum"
+          fullWidth
+          sx={{ "& .MuiInputBase-input": { fontFamily: "'JetBrains Mono Variable', monospace" } }}
+        />
       )}
 
-      <div>
-        <label className="block text-xs font-medium text-gray-700">
-          {isText ? "Statement / instructions" : "Problem description"}
-        </label>
-        <textarea
-          value={params.description}
-          onChange={(e) => update({ description: e.target.value })}
-          className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-sm"
-          rows={3}
-          placeholder="Given an array..."
-        />
-      </div>
+      <TextField
+        label={isText ? "Statement / instructions" : "Problem description"}
+        value={params.description}
+        onChange={(event) => update({ description: event.target.value })}
+        placeholder="Given an array..."
+        multiline
+        rows={3}
+        fullWidth
+      />
 
-      <div>
-        <label className="block text-xs font-medium text-gray-700">
+      <Box>
+        <Typography variant="caption" fontWeight={600}>
           {isText ? "Starter text" : "Starter code"}
-        </label>
-        <div className="mt-1 border border-gray-300 rounded overflow-hidden">
+        </Typography>
+        <Paper variant="outlined" sx={{ mt: 0.75, overflow: "hidden" }}>
           <Editor
             height="120px"
             language={monacoLang}
             path={`starter.${params.language}`}
             value={params.starter[params.language] ?? ""}
-            onChange={(v) => updateStarter(params.language, v ?? "")}
+            onChange={(nextValue) => updateStarter(params.language, nextValue ?? "")}
             options={{ minimap: { enabled: false }, fontSize: 12, automaticLayout: true, scrollBeyondLastLine: false }}
           />
-        </div>
-      </div>
+        </Paper>
+      </Box>
 
       {!isText && (
-        <div>
-          <div className="flex items-center justify-between">
-            <label className="block text-xs font-medium text-gray-700">Tests</label>
-            <button
-              type="button"
-              onClick={addTest}
-              className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-            >
-              + Add test
-            </button>
-          </div>
+        <Box>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+            <Typography variant="caption" fontWeight={600}>Tests</Typography>
+            <Button type="button" size="small" variant="contained" startIcon={<AddIcon />} onClick={addTest}>
+              Add test
+            </Button>
+          </Stack>
           {params.tests.length === 0 ? (
-            <div className="text-xs text-gray-400 italic mt-2">No tests defined.</div>
+            <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1, fontStyle: "italic" }}>
+              No tests defined.
+            </Typography>
           ) : (
-            <ul className="mt-2 space-y-2">
-              {params.tests.map((t, i) => (
+            <Stack component="ul" spacing={1} sx={{ listStyle: "none", m: 0, mt: 1, p: 0 }}>
+              {params.tests.map((test, index) => (
                 <TestRow
-                  key={i}
-                  test={t}
-                  onChange={(patch) => updateTest(i, patch)}
-                  onRemove={() => removeTest(i)}
+                  key={index}
+                  test={test}
+                  onChange={(patch) => updateTest(index, patch)}
+                  onRemove={() => removeTest(index)}
                 />
               ))}
-            </ul>
+            </Stack>
           )}
-        </div>
+        </Box>
       )}
-    </div>
+    </Stack>
   );
 };
 
@@ -232,73 +228,68 @@ function TestRow({ test, onChange, onRemove }: TestRowProps) {
   const [expectedDraft, setExpectedDraft] = useState<string>(() => JSON.stringify(test.expected));
   const [expectedErr, setExpectedErr] = useState<string | null>(null);
 
-  const commitArgs = (s: string) => {
-    setArgsDraft(s);
+  const commitArgs = (draft: string) => {
+    setArgsDraft(draft);
     try {
-      const parsed = JSON.parse(s);
+      const parsed = JSON.parse(draft);
       if (!Array.isArray(parsed)) throw new Error("Must be a JSON array (the function call arguments)");
       setArgsErr(null);
       onChange({ args: parsed });
-    } catch (e) {
-      setArgsErr(e instanceof Error ? e.message : String(e));
+    } catch (error) {
+      setArgsErr(error instanceof Error ? error.message : String(error));
     }
   };
 
-  const commitExpected = (s: string) => {
-    setExpectedDraft(s);
+  const commitExpected = (draft: string) => {
+    setExpectedDraft(draft);
     try {
-      const parsed = JSON.parse(s);
+      const parsed = JSON.parse(draft);
       setExpectedErr(null);
       onChange({ expected: parsed });
-    } catch (e) {
-      setExpectedErr(e instanceof Error ? e.message : String(e));
+    } catch (error) {
+      setExpectedErr(error instanceof Error ? error.message : String(error));
     }
   };
 
   return (
-    <li className="border border-gray-200 rounded p-2 space-y-2">
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
+    <Paper component="li" variant="outlined" sx={{ p: 1.25 }}>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <TextField
           value={test.name}
-          onChange={(e) => onChange({ name: e.target.value })}
-          placeholder="test name"
-          className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs"
+          onChange={(event) => onChange({ name: event.target.value })}
+          placeholder="Test name"
+          size="small"
+          fullWidth
         />
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-xs text-red-600 hover:text-red-800 px-2"
-          title="Remove test"
-        >
-          ×
-        </button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <div>
-          <label className="block text-[11px] font-medium text-gray-600">args (JSON array)</label>
-          <input
-            type="text"
-            value={argsDraft}
-            onChange={(e) => commitArgs(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono"
-            placeholder='[[2,7,11,15], 9]'
-          />
-          {argsErr && <div className="text-[11px] text-red-600 mt-1">{argsErr}</div>}
-        </div>
-        <div>
-          <label className="block text-[11px] font-medium text-gray-600">expected (JSON)</label>
-          <input
-            type="text"
-            value={expectedDraft}
-            onChange={(e) => commitExpected(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono"
-            placeholder="[0, 1]"
-          />
-          {expectedErr && <div className="text-[11px] text-red-600 mt-1">{expectedErr}</div>}
-        </div>
-      </div>
-    </li>
+        <IconButton aria-label="Remove test" color="error" size="small" onClick={onRemove}>
+          <DeleteOutlineIcon fontSize="small" />
+        </IconButton>
+      </Stack>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1, mt: 1 }}>
+        <TextField
+          label="args (JSON array)"
+          value={argsDraft}
+          onChange={(event) => commitArgs(event.target.value)}
+          placeholder="[[2,7,11,15], 9]"
+          error={Boolean(argsErr)}
+          helperText={argsErr}
+          size="small"
+          fullWidth
+          sx={{ "& .MuiInputBase-input": { fontFamily: "'JetBrains Mono Variable', monospace" } }}
+        />
+        <TextField
+          label="expected (JSON)"
+          value={expectedDraft}
+          onChange={(event) => commitExpected(event.target.value)}
+          placeholder="[0, 1]"
+          error={Boolean(expectedErr)}
+          helperText={expectedErr}
+          size="small"
+          fullWidth
+          sx={{ "& .MuiInputBase-input": { fontFamily: "'JetBrains Mono Variable', monospace" } }}
+        />
+      </Box>
+    </Paper>
   );
 }
 
@@ -312,31 +303,27 @@ const JsonParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) => {
       const parsed = draft.trim() === "" ? {} : JSON.parse(draft);
       setErr(null);
       onChange(parsed);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : String(error));
     }
   };
 
   return (
-    <div>
-      <div className="border border-gray-300 rounded overflow-hidden">
+    <Box>
+      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
         <Editor
           height="180px"
           defaultLanguage="json"
           value={draft}
-          onChange={(v) => setDraft(v ?? "")}
+          onChange={(nextValue) => setDraft(nextValue ?? "")}
           options={{ minimap: { enabled: false }, fontSize: 12, automaticLayout: true }}
         />
-      </div>
-      {err && <div className="text-xs text-red-600 mt-1">JSON error: {err}</div>}
-      <button
-        type="button"
-        onClick={apply}
-        className="mt-2 text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-      >
+      </Paper>
+      {err && <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5 }}>JSON error: {err}</Typography>}
+      <Button type="button" variant="contained" size="small" sx={{ mt: 1 }} onClick={apply}>
         Apply
-      </button>
-    </div>
+      </Button>
+    </Box>
   );
 };
 

@@ -140,3 +140,70 @@ Cloudflare serves the files in `dist/` directly.
 References: [Workers SPA routing](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/),
 [Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/),
 and [Pages SPA routing](https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering).
+
+## Pre and pull request previews
+
+`main` serves the public production deployment. Preproduction branches use
+isolated Worker Previews within the same Worker:
+
+| Source | URL |
+| --- | --- |
+| `develop` | `https://pre.designer.leia.ovh` |
+| Open PR targeting `develop`, such as #123 | `https://pre-123.designer.leia.ovh` |
+| Branch without an open PR | A stable `branch-...` URL with a unique suffix |
+
+In Cloudflare, enable **Builds for Preview branches** under **Settings > Builds >
+Previews Base** and configure:
+
+| Setting | Value |
+| --- | --- |
+| Preview build command | `npm run build:pre` |
+| Preview command | `npm run deploy:preview` |
+| Root directory | `/` |
+| Preview build variables | The pre environment values, configured in this panel |
+
+Preview build variables are independent of production build variables.
+For a local build, copy `.env.pre.example` to `.env.pre.local` and fill in the
+values. Do not put Vite build variables in Wrangler's `vars` block.
+
+Under **Domains**, enable **Production and Preview** for `designer.leia.ovh`.
+Cloudflare uses `*.designer.leia.ovh` for previews and manages the wildcard DNS
+record and certificate. After validating the `pre` preview, migrate the existing
+`pre.designer.leia.ovh` record from Heroku to Cloudflare.
+
+To retain an explicit CNAME for the stable pre environment, point it to
+`pre-leia-designer-frontend.experimentia.workers.dev` with proxying enabled.
+The Worker's wildcard domain selects the `pre` preview by hostname.
+Keep the API services' specific DNS records intact.
+
+The build's Turnstile site key and Auth's Turnstile secret must belong to the
+same pre widget. Authorizing `designer.leia.ovh` and `workbench.leia.ovh` also
+covers their PR subdomains.
+
+The preview command resolves the PR number through GitHub's public API without
+additional tokens. A fork PR is selected only when its head commit matches
+the checkout being deployed. Deployment stops if GitHub fails or the mapping
+is ambiguous. `develop` always uses `pre`, and `main` is explicitly rejected.
+Cloudflare Builds posts the preview link on PRs for connected repository branches.
+Forks can also be deployed from a local checkout with the same preview command.
+
+All Designer previews use `VITE_WORKBENCH_URL=https://pre.workbench.leia.ovh`.
+Designer and Workbench PR numbers are independent and are not paired.
+
+The pre APIs must allow origins such as `https://pre-123.designer.leia.ovh` and
+`https://pre-123.workbench.leia.ovh` through CORS. Workbench's Socket.IO server
+needs the same origin policy. Turnstile must authorize the preview hostnames.
+
+The stable pre sites and PR previews are currently public. Zero Trust and
+Cloudflare Access are disabled. The future Access allowlist is kept outside
+the repository; personal email addresses are not published here.
+
+```sh
+npm run test:preview
+WORKERS_CI_BRANCH=develop npm run deploy:preview -- --dry-run
+npm run build:pre
+```
+
+PR branches need this configuration before using the preview commands.
+Previews remain available until they are deleted or Cloudflare limits are
+reached. Closing a PR does not run a cleanup workflow in this repository.

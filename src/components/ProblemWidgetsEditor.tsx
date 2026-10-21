@@ -1,4 +1,21 @@
 import { useState } from "react";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import {
+  Box,
+  Button,
+  Collapse,
+  FormControlLabel,
+  MenuItem,
+  Paper,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+} from "@mui/material";
 import {
   WIDGET_CATALOG,
   SLOT_OPTIONS,
@@ -14,13 +31,11 @@ interface ProblemWidgetsEditorProps {
 }
 
 function getToolEntry(widget: ProblemWidget, toolName: string): ProblemWidgetTool {
-  return (
-    widget.tools?.find((t) => t.name === toolName) ?? {
-      name: toolName,
-      enabled: true,
-      usage: "",
-    }
-  );
+  return widget.tools?.find((tool) => tool.name === toolName) ?? {
+    name: toolName,
+    enabled: true,
+    usage: "",
+  };
 }
 
 function upsertTool(
@@ -29,74 +44,56 @@ function upsertTool(
   patch: Partial<ProblemWidgetTool>,
 ): ProblemWidgetTool[] {
   const existing = widget.tools ?? [];
-  const idx = existing.findIndex((t) => t.name === toolName);
+  const index = existing.findIndex((tool) => tool.name === toolName);
   const base: ProblemWidgetTool =
-    idx >= 0 ? existing[idx] : { name: toolName, enabled: true, usage: "" };
+    index >= 0 ? existing[index] : { name: toolName, enabled: true, usage: "" };
   const updated = { ...base, ...patch };
-  return idx >= 0
-    ? existing.map((t, i) => (i === idx ? updated : t))
+  return index >= 0
+    ? existing.map((tool, itemIndex) => (itemIndex === index ? updated : tool))
     : [...existing, updated];
 }
 
-// Editor for the problem's activity widgets. The instructor picks which
-// widgets the activity exposes, configures their params (e.g. the code
-// editor's problem statement + tests) and writes optional usage guidance for
-// each tool. Tool SCHEMAS are never authored here — they live in the workbench
-// widget catalog; this only references them by name.
 export function ProblemWidgetsEditor({ widgets, onChange }: ProblemWidgetsEditorProps) {
   const addWidget = () => {
     const defaultType = WIDGET_CATALOG[0]?.widgetType;
     if (!defaultType) return;
     const entry = findWidgetEntry(defaultType);
-    const taken = new Set(widgets.map((w) => w.slot));
-    const nextSlot = (SLOT_OPTIONS.find((s) => !taken.has(s.id))?.id ?? "right") as SlotId;
-    onChange([
-      ...widgets,
-      { widgetType: defaultType, slot: nextSlot, params: entry?.defaultParams },
-    ]);
-  };
-
-  const removeAt = (idx: number) => {
-    onChange(widgets.filter((_, i) => i !== idx));
-  };
-
-  const updateAt = (idx: number, patch: Partial<ProblemWidget>) => {
-    onChange(widgets.map((w, i) => (i === idx ? { ...w, ...patch } : w)));
+    const taken = new Set(widgets.map((widget) => widget.slot));
+    const nextSlot = (SLOT_OPTIONS.find((slot) => !taken.has(slot.id))?.id ?? "right") as SlotId;
+    onChange([...widgets, { widgetType: defaultType, slot: nextSlot, params: entry?.defaultParams }]);
   };
 
   return (
-    <div className="border-t border-gray-200 pt-4">
-      <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700">Widgets &amp; tools</label>
-        <button
-          type="button"
-          onClick={addWidget}
-          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-        >
-          + Add widget
-        </button>
-      </div>
-      <p className="text-xs text-gray-500 mt-1">
-        Widgets the workbench mounts for this activity. Each widget exposes tool calls LEIA can use
-        in both voice (Luke) and text mode. You configure the widget and when LEIA should use each
-        tool — the tool's behaviour itself is fixed by the platform.
-      </p>
+    <Box sx={{ pt: 2, borderTop: 1, borderColor: "divider" }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+        <Typography variant="subtitle2">Widgets &amp; tools</Typography>
+        <Button type="button" variant="contained" size="small" startIcon={<AddIcon />} onClick={addWidget}>
+          Add widget
+        </Button>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+        Widgets the workbench mounts for this activity. Each widget exposes tool calls LEIA can use in both voice
+        (Luke) and text mode. You configure the widget and when LEIA should use each tool — the tool&apos;s behaviour
+        itself is fixed by the platform.
+      </Typography>
 
       {widgets.length === 0 ? (
-        <div className="text-xs text-gray-400 italic mt-3">No widgets configured.</div>
+        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 2, fontStyle: "italic" }}>
+          No widgets configured.
+        </Typography>
       ) : (
-        <ul className="mt-3 space-y-3">
-          {widgets.map((w, i) => (
+        <Stack component="ul" spacing={1.5} sx={{ listStyle: "none", p: 0, m: 0, mt: 2 }}>
+          {widgets.map((widget, index) => (
             <WidgetRow
-              key={i}
-              widget={w}
-              onChange={(patch) => updateAt(i, patch)}
-              onRemove={() => removeAt(i)}
+              key={index}
+              widget={widget}
+              onChange={(patch) => onChange(widgets.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)))}
+              onRemove={() => onChange(widgets.filter((_, itemIndex) => itemIndex !== index))}
             />
           ))}
-        </ul>
+        </Stack>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -113,127 +110,139 @@ function WidgetRow({ widget, onChange, onRemove }: WidgetRowProps) {
   const ParamsForm = entry?.ParamsForm ?? JsonParamsForm;
 
   return (
-    <li className="border border-gray-200 rounded p-2">
-      <div className="flex items-center gap-2 text-sm">
-        <select
+    <Paper component="li" variant="outlined" sx={{ p: 1.5 }}>
+      <Stack spacing={1}>
+        <TextField
+          select
+          label="Widget"
           value={widget.widgetType}
-          onChange={(e) => {
-            const nextEntry = findWidgetEntry(e.target.value);
-            onChange({
-              widgetType: e.target.value,
-              params: nextEntry?.defaultParams,
-              tools: undefined,
-            });
+          onChange={(event) => {
+            const nextEntry = findWidgetEntry(event.target.value);
+            onChange({ widgetType: event.target.value, params: nextEntry?.defaultParams, tools: undefined });
           }}
-          className="border border-gray-300 rounded px-2 py-1 text-sm flex-1"
+          fullWidth
         >
-          {WIDGET_CATALOG.map((c) => (
-            <option key={c.widgetType} value={c.widgetType}>
-              {c.label}
-            </option>
+          {WIDGET_CATALOG.map((catalogEntry) => (
+            <MenuItem key={catalogEntry.widgetType} value={catalogEntry.widgetType}>
+              {catalogEntry.label}
+            </MenuItem>
           ))}
-        </select>
-        <select
+        </TextField>
+        <TextField
+          select
+          label="Slot"
           value={widget.slot ?? "right"}
-          onChange={(e) => onChange({ slot: e.target.value as SlotId })}
-          className="border border-gray-300 rounded px-2 py-1 text-sm"
+          onChange={(event) => onChange({ slot: event.target.value as SlotId })}
+          fullWidth
         >
-          {SLOT_OPTIONS.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
+          {SLOT_OPTIONS.map((slot) => (
+            <MenuItem key={slot.id} value={slot.id}>
+              {slot.label}
+            </MenuItem>
           ))}
-        </select>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-xs text-red-600 hover:text-red-800 px-2"
-          title="Remove widget"
-        >
-          ×
-        </button>
-      </div>
+        </TextField>
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button
+            type="button"
+            color="error"
+            size="small"
+            startIcon={<DeleteOutlineIcon fontSize="small" />}
+            onClick={onRemove}
+          >
+            Remove widget
+          </Button>
+        </Box>
+      </Stack>
 
-      {entry && <div className="text-xs text-gray-500 mt-1">{entry.description}</div>}
+      {entry && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+          {entry.description}
+        </Typography>
+      )}
 
-      {/* Params (problem statement, tests, ...) */}
-      <div className="mt-2">
-        <button
+      <Box sx={{ mt: 1.5 }}>
+        <Button
           type="button"
-          onClick={() => setParamsOpen((v) => !v)}
-          className="text-xs text-blue-600 hover:underline"
+          color="primary"
+          size="small"
+          startIcon={paramsOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          onClick={() => setParamsOpen((open) => !open)}
         >
-          {paramsOpen ? "▾" : "▸"} Configure problem &amp; tests
-        </button>
-        {paramsOpen && (
-          <div className="mt-2">
-            <ParamsForm
-              value={widget.params}
-              onChange={(next) => onChange({ params: next })}
-            />
+          Configure problem &amp; tests
+        </Button>
+        <Collapse in={paramsOpen} unmountOnExit>
+          <Box sx={{ mt: 1.5 }}>
+            <ParamsForm value={widget.params} onChange={(params) => onChange({ params })} />
             {entry && (
-              <button
+              <Button
                 type="button"
+                color="inherit"
+                size="small"
+                startIcon={<RestartAltIcon />}
+                sx={{ mt: 1.5 }}
                 onClick={() => onChange({ params: entry.defaultParams })}
-                className="mt-3 text-xs px-2 py-1 rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
               >
                 Reset to default
-              </button>
+              </Button>
             )}
-          </div>
-        )}
-      </div>
+          </Box>
+        </Collapse>
+      </Box>
 
-      {/* Tool usage guidance */}
       {entry && entry.tools.length > 0 && (
-        <div className="mt-2">
-          <button
+        <Box sx={{ mt: 1.5 }}>
+          <Button
             type="button"
-            onClick={() => setToolsOpen((v) => !v)}
-            className="text-xs text-blue-600 hover:underline"
+            color="primary"
+            size="small"
+            startIcon={toolsOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            onClick={() => setToolsOpen((open) => !open)}
           >
-            {toolsOpen ? "▾" : "▸"} Tools ({entry.tools.length})
-          </button>
-          {toolsOpen && (
-            <ul className="mt-2 space-y-2">
+            Tools ({entry.tools.length})
+          </Button>
+          <Collapse in={toolsOpen} unmountOnExit>
+            <Stack component="ul" spacing={1} sx={{ listStyle: "none", p: 0, m: 0, mt: 1.5 }}>
               {entry.tools.map((tool) => {
                 const state = getToolEntry(widget, tool.name);
                 const enabled = state.enabled !== false;
                 return (
-                  <li key={tool.name} className="border border-gray-100 rounded p-2 bg-gray-50">
-                    <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={enabled}
-                        onChange={(e) =>
-                          onChange({
-                            tools: upsertTool(widget, tool.name, { enabled: e.target.checked }),
-                          })
-                        }
-                      />
-                      <span>{tool.label}</span>
-                      <span className="font-mono text-[11px] text-gray-400">{tool.name}</span>
-                    </label>
-                    <div className="text-[11px] text-gray-500 mt-1 ml-6">{tool.description}</div>
-                    <textarea
+                  <Paper component="li" key={tool.name} variant="outlined" sx={{ p: 1.25, bgcolor: "surfaces.subtle" }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={enabled}
+                          onChange={(event) => onChange({ tools: upsertTool(widget, tool.name, { enabled: event.target.checked }) })}
+                        />
+                      }
+                      label={
+                        <Stack direction="row" spacing={0.75} alignItems="center">
+                          <Typography variant="caption" fontWeight={600}>{tool.label}</Typography>
+                          <Typography className="mono" variant="caption" color="text.disabled">{tool.name}</Typography>
+                        </Stack>
+                      }
+                      sx={{ m: 0 }}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, ml: 5 }}>
+                      {tool.description}
+                    </Typography>
+                    <TextField
                       value={state.usage ?? ""}
                       disabled={!enabled}
-                      onChange={(e) =>
-                        onChange({
-                          tools: upsertTool(widget, tool.name, { usage: e.target.value }),
-                        })
-                      }
-                      className="mt-1 ml-6 w-[calc(100%-1.5rem)] border border-gray-300 rounded px-2 py-1 text-xs disabled:bg-gray-100 disabled:text-gray-400"
-                      rows={2}
+                      onChange={(event) => onChange({ tools: upsertTool(widget, tool.name, { usage: event.target.value }) })}
                       placeholder="When should LEIA use this tool in this activity? (optional)"
+                      multiline
+                      rows={2}
+                      fullWidth
+                      sx={{ mt: 1, pl: 5 }}
                     />
-                  </li>
+                  </Paper>
                 );
               })}
-            </ul>
-          )}
-        </div>
+            </Stack>
+          </Collapse>
+        </Box>
       )}
-    </li>
+    </Paper>
   );
 }

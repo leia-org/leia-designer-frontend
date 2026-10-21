@@ -2,6 +2,8 @@ import React, { memo } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { Alert, Box, Paper, Typography } from "@mui/material";
 
 interface FormatPreviewProps {
   code: string;
@@ -24,102 +26,110 @@ export const FormatPreview: React.FC<FormatPreviewProps> = memo(
           })()
         : code;
 
-    const language = format;
-    const isCodeFormat =
-      format === "json" ||
-      format === "yaml" ||
-      format === "xml" ||
-      format === "text";
+    const isCodeFormat = ["json", "yaml", "xml", "text"].includes(format);
 
     return (
-      <div className="h-full bg-gray-50 flex flex-col relative">
-        {/* Mermaid Preview with Zoom/Pan */}
+      <Box
+        sx={{
+          height: "100%",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: "surfaces.subtle",
+        }}
+      >
         {format === "mermaid" && (
           <TransformWrapper
             initialScale={1}
             minScale={0.5}
             maxScale={4}
-            centerOnInit={true}
+            centerOnInit
             wheel={{ wheelDisabled: true }}
           >
             <TransformComponent
-              wrapperClass="!w-full !h-full"
-              contentClass="flex items-center justify-center p-4"
+              wrapperStyle={{ width: "100%", height: "100%" }}
+              contentStyle={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+              }}
             >
               {mermaidSvg ? (
-                <div
-                  dangerouslySetInnerHTML={{ __html: mermaidSvg }}
-                  className="transform-component-module_content__uCDPE"
-                />
+                <Box dangerouslySetInnerHTML={{ __html: mermaidSvg }} />
               ) : (
-                <div className="text-gray-500">Loading preview...</div>
+                <Typography color="text.secondary">Loading preview...</Typography>
               )}
             </TransformComponent>
           </TransformWrapper>
         )}
 
-        {/* Markdown Preview */}
         {format === "markdown" && (
-          <div className="h-full overflow-auto p-6">
-            <div className="prose prose-sm max-w-none">
-              <ReactMarkdown>{code}</ReactMarkdown>
-            </div>
-          </div>
+          <Box
+            sx={{
+              height: "100%",
+              overflow: "auto",
+              p: 3,
+              "& h1, & h2, & h3, & h4, & h5, & h6": { mt: 0, mb: 1.5 },
+              "& p": { my: 1.25, lineHeight: 1.65 },
+              "& ul, & ol": { pl: 3, my: 1.25 },
+              "& code": {
+                fontFamily: "'JetBrains Mono Variable', monospace",
+                fontSize: "0.85em",
+              },
+              "& pre": {
+                overflow: "auto",
+                p: 2,
+                bgcolor: "background.paper",
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 1,
+              },
+            }}
+          >
+            <ReactMarkdown>{code}</ReactMarkdown>
+          </Box>
         )}
 
-        {/* HTML Preview */}
         {format === "html" && (
-          <div className="h-full overflow-auto p-6">
-            <div className="border rounded bg-white p-4">
-              <div dangerouslySetInnerHTML={{ __html: code }} />
-            </div>
-          </div>
+          <Box sx={{ height: "100%", overflow: "auto", p: 3 }}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Box dangerouslySetInnerHTML={{ __html: code }} />
+            </Paper>
+          </Box>
         )}
 
-        {/* JSON / YAML / XML / TEXT con syntax highlighting */}
         {isCodeFormat && (
-          <div className="h-full overflow-auto p-6">
-            <div className="bg-white border rounded p-4">
+          <Box sx={{ height: "100%", overflow: "auto", p: 3 }}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
               <SyntaxHighlighter
-                language={language}
+                language={format}
                 wrapLongLines
                 customStyle={{
                   background: "transparent",
                   margin: 0,
                   padding: 0,
-                  fontSize: "0.875rem", // text-sm
+                  fontSize: "0.875rem",
                   fontFamily:
-                    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    "'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace",
                 }}
               >
                 {formattedCode}
               </SyntaxHighlighter>
-            </div>
-          </div>
+            </Paper>
+          </Box>
         )}
 
-        {/* Error Display */}
         {error && (
-          <div className="absolute bottom-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
-            <div className="flex items-start gap-2">
-              <svg
-                className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <div className="text-sm text-red-600 font-medium">{error}</div>
-            </div>
-          </div>
+          <Alert
+            severity="error"
+            icon={<ErrorOutlineIcon fontSize="inherit" />}
+            sx={{ position: "absolute", right: 16, bottom: 16, left: 16, boxShadow: 3 }}
+          >
+            {error}
+          </Alert>
         )}
-      </div>
+      </Box>
     );
   }
 );

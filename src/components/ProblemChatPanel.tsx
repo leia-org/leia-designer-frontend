@@ -1,13 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import SendIcon from "@mui/icons-material/Send";
 import {
-  PaperClipIcon,
-  PaperAirplaneIcon,
-  SparklesIcon,
-} from "@heroicons/react/24/solid";
+  Alert,
+  Box,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { keyframes } from "@mui/material/styles";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
-import { useApiKeys } from "../hooks/useApiKeys";
-import { useProviders } from "../hooks/useProviders";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
@@ -34,6 +42,20 @@ const WIDGET_CATALOG_DOC = WIDGET_CATALOG.length
     ).join("\n")
   : "(none available)";
 
+const EXAMPLE_PROMPT =
+  "Create a requirements-elicitation activity about a library booking system";
+
+const thinkingDot = keyframes`
+  0%, 80%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+`;
+
 // extends / overrides / constrainedTo are keyed by component (persona /
 // behaviour / problem); each component is { spec: {...}, apiVersion? }.
 const COMPONENT_SCOPED_PROPS = {
@@ -50,7 +72,7 @@ const componentScoped = (description: string) => ({
 // The editor-driving tools. apply_problem's parameters ARE the full Problem
 // spec (structured output via function calling, like the workbench widget
 // tools). get_current_problem lets the model read the editor to iterate.
-const CHAT_TOOLS: ProblemChatTool[] = [
+const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "get_current_problem",
     description:
@@ -58,9 +80,27 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     parameters: { type: "object", properties: {} },
   },
   {
+    name: "list_problems",
+    description:
+      "Lists existing problems that can be reused. You MUST call this, wait for its result and inspect it before apply_problem. Reuse a semantically suitable problem instead of creating a near-duplicate.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "use_problem",
+    description:
+      "Selects an existing problem by id from list_problems. Prefer this when its scenario, learning objective and expected solution materially match the user's request.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Problem id returned by list_problems." },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "apply_problem",
     description:
-      "Writes a COMPLETE problem into the editor, replacing the current one. Fill every field you reasonably can.\n\n" +
+      "Writes a NEW, COMPLETE problem into the editor, replacing the current one. Call list_problems first and use this only when no existing problem is semantically suitable. Fill every field you reasonably can.\n\n" +
       "`extends` / `overrides` / `constrainedTo` customize the persona / behaviour / problem this activity is paired with. Each is keyed by component (`persona`, `behaviour`, `problem`); each component is `{ spec: { ...fields }, apiVersion?: \"v1\" }`. extends ADDS to a spec, overrides REPLACES fields, constrainedTo CONSTRAINS/limits. persona.spec fields: fullName, firstName, description, personality, subjectPronoum, objectPronoum, possesivePronoum, possesiveAdjective. behaviour.spec fields: description, role, process. Use them ONLY when the user asks to customize the persona/behaviour for this problem; otherwise leave them as {}. Example:\n" +
       '{ "extends": { "persona": { "spec": { "personality": ["amigable", "despistado"] } } }, "overrides": { "behaviour": { "spec": { "role": "alumno de instituto" } } }, "constrainedTo": { "behaviour": { "spec": { "process": ["requirements-elicitation"] }, "apiVersion": "v1" } } }\n\n' +
       "Add `widgets` ONLY when the activity needs an interactive tool (e.g. a coding exercise needs the code editor). Available widgets and their tool functions:\n" +
@@ -93,7 +133,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Optional process tags.",
+          description: "Activity process tags. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
         },
         extends: componentScoped(
           "ADD to the paired persona/behaviour/problem spec (e.g. add persona personality traits). Empty object {} unless asked to compose.",
@@ -146,9 +186,27 @@ const CHAT_TOOLS: ProblemChatTool[] = [
     parameters: { type: "object", properties: {} },
   },
   {
+    name: "list_behaviours",
+    description:
+      "Lists existing behaviours that can be reused. You MUST call this, wait for its result and inspect it before apply_behaviour. Reuse one only when its full instructions fit the exact selected Problem, including its real task and subject; a matching role, technology or process alone is not enough.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "use_behaviour",
+    description:
+      "Selects an existing behaviour by id from list_behaviours only when its full instructions fit the exact selected Problem. Its process must exactly match the selected problem process, but matching process alone is not enough.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Behaviour id returned by list_behaviours." },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "apply_behaviour",
     description:
-      "Writes a NEW, COMPLETE behaviour into the editor, replacing the current one. It must be written specifically for the exact current Problem, including its real task, subject, technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. The behaviour defines the role the AI plays opposite the student (e.g. a client being interviewed, a teammate). Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
+      "Writes a NEW, COMPLETE behaviour into the editor for the exact current Problem. Include its real task, subject, and technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. Call list_behaviours first and use this only when no existing behaviour's full instructions fit this exact Problem. Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -158,7 +216,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Optional process tags.",
+          description: "Must exactly match the current Problem process tags.",
         },
         tooltip: { type: "string", description: "Short helper tooltip describing this behaviour." },
       },
@@ -174,7 +232,7 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_persona",
     description:
-      "Writes a COMPLETE persona into the editor, replacing the current one. The persona is the character the AI embodies (name, background, personality, pronouns). Set `name` so the instructor doesn't have to rename it.",
+      "Writes a NEW, COMPLETE persona into the editor, replacing the current one. Call list_personas first and use this only when no existing persona is suitable. The persona is the character the AI embodies (name, background, personality, pronouns). Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -194,98 +252,109 @@ const CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "list_personas",
     description:
-      "Lists EXISTING personas the instructor already has, so you can REUSE one (by id) instead of creating a new one. Returns [{ id, name, firstName, description }]. Prefer reusing a suitable existing persona; only create a new one with apply_persona when none fits.",
+      "Lists existing personas the instructor can reuse. You MUST call this, wait for its result and inspect it before apply_persona. Prefer a suitable existing persona and only create a new one when none fits.",
     parameters: { type: "object", properties: {} },
   },
   {
     name: "use_persona",
     description:
-      "Selects an EXISTING persona (by its id, from list_personas) as the LEIA's persona, instead of creating a new one. Returns { status, name } or { error }.",
+      "Selects an existing persona by id from list_personas instead of creating a duplicate.",
     parameters: {
       type: "object",
-      properties: { id: { type: "string", description: "The persona id from list_personas." } },
+      properties: {
+        id: { type: "string", description: "Persona id returned by list_personas." },
+      },
       required: ["id"],
+    },
+  },
+  {
+    name: "set_leia_name",
+    description:
+      "Suggests a short, clear learner-facing title for the complete LEIA. Call this after you understand the activity, and call it again only if the activity changes materially.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "A concise human-readable LEIA title, not kebab-case.",
+        },
+      },
+      required: ["name"],
     },
   },
 ];
 
-type ChatRole = "user" | "assistant" | "system";
-interface ChatMessage {
-  role: ChatRole;
+const buildChatTools = (canEditBehaviour: boolean): ProblemChatTool[] =>
+  AUTHORING_CHAT_TOOLS.filter(
+    (tool) => canEditBehaviour || tool.name !== "apply_behaviour",
+  ).map((tool) =>
+    !canEditBehaviour && tool.name === "apply_problem"
+      ? {
+          ...tool,
+          description:
+            `${tool.description}\n\nThe current user cannot author the base Behaviour resource. Select an existing one with use_behaviour. The Problem may still customize that selected behaviour through extends, overrides or constrainedTo when the activity requires it.`,
+        }
+      : tool,
+  );
+
+export type ProblemChatRole = "user" | "assistant" | "system";
+
+export interface ProblemChatMessage {
+  role: ProblemChatRole;
   text: string;
 }
+
+export interface ProblemChatState {
+  messages: ProblemChatMessage[];
+  input: string;
+}
+
+type ChatRole = ProblemChatRole;
+type ChatMessage = ProblemChatMessage;
 
 interface ProblemChatPanelProps {
   currentProblem: Problem | null;
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
+  problems: Problem[];
+  behaviours: Behaviour[];
   personas: Persona[];
+  canEditBehaviour: boolean;
   onApplyProblem: (spec: ProblemSpec, name?: string) => void;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => void;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
-  onUsePersona: (id: string) => { ok: boolean; name?: string };
+  onUseProblem: (id: string) => { ok: boolean; name?: string; process?: string[]; error?: string };
+  onUseBehaviour: (id: string, problemProcess?: string[]) => { ok: boolean; name?: string; error?: string };
+  onUsePersona: (id: string) => { ok: boolean; name?: string; error?: string };
+  onSetLeiaName?: (name: string) => void;
+  modelName: string;
+  apiKeyId: string | null;
+  initialChatState?: ProblemChatState;
+  onChatStateChange?: (state: ProblemChatState) => void;
 }
 
 export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblem,
   currentBehaviour,
   currentPersona,
+  problems,
+  behaviours,
   personas,
+  canEditBehaviour,
   onApplyProblem,
   onApplyBehaviour,
   onApplyPersona,
+  onUseProblem,
+  onUseBehaviour,
   onUsePersona,
+  onSetLeiaName,
+  modelName,
+  apiKeyId,
+  initialChatState,
+  onChatStateChange,
 }) => {
-  const { apiKeys, getDefaultKey, isLoading: apiKeysLoading } = useApiKeys();
-  const { apiKeyProvidersMapped, defaultModel, isLoading: providersLoading } = useProviders();
-
-  // The problem-chat always runs on OpenAI (Responses API + PDF input), so only
-  // OpenAI models/keys are selectable here.
-  const openaiKeys = useMemo(
-    () => apiKeys.filter((k) => k.provider === "openai"),
-    [apiKeys],
-  );
-  const openaiModels = useMemo(
-    () => apiKeyProvidersMapped?.openai || [],
-    [apiKeyProvidersMapped],
-  );
-
-  const [selectedApiKeyId, setSelectedApiKeyId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>("");
-
-  const optionsLoading = apiKeysLoading || providersLoading;
-
-  // Seed sensible defaults once the keys/models load (default OpenAI key, and
-  // the model preselected from that key's default model).
-  useEffect(() => {
-    if (optionsLoading) return;
-    let keyId = selectedApiKeyId && openaiKeys.some((k) => k.id === selectedApiKeyId) ? selectedApiKeyId : null;
-    if (!keyId) {
-      const def = getDefaultKey();
-      keyId = def && def.provider === "openai" ? def.id : (openaiKeys[0]?.id ?? null);
-      if (keyId !== selectedApiKeyId) setSelectedApiKeyId(keyId);
-    }
-    const keyModel = openaiKeys.find((k) => k.id === keyId)?.model;
-    setSelectedModel((prev) => {
-      if (prev && openaiModels.includes(prev)) return prev;
-      if (keyModel && openaiModels.includes(keyModel)) return keyModel;
-      if (defaultModel && openaiModels.includes(defaultModel)) return defaultModel;
-      return openaiModels[0] ?? "";
-    });
-  }, [optionsLoading, openaiKeys, openaiModels, defaultModel, getDefaultKey, selectedApiKeyId]);
-
-  // Manually choosing a key preselects that key's default model.
-  const handleSelectApiKey = useCallback(
-    (id: string | null) => {
-      setSelectedApiKeyId(id);
-      const keyModel = openaiKeys.find((k) => k.id === id)?.model;
-      if (keyModel && openaiModels.includes(keyModel)) setSelectedModel(keyModel);
-    },
-    [openaiKeys, openaiModels],
-  );
-
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialChatState?.messages ?? []);
+  const [input, setInput] = useState(() => initialChatState?.input ?? "");
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -293,6 +362,15 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const chatIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const inspectedLibrariesRef = useRef<Set<"problem" | "behaviour" | "persona">>(new Set());
+  const chatTools = useMemo(
+    () => buildChatTools(canEditBehaviour),
+    [canEditBehaviour],
+  );
+
+  useEffect(() => {
+    onChatStateChange?.({ messages, input });
+  }, [input, messages, onChatStateChange]);
 
   // Always read the freshest resources when the model calls get_current_*.
   const currentProblemRef = useRef<Problem | null>(currentProblem);
@@ -301,17 +379,19 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviourRef.current = currentBehaviour;
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
-  // Latest list of existing personas the chat can reuse by id.
+  const problemsRef = useRef<Problem[]>(problems);
+  problemsRef.current = problems;
+  const behavioursRef = useRef<Behaviour[]>(behaviours);
+  behavioursRef.current = behaviours;
   const personasRef = useRef<Persona[]>(personas);
   personasRef.current = personas;
 
-  const ready = Boolean(selectedModel && selectedApiKeyId);
-  const hasOpenaiKeys = openaiKeys.length > 0;
+  const ready = Boolean(modelName && apiKeyId);
 
   // Changing the model/key invalidates the server-side session.
   useEffect(() => {
     chatIdRef.current = null;
-  }, [selectedModel, selectedApiKeyId]);
+  }, [modelName, apiKeyId]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
@@ -320,13 +400,19 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const pushMessage = (role: ChatRole, text: string) =>
     setMessages((prev) => [...prev, { role, text }]);
 
+  const stripAvatar = (spec: Record<string, unknown>): ProblemSpec => {
+    const cleanSpec = { ...spec };
+    delete cleanSpec.avatar;
+    return cleanSpec as unknown as ProblemSpec;
+  };
+
   const ensureSession = useCallback(async (): Promise<string> => {
     if (chatIdRef.current) return chatIdRef.current;
-    if (!selectedModel || !selectedApiKeyId) throw new Error("Select a model and API key first");
-    const chatId = await openProblemChat(selectedModel, selectedApiKeyId);
+    if (!modelName || !apiKeyId) throw new Error("Select a model and API key first");
+    const chatId = await openProblemChat(modelName, apiKeyId);
     chatIdRef.current = chatId;
     return chatId;
-  }, [selectedModel, selectedApiKeyId]);
+  }, [modelName, apiKeyId]);
 
   const handleAttach = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -355,27 +441,37 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     // if the session was re-opened; it only attaches each one once.
     let response = await sendProblemChatMessage(chatId, {
       message,
-      tools: CHAT_TOOLS,
+      tools: chatTools,
       fileIds: attachments.map((a) => a.fileId),
     });
-    for (let i = 0; i < 8; i++) {
+    let activeProblemProcess: string[] | undefined = currentProblemRef.current
+      ? Array.from(currentProblemRef.current.spec?.process ?? [])
+      : undefined;
+    for (let i = 0; i < 14; i++) {
       const calls = response.toolCalls;
       if (!Array.isArray(calls) || calls.length === 0) break;
 
-      // Tool calls may arrive in parallel. Apply the new problem before its
-      // activity-specific behaviour so invalidating the stale behaviour cannot
-      // erase the replacement from the same model turn.
+      // Tool calls may be returned in parallel. Resolve the problem before the
+      // behaviour so compatibility is checked against the final selection.
       const priority: Record<string, number> = {
         get_current_problem: 0,
         get_current_behaviour: 0,
         get_current_persona: 0,
+        list_problems: 0,
+        list_behaviours: 0,
+        list_personas: 0,
         apply_problem: 10,
+        use_problem: 10,
         apply_behaviour: 20,
+        use_behaviour: 20,
         apply_persona: 30,
+        use_persona: 30,
+        set_leia_name: 40,
       };
       const orderedCalls = [...calls].sort(
         (left, right) => (priority[left.name] ?? 100) - (priority[right.name] ?? 100),
       );
+      const inspectedBeforeThisResponse = new Set(inspectedLibrariesRef.current);
 
       const results: ProblemChatToolResult[] = orderedCalls.map((call) => {
         let output: unknown;
@@ -390,41 +486,131 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           return { name: typeof name === "string" && name.trim() ? name.trim() : undefined, spec: rest };
         };
         if (call.name === "apply_problem") {
+          if (!inspectedBeforeThisResponse.has("problem")) {
+            output = { error: "call list_problems and inspect its result before creating a new problem" };
+            return { callId: call.callId, output };
+          }
           const { name, spec } = takeName();
-          onApplyProblem(spec as unknown as ProblemSpec, name);
+          const problemSpec = stripAvatar(spec);
+          activeProblemProcess = Array.from(problemSpec.process ?? []);
+          onApplyProblem(problemSpec, name);
           pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_behaviour") {
+          if (!canEditBehaviour) {
+            output = { error: "this user cannot author or modify behaviours; use an existing behaviour" };
+            return { callId: call.callId, output };
+          }
+          if (!inspectedBeforeThisResponse.has("behaviour")) {
+            output = { error: "call list_behaviours and inspect its result before creating a new behaviour" };
+            return { callId: call.callId, output };
+          }
           const { name, spec } = takeName();
           onApplyBehaviour(spec, name);
           pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_persona") {
+          if (!inspectedBeforeThisResponse.has("persona")) {
+            output = { error: "call list_personas and inspect its result before creating a new persona" };
+            return { callId: call.callId, output };
+          }
           const { name, spec } = takeName();
           onApplyPersona(spec, name);
           pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
+        } else if (call.name === "set_leia_name") {
+          const name = typeof args.name === "string" ? args.name.trim() : "";
+          if (name) {
+            onSetLeiaName?.(name);
+            pushMessage("system", `✓ LEIA title suggested: "${name}".`);
+            output = { status: "applied", name };
+          } else {
+            output = { error: "a non-empty LEIA title is required" };
+          }
         } else if (call.name === "get_current_problem") {
           output = currentProblemRef.current?.spec ?? null;
         } else if (call.name === "get_current_behaviour") {
           output = currentBehaviourRef.current?.spec ?? null;
         } else if (call.name === "get_current_persona") {
           output = currentPersonaRef.current?.spec ?? null;
+        } else if (call.name === "list_problems") {
+          inspectedLibrariesRef.current.add("problem");
+          output = problemsRef.current
+            .filter((problem) => problem.id && !problem.id.startsWith("generated-"))
+            .map((problem) => ({
+              id: problem.id,
+              name: problem.metadata?.name,
+              description:
+                typeof problem.spec?.description === "string"
+                  ? problem.spec.description.slice(0, 240)
+                  : undefined,
+              details:
+                typeof problem.spec?.details === "string"
+                  ? problem.spec.details.slice(0, 240)
+                  : undefined,
+              solutionPreview:
+                typeof problem.spec?.solution === "string"
+                  ? problem.spec.solution.slice(0, 240)
+                  : undefined,
+              process: problem.spec?.process,
+              solutionFormat: problem.spec?.solutionFormat,
+            }));
+        } else if (call.name === "use_problem") {
+          const id = typeof args.id === "string" ? args.id : "";
+          const result = onUseProblem(id);
+          if (result.ok) {
+            activeProblemProcess = result.process;
+            pushMessage("system", `✓ Using existing problem${result.name ? ` ("${result.name}")` : ""}.`);
+            output = { status: "selected", name: result.name };
+          } else {
+            output = { error: result.error || `no problem with id '${id}'` };
+          }
+        } else if (call.name === "list_behaviours") {
+          inspectedLibrariesRef.current.add("behaviour");
+          output = behavioursRef.current
+            .filter((behaviour) => behaviour.id && !behaviour.id.startsWith("generated-"))
+            .map((behaviour) => ({
+              id: behaviour.id,
+              name: behaviour.metadata?.name,
+              role: behaviour.spec?.role,
+              description:
+                typeof behaviour.spec?.description === "string"
+                  ? behaviour.spec.description.slice(0, 240)
+                  : undefined,
+              tooltip: behaviour.spec?.tooltip,
+              process: behaviour.spec?.process,
+            }));
+        } else if (call.name === "use_behaviour") {
+          const id = typeof args.id === "string" ? args.id : "";
+          const result = onUseBehaviour(id, activeProblemProcess);
+          if (result.ok) {
+            pushMessage("system", `✓ Using existing behaviour${result.name ? ` ("${result.name}")` : ""}.`);
+            output = { status: "selected", name: result.name };
+          } else {
+            output = { error: result.error || `no behaviour with id '${id}'` };
+          }
         } else if (call.name === "list_personas") {
-          output = personasRef.current.map((p) => ({
-            id: p.id,
-            name: p.metadata?.name,
-            firstName: p.spec?.firstName,
-            description: typeof p.spec?.description === "string" ? p.spec.description.slice(0, 240) : undefined,
-          }));
+          inspectedLibrariesRef.current.add("persona");
+          output = personasRef.current
+            .filter((persona) => persona.id && !persona.id.startsWith("generated-"))
+            .map((persona) => ({
+              id: persona.id,
+              name: persona.metadata?.name,
+              firstName: persona.spec?.firstName,
+              description:
+                typeof persona.spec?.description === "string"
+                  ? persona.spec.description.slice(0, 240)
+                  : undefined,
+              personality: persona.spec?.personality,
+            }));
         } else if (call.name === "use_persona") {
           const id = typeof args.id === "string" ? args.id : "";
-          const res = onUsePersona(id);
-          if (res.ok) {
-            pushMessage("system", `✓ Using existing persona${res.name ? ` ("${res.name}")` : ""}.`);
-            output = { status: "selected", name: res.name };
+          const result = onUsePersona(id);
+          if (result.ok) {
+            pushMessage("system", `✓ Using existing persona${result.name ? ` ("${result.name}")` : ""}.`);
+            output = { status: "selected", name: result.name };
           } else {
-            output = { error: `no persona with id '${id}'` };
+            output = { error: result.error || `no persona with id '${id}'` };
           }
         } else {
           output = { error: `unknown tool '${call.name}'` };
@@ -432,7 +618,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         return { callId: call.callId, output };
       });
 
-      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: CHAT_TOOLS });
+      response = await sendProblemChatMessage(chatId, { toolResults: results, tools: chatTools });
     }
     return response.message ?? "";
   };
@@ -442,6 +628,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     if (!text || sending) return;
     setError(null);
     setInput("");
+    inspectedLibrariesRef.current.clear();
     pushMessage("user", text);
     setSending(true);
     try {
@@ -463,163 +650,180 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full rounded-lg border border-gray-200 bg-white">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
-        <SparklesIcon className="h-4 w-4 text-blue-600" />
-        <span className="text-sm font-semibold text-gray-800">AI Assistant</span>
-      </div>
+    <Paper variant="outlined" sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: "divider" }}>
+        <AutoAwesomeIcon color="primary" fontSize="small" />
+        <Typography variant="subtitle2">AI Assistant</Typography>
+      </Stack>
 
-      {/* Model + API key selectors (OpenAI only — the assistant runs on OpenAI). */}
-      <div className="px-3 py-2 border-b border-gray-100">
-        {hasOpenaiKeys ? (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">Model</label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                disabled={optionsLoading}
-                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">{optionsLoading ? "Loading…" : "-- model --"}</option>
-                {openaiModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">API Key</label>
-              <select
-                value={selectedApiKeyId ?? ""}
-                onChange={(e) => handleSelectApiKey(e.target.value || null)}
-                disabled={optionsLoading}
-                className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">{optionsLoading ? "Loading…" : "-- key --"}</option>
-                {openaiKeys.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.description}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        ) : (
-          <div className="text-[11px] text-amber-700">
-            {optionsLoading ? (
-              "Loading API keys…"
-            ) : (
-              <>
-                No OpenAI API key available.{" "}
-                <Link to="/administration/api-keys" className="text-blue-600 underline">
-                  Create one
-                </Link>{" "}
-                to use the assistant.
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Transcript */}
-      <div ref={transcriptRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3 min-h-[160px]">
+      <Stack ref={transcriptRef} spacing={1.5} sx={{ flex: 1, minHeight: 160, overflowY: "auto", px: 2, py: 1.5 }}>
         {messages.length === 0 ? (
-          <div className="text-xs text-gray-400 italic">
-            Attach a PDF of a past exercise or describe what you want, and I'll build the whole
-            LEIA — problem, behaviour and persona — writing each into its editor with a name.
-            E.g. "create a requirements-elicitation activity about a library booking system".
-          </div>
+          <Typography variant="caption" color="text.disabled" fontStyle="italic">
+            Attach a PDF of a past exercise or describe what you want. I'll first search the
+            existing problem, behaviour and persona library, reuse the best matches, and create only what is missing.
+            E.g. "{EXAMPLE_PROMPT}".
+          </Typography>
         ) : (
           messages.map((msg, i) => {
             if (msg.role === "system") {
               return (
-                <div key={i} className="text-[11px] text-green-700 bg-green-50 rounded px-2 py-1">
+                <Typography key={i} variant="caption" sx={{ px: 1, py: 0.5, bgcolor: "#F0FDF4", color: "success.dark", borderRadius: 1 }}>
                   {msg.text}
-                </div>
+                </Typography>
               );
             }
             const isUser = msg.role === "user";
             return (
-              <div key={i} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] px-3 py-2 rounded-lg text-sm whitespace-pre-wrap ${
-                    isUser
-                      ? "bg-blue-600 text-white rounded-br-sm"
-                      : "bg-gray-100 text-gray-800 rounded-bl-sm"
-                  }`}
+              <Box key={i} sx={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                <Paper
+                  variant={isUser ? undefined : "outlined"}
+                  elevation={isUser ? 1 : 0}
+                  sx={{
+                    maxWidth: "85%",
+                    px: 1.5,
+                    py: 1,
+                    bgcolor: isUser ? "primary.main" : "surfaces.subtle",
+                    color: isUser ? "primary.contrastText" : "text.primary",
+                    borderRadius: 1.5,
+                    borderBottomRightRadius: isUser ? 0.5 : 1.5,
+                    borderBottomLeftRadius: isUser ? 1.5 : 0.5,
+                  }}
                 >
-                  {msg.text}
-                </div>
-              </div>
+                  {isUser ? (
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{msg.text}</Typography>
+                  ) : (
+                    <Box
+                      sx={{
+                        fontSize: 14,
+                        lineHeight: 1.55,
+                        "& p": { m: 0 },
+                        "& p + p": { mt: 1 },
+                        "& ul, & ol": { my: 0.75, pl: 2.5 },
+                        "& li + li": { mt: 0.35 },
+                        "& pre": {
+                          m: 0,
+                          mt: 1,
+                          p: 1,
+                          overflowX: "auto",
+                          borderRadius: 1,
+                          bgcolor: "rgba(15, 23, 42, 0.08)",
+                          fontSize: 12,
+                        },
+                        "& :not(pre) > code": {
+                          px: 0.45,
+                          py: 0.1,
+                          borderRadius: 0.5,
+                          bgcolor: "rgba(15, 23, 42, 0.08)",
+                          fontSize: "0.88em",
+                        },
+                      }}
+                    >
+                      <ReactMarkdown>{msg.text}</ReactMarkdown>
+                    </Box>
+                  )}
+                </Paper>
+              </Box>
             );
           })
         )}
-        {sending && <div className="text-xs text-gray-400 italic">Thinking…</div>}
-      </div>
-
-      {/* Attachments */}
-      {attachments.length > 0 && (
-        <div className="px-3 py-2 border-t border-gray-100 flex flex-wrap gap-2">
-          {attachments.map((file) => (
-            <span
-              key={file.fileId}
-              className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-600"
+        {sending && (
+          <Box
+            role="status"
+            aria-label="The assistant is thinking"
+            sx={{ display: "flex", justifyContent: "flex-start" }}
+          >
+            <Paper
+              variant="outlined"
+              sx={{
+                px: 1.5,
+                py: 1.25,
+                bgcolor: "surfaces.subtle",
+                borderRadius: 1.5,
+                borderBottomLeftRadius: 0.5,
+              }}
             >
-              <PaperClipIcon className="h-3 w-3" />
-              {file.filename}
-            </span>
+              <Stack direction="row" spacing={0.6} alignItems="center" aria-hidden="true">
+                {[0, 1, 2].map((index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      bgcolor: "primary.main",
+                      animation: `${thinkingDot} 1.2s ease-in-out infinite`,
+                      animationDelay: `${index * 0.16}s`,
+                    }}
+                  />
+                ))}
+              </Stack>
+            </Paper>
+          </Box>
+        )}
+      </Stack>
+
+      {attachments.length > 0 && (
+        <Stack direction="row" flexWrap="wrap" useFlexGap spacing={0.75} sx={{ px: 2, py: 1, borderTop: 1, borderColor: "divider" }}>
+          {attachments.map((file) => (
+            <Chip
+              key={file.fileId}
+              icon={<AttachFileIcon />}
+              label={file.filename}
+              size="small"
+            />
           ))}
-        </div>
+        </Stack>
       )}
 
-      {error && <div className="px-3 py-1 text-[11px] text-red-600">{error}</div>}
+      {error && <Alert severity="error" sx={{ mx: 2, mb: 1 }}>{error}</Alert>}
 
-      {/* Composer */}
-      <div className="border-t border-gray-200 p-2">
-        <div className="flex items-end gap-2">
+      <Box sx={{ p: 1, borderTop: 1, borderColor: "divider" }}>
+        <Stack direction="row" alignItems="flex-end" spacing={1}>
           <input
             ref={fileInputRef}
             type="file"
             accept="application/pdf"
-            className="hidden"
+            hidden
             onChange={handleAttach}
           />
-          <button
+          <IconButton
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={!ready || uploading || sending}
-            title="Attach a PDF"
-            className="p-2 text-gray-500 hover:text-blue-600 disabled:opacity-40"
+            aria-label="Attach a PDF"
+            color="primary"
           >
             {uploading ? (
-              <span className="block h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              <CircularProgress size={18} />
             ) : (
-              <PaperClipIcon className="h-5 w-5" />
+              <AttachFileIcon />
             )}
-          </button>
-          <textarea
+          </IconButton>
+          <TextField
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onChange={(event) => setInput(event.target.value)}
             disabled={!ready || sending}
-            rows={1}
-            placeholder={ready ? "Describe the problem or ask to convert the PDF…" : "Select a model and key…"}
-            className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50"
-            style={{ maxHeight: 120 }}
+            multiline
+            minRows={1}
+            maxRows={5}
+            placeholder={ready ? `E.g. ${EXAMPLE_PROMPT}` : "Select a model and key…"}
+            fullWidth
+            slotProps={{ htmlInput: { onKeyDown: handleKeyDown } }}
+            sx={{ "& textarea": { maxHeight: 120, overflowY: "auto" } }}
           />
-          <button
+          <IconButton
             type="button"
             onClick={() => void handleSend()}
             disabled={!ready || sending || !input.trim()}
-            className="p-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-40"
+            color="primary"
+            sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" } }}
+            aria-label="Send message"
           >
-            <PaperAirplaneIcon className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-    </div>
+            <SendIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      </Box>
+    </Paper>
   );
 };
 

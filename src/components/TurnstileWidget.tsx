@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { isTurnstileEnabled, turnstileSiteKey } from "../config/turnstile";
+import { Alert, Box } from "@mui/material";
+import { turnstileSiteKey, turnstileState } from "../config/turnstile";
 
 declare global {
   interface Window {
@@ -29,7 +30,7 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!isTurnstileEnabled || !turnstileSiteKey) {
+    if (turnstileState !== "ready") {
       return;
     }
 
@@ -37,7 +38,7 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
     let intervalId: number | undefined;
 
     const renderWidget = () => {
-      if (!containerRef.current || !window.turnstile || widgetId) {
+      if (!containerRef.current || !window.turnstile || widgetId || !turnstileSiteKey) {
         return;
       }
 
@@ -70,17 +71,17 @@ export const TurnstileWidget = ({ onTokenChange }: TurnstileWidgetProps) => {
     };
   }, [onTokenChange]);
 
-  if (!isTurnstileEnabled) {
+  if (turnstileState === "disabled") {
     return null;
   }
 
-  if (!turnstileSiteKey) {
+  if (turnstileState === "unavailable") {
     return (
-      <p role="alert" className="text-center text-sm text-red-600">
+      <Alert severity="error" sx={{ justifyContent: "center" }}>
         Verification is temporarily unavailable. Please try again later.
-      </p>
+      </Alert>
     );
   }
 
-  return <div ref={containerRef} className="flex justify-center"></div>;
+  return <Box ref={containerRef} sx={{ display: "flex", justifyContent: "center" }} />;
 };

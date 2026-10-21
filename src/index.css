@@ -1,13 +1,9 @@
-@import "tailwindcss";
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
 
-@layer base {
-  input[type="password"]::-ms-reveal,
-  input[type="password"]::-ms-clear {
-    display: none;
-  }
-
-  button:not([disabled]),
-  [role="button"]:not([disabled]) {
-    cursor: pointer;
-  }
+button:not([disabled]),
+[role="button"]:not([disabled]) {
+  cursor: pointer;
 }
