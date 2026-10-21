@@ -19,6 +19,7 @@ import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { useAuth } from "../context";
 import { TurnstileWidget } from "../components/TurnstileWidget";
 import { AuthLayout } from "../components/shared/AuthLayout";
+import { TestAccountLogin } from "../components/TestAccountLogin";
 import { isTurnstileEnabled } from "../config/turnstile";
 
 export const Login = () => {
@@ -157,6 +158,7 @@ export const Login = () => {
           >
             {loading ? <CircularProgress size={22} color="inherit" /> : "Login"}
           </Button>
+          <TestAccountLogin />
         </Stack>
       </Box>
     </AuthLayout>
