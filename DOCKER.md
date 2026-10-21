@@ -42,3 +42,12 @@ docker build --secret id=vite_env,src=.env.production.local \
   -t leia-frontend .
 docker run --rm -p 8080:5173 leia-frontend
 ```
+
+For the existing Compose service, set the input file and its content hash before
+building. The hash prevents a cached bundle from retaining older Vite settings.
+
+```sh
+export DOCKER_FRONTEND_ENV_FILE=.env.production.local
+export DOCKER_BUILD_CONFIG_DIGEST="$(shasum -a 256 "$DOCKER_FRONTEND_ENV_FILE" | cut -d ' ' -f 1)"
+docker compose up --build
+```
