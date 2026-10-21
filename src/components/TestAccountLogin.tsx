@@ -16,9 +16,9 @@ export function TestAccountLogin({ returnPath = "/" }: { returnPath?: string }) 
     }).then(async response => {
       if (!response.ok) return;
       const status = await response.json() as { enabled?: boolean; authenticated?: boolean };
-      if (!status.enabled || controller.signal.aborted) return;
+      if (!status.enabled || !status.authenticated || controller.signal.aborted) return;
       setEntryUrl(entry.href);
-      if (status.authenticated && new URLSearchParams(window.location.search).get("login") !== "password") {
+      if (new URLSearchParams(window.location.search).get("login") !== "password") {
         window.location.assign(entry.href);
       }
     }).catch(() => { /* A failed capability check leaves the standard login available. */ });
