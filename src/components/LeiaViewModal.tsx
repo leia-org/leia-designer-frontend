@@ -211,6 +211,9 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
     }
   };
 
+  const regeneratedImageCount = job?.steps.filter(step => step.status === "completed").length ?? 0;
+  const regenerationProgress = job?.steps.length ? (regeneratedImageCount / job.steps.length) * 100 : 0;
+
   return (
     <Dialog
       open={isOpen}
@@ -234,15 +237,27 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
             <Typography variant="body2" color="text.secondary">View LEIA content</Typography>
           </Box>
         </Stack>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <>
+        <Stack direction="row" alignItems="flex-start" spacing={1}>
+          <Stack direction="column" alignItems="flex-end" spacing={0.5}>
               <ButtonGroup variant="outlined" size="small" disabled={regeneratingTarget !== null}>
                 <Button
-                  startIcon={regeneratingTarget ? <CircularProgress size={16} /> : <RefreshIcon />}
+                  startIcon={regeneratingTarget
+                    ? <CircularProgress
+                        size={16}
+                        variant="determinate"
+                        value={regenerationProgress}
+                        enableTrackSlot
+                        aria-label="Images regenerated"
+                        aria-valuetext={`${regeneratedImageCount} of ${job?.steps.length ?? 0} images regenerated`}
+                        sx={{ "& .MuiCircularProgress-track": { opacity: 0.3 } }}
+                      />
+                    : <RefreshIcon />}
                   disabled={isSyncing || Boolean(syncError) || regeneratingTarget !== null || availableImageCount === 0 || !imageApiKeyId}
                   onClick={() => void handleRegenerate("all")}
                 >
-                  {regeneratingTarget ? "Regenerating" : availableImageCount === 0 ? "No images to regenerate" : `Regenerate ${availableImageCount} ${availableImageCount === 1 ? "image" : "images"}`}
+                  {regeneratingTarget
+                    ? `Regenerating ${regeneratedImageCount}/${job?.steps.length ?? 0}`
+                    : availableImageCount === 0 ? "No images to regenerate" : `Regenerate ${availableImageCount} ${availableImageCount === 1 ? "image" : "images"}`}
                 </Button>
                 <Button
                   size="small"
@@ -340,7 +355,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                   )}
                 </Stack>
               </Popover>
-          </>
+          </Stack>
           <IconButton onClick={onClose} aria-label="Close"><CloseIcon /></IconButton>
         </Stack>
       </DialogTitle>
@@ -377,9 +392,6 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
       </Tabs>
       <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
         {syncError && <Alert severity="error" sx={{ mb: 2 }}>{syncError}</Alert>}
-        {job?.active && <Typography role="status" variant="body2" sx={{ mb: 2 }}>
-          {job.steps.filter(step => step.status === "completed" || step.status === "failed").length} of {job.steps.length} images finished
-        </Typography>}
         {job && !job.active && job.status !== "completed" && <Alert severity="warning" sx={{ mb: 2 }}>
           {job.error || job.steps.filter(step => step.status === "failed").map(step => step.error).join("; ")}
         </Alert>}
