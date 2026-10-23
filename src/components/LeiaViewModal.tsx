@@ -346,7 +346,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                   disabled={availableImageCount === 0 || !imageApiKeyId}
                   onClick={() => void handleRegenerate("all")}
                 >
-                  {regeneratingTarget ? "Regenerating" : availableImageCount === 5 ? "Regenerate all images" : `Regenerate available (${availableImageCount})`}
+                  {regeneratingTarget ? "Regenerating" : availableImageCount === 0 ? "No images to regenerate" : `Regenerate ${availableImageCount} ${availableImageCount === 1 ? "image" : "images"}`}
                 </Button>
                 <Button
                   size="small"
