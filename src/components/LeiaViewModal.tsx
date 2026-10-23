@@ -451,9 +451,20 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
       <Tabs
         value={viewMode}
         onChange={(_, value: ViewMode) => setViewMode(value)}
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{ px: 2, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}
+        variant="fullWidth"
+        sx={{
+          px: { xs: 0, sm: 2 },
+          flexShrink: 0,
+          borderTop: "1px solid",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          "& .MuiTab-root": {
+            minWidth: 0,
+            px: { xs: 0.5, sm: 2 },
+            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+            overflowWrap: "anywhere",
+          },
+        }}
       >
         <Tab value="problem" label="Problem" />
         <Tab value="persona" label="Persona" />
