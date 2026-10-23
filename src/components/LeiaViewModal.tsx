@@ -25,6 +25,7 @@ import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import CloseIcon from "@mui/icons-material/Close";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import PsychologyOutlinedIcon from "@mui/icons-material/PsychologyOutlined";
 import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
 import InsertChartOutlinedIcon from "@mui/icons-material/InsertChartOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
@@ -452,24 +453,32 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         value={viewMode}
         onChange={(_, value: ViewMode) => setViewMode(value)}
         variant="fullWidth"
+        scrollButtons={false}
         sx={{
           px: { xs: 0, sm: 2 },
           flexShrink: 0,
+          minHeight: 40,
           borderTop: "1px solid",
           borderBottom: "1px solid",
           borderColor: "divider",
           "& .MuiTab-root": {
             minWidth: 0,
+            maxWidth: "none",
+            minHeight: 40,
+            py: 0.5,
+            flexDirection: { xs: "column", sm: "row" },
+            gap: 0.5,
+            "& .MuiTab-icon": { margin: 0 },
             px: { xs: 0.5, sm: 2 },
             fontSize: { xs: "0.75rem", sm: "0.875rem" },
             overflowWrap: "anywhere",
           },
         }}
       >
-        <Tab value="problem" label="Problem" />
-        <Tab value="persona" label="Persona" />
-        {user?.role === "admin" && <Tab value="behaviour" label="Behaviour" />}
-        <Tab value="infographics" label="Infographics" />
+        <Tab value="problem" icon={<ExtensionOutlinedIcon fontSize="small" />} iconPosition="start" label="Problem" />
+        <Tab value="persona" icon={<PersonOutlineIcon fontSize="small" />} iconPosition="start" label="Persona" />
+        {user?.role === "admin" && <Tab value="behaviour" icon={<PsychologyOutlinedIcon fontSize="small" />} iconPosition="start" label="Behaviour" />}
+        <Tab value="infographics" icon={<InsertChartOutlinedIcon fontSize="small" />} iconPosition="start" label="Infographics" />
       </Tabs>
       <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
         {viewMode === "problem" && (
