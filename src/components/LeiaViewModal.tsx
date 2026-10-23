@@ -23,7 +23,12 @@ import {
 } from "@mui/material";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import CloseIcon from "@mui/icons-material/Close";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
+import InsertChartOutlinedIcon from "@mui/icons-material/InsertChartOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { toast } from "react-toastify";
 import type { Leia } from "../models/Leia";
@@ -165,18 +170,17 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const canRegenerateProblem = isAdmin || getUserId(problemResource?.user) === user?.id;
   const canRegeneratePersona = isAdmin || getUserId(personaResource?.user) === user?.id;
   const avatarRegenerationOptions = [
-    ...(canRegenerateLeia ? [{ label: "LEIA avatar", target: "leias" as const }] : []),
-    ...(canRegenerateProblem ? [{ label: "Problem avatar", target: "problems" as const }] : []),
-    ...(canRegeneratePersona ? [{ label: "Persona avatar", target: "personas" as const }] : []),
+    { label: "LEIA avatar", target: "leias" as const, icon: <SmartToyOutlinedIcon />, allowed: canRegenerateLeia },
+    { label: "Problem avatar", target: "problems" as const, icon: <ExtensionOutlinedIcon />, allowed: canRegenerateProblem },
+    { label: "Persona avatar", target: "personas" as const, icon: <PersonOutlineIcon />, allowed: canRegeneratePersona },
   ];
-  const infographicRegenerationOptions = canRegenerateLeia
-    ? [
-        { label: "Infographic", target: "infographic" as const },
-        { label: "Infographic with solution", target: "infographicSolution" as const },
-      ]
-    : [];
-  const canOpenRegenerate = avatarRegenerationOptions.length > 0
-    || infographicRegenerationOptions.length > 0;
+  const infographicRegenerationOptions = [
+    { label: "Infographic", target: "infographic" as const, icon: <InsertChartOutlinedIcon />, allowed: canRegenerateLeia },
+    { label: "Infographic with solution", target: "infographicSolution" as const, icon: <FactCheckOutlinedIcon />, allowed: canRegenerateLeia },
+  ];
+  const availableRegenerationOptions = [...avatarRegenerationOptions, ...infographicRegenerationOptions]
+    .filter((option) => option.allowed);
+  const availableImageCount = availableRegenerationOptions.length;
   const infographicCandidates = buildStoredImageCandidateSources(
     displayLeia.spec?.infographic,
     ...buildLeiaInfographicPaths(displayLeia.id, "infographic"),
@@ -259,6 +263,8 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   };
 
   const handleRegenerate = async (target: RegenerationTarget) => {
+    if (regeneratingTarget || availableImageCount === 0) return;
+    if (target !== "all" && !availableRegenerationOptions.some((option) => option.target === target)) return;
     const selectedImageApiKeyId = requireImageApiKey();
     if (!selectedImageApiKeyId) return;
 
@@ -266,10 +272,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
     setRegenerateAnchor(null);
     try {
       if (target === "all") {
-        const targets = [
-          ...avatarRegenerationOptions.map((option) => option.target),
-          ...infographicRegenerationOptions.map((option) => option.target),
-        ];
+        const targets = availableRegenerationOptions.map((option) => option.target);
         let failedCount = 0;
 
         // These requests can update the same LEIA document. Run them in sequence
@@ -298,7 +301,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         await regenerateAvatar(target, selectedImageApiKeyId);
       }
 
-      toast.success(target === "all" ? "All images regenerated successfully" : "Image regenerated successfully", {
+      toast.success(target === "all" ? "All available images regenerated successfully" : "Image regenerated successfully", {
         position: "bottom-right",
         autoClose: 3000,
       });
@@ -336,14 +339,14 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
           </Box>
         </Stack>
         <Stack direction="row" alignItems="center" spacing={1}>
-          {canOpenRegenerate && (
-            <>
+          <>
               <ButtonGroup variant="outlined" size="small" disabled={regeneratingTarget !== null}>
                 <Button
                   startIcon={regeneratingTarget ? <CircularProgress size={16} /> : <RefreshIcon />}
+                  disabled={availableImageCount === 0 || !imageApiKeyId}
                   onClick={() => void handleRegenerate("all")}
                 >
-                  {regeneratingTarget ? "Regenerating" : "Regenerate all"}
+                  {regeneratingTarget ? "Regenerating" : availableImageCount === 5 ? "Regenerate all images" : `Regenerate available (${availableImageCount})`}
                 </Button>
                 <Button
                   size="small"
@@ -362,13 +365,14 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                 onClose={() => setRegenerateAnchor(null)}
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                 transformOrigin={{ vertical: "top", horizontal: "right" }}
-                slotProps={{ paper: { sx: { mt: 1, width: 320, maxWidth: "calc(100vw - 32px)" } } }}
+                slotProps={{ paper: { sx: { mt: 1, width: 380, maxWidth: "calc(100vw - 32px)" } } }}
               >
                 <Stack spacing={1.5} sx={{ p: 2 }}>
                   <Box>
                     <Typography variant="subtitle2">Regenerate images</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Select the Gemini key used to create the new image.
+                      You can regenerate images for components you own (
+                      {availableImageCount} of 5 images available)
                     </Typography>
                   </Box>
                   <FormControl fullWidth size="small">
@@ -401,17 +405,19 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                     <Stack spacing={0.5}>
                       <Typography variant="overline" color="text.secondary">Avatars</Typography>
                       {avatarRegenerationOptions.map((option) => (
+                        <Box key={option.target}>
                         <Button
-                          key={option.target}
                           color="inherit"
                           fullWidth
-                          startIcon={<ImageOutlinedIcon />}
+                          startIcon={option.icon}
                           onClick={() => void handleRegenerate(option.target)}
-                          disabled={!imageApiKeyId}
-                          sx={{ justifyContent: "flex-start" }}
+                          disabled={!option.allowed || !imageApiKeyId || regeneratingTarget !== null}
+                          sx={{ justifyContent: "flex-start", textAlign: "left" }}
                         >
                           {option.label}
+                          {!option.allowed && <LockOutlinedIcon sx={{ ml: "auto", fontSize: 16 }} />}
                         </Button>
+                        </Box>
                       ))}
                     </Stack>
                   )}
@@ -420,24 +426,25 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                     <Stack spacing={0.5}>
                       <Typography variant="overline" color="text.secondary">Infographics</Typography>
                       {infographicRegenerationOptions.map((option) => (
+                        <Box key={option.target}>
                         <Button
-                          key={option.target}
                           color="inherit"
                           fullWidth
-                          startIcon={<ImageOutlinedIcon />}
+                          startIcon={option.icon}
                           onClick={() => void handleRegenerate(option.target)}
-                          disabled={!imageApiKeyId}
-                          sx={{ justifyContent: "flex-start" }}
+                          disabled={!option.allowed || !imageApiKeyId || regeneratingTarget !== null}
+                          sx={{ justifyContent: "flex-start", textAlign: "left" }}
                         >
                           {option.label}
+                          {!option.allowed && <LockOutlinedIcon sx={{ ml: "auto", fontSize: 16 }} />}
                         </Button>
+                        </Box>
                       ))}
                     </Stack>
                   )}
                 </Stack>
               </Popover>
-            </>
-          )}
+          </>
           <IconButton onClick={onClose} aria-label="Close"><CloseIcon /></IconButton>
         </Stack>
       </DialogTitle>
