@@ -10,17 +10,17 @@ export const LeiaListSkeleton = ({ count = 4 }: LeiaListSkeletonProps) => (
       <Box
         component="li"
         key={`leia-skeleton-${index}`}
-        sx={{ py: 2, borderBottom: index < count - 1 ? "1px solid" : 0, borderColor: "divider" }}
+        sx={{ py: 1.5, borderBottom: index < count - 1 ? "1px solid" : 0, borderColor: "divider" }}
       >
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Skeleton variant="circular" width={78} height={78} />
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Skeleton variant="circular" width={48} height={48} />
           <Box sx={{ flex: 1 }}>
-            <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+            <Stack direction="row" spacing={1} sx={{ mb: 0.5 }}>
               <Skeleton variant="text" width={180} height={22} />
               <Skeleton variant="rounded" width={52} height={22} />
             </Stack>
             <Skeleton variant="text" height={18} sx={{ width: "90%", mb: 0.5 }} />
-            <Skeleton variant="text" height={18} sx={{ width: "70%" }} />
+            <Skeleton variant="text" height={16} sx={{ width: 140 }} />
           </Box>
         </Stack>
       </Box>

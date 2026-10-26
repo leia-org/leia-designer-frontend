@@ -4,8 +4,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_CONFIG_DIGEST: ${DOCKER_BUILD_CONFIG_DIGEST:?Set the SHA-256 of DOCKER_FRONTEND_ENV_FILE before building}
+      secrets:
+        - vite_env
     container_name: designer-frontend
     environment:
       - PORT=80
     ports:
       - '8081:80'
+
+secrets:
+  vite_env:
+    file: ${DOCKER_FRONTEND_ENV_FILE:-.env.production.local}

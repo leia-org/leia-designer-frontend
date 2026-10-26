@@ -178,9 +178,9 @@ interface CreateLeiaDraftState {
   personaPublish: boolean;
 }
 
-const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Library management system";
 const DEFAULT_PROBLEM_GENERATION_DETAILS =
-  "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+  "Include catalog, loans, reservations, member accounts, and overdue notifications.";
 
 const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
 const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
@@ -1980,9 +1980,8 @@ const openGenerateProblemModal = () => {
           isPublished: false,
           user: currentUser!,
         } as unknown as Problem,
-        // A previous behaviour may be tied to a different exercise even if
-        // its broad process tag matches. The assistant must now apply a new
-        // behaviour specifically written for this problem.
+        // The assistant keeps the previous behaviour as a candidate and must
+        // explicitly confirm its compatibility with the updated problem.
         behaviour: null,
       }));
     },
@@ -2011,27 +2010,24 @@ const openGenerateProblemModal = () => {
   const applyChatBehaviour = useCallback(
     (spec: Record<string, unknown>, name?: string) => {
       if (!canEditBehaviour) return;
-      setLeiaConfig((prev) => {
-        const process = copyProcess(prev.problem?.spec?.process ?? spec.process);
-
-        return {
-          ...prev,
-          behaviour: {
-            apiVersion: "v1",
-            metadata: {
-              name: name || prev.behaviour?.metadata?.name || "ai-generated-behaviour",
-              version: "1.0.0",
-            },
-            spec: { ...spec, process },
-            id: "generated-" + Date.now(),
-            edited: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            isPublished: false,
-            user: currentUser!,
-          } as unknown as Behaviour,
-        };
-      });
+      // The chat supplies the final Problem process, including when both
+      // resources are applied in the same tool response before React renders.
+      const behaviour = {
+        apiVersion: "v1",
+        metadata: {
+          name: name || "ai-generated-behaviour",
+          version: "1.0.0",
+        },
+        spec: { ...spec, process: copyProcess(spec.process) },
+        id: "generated-" + Date.now(),
+        edited: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isPublished: false,
+        user: currentUser!,
+      } as unknown as Behaviour;
+      setLeiaConfig(prev => ({ ...prev, behaviour }));
+      return behaviour;
     },
     [canEditBehaviour, currentUser],
   );
@@ -2090,9 +2086,14 @@ const openGenerateProblemModal = () => {
   );
 
   const handleUseExistingBehaviour = useCallback(
-    (id: string, problemProcess?: string[]): { ok: boolean; name?: string; error?: string } => {
-      const behaviour = behaviours.find((item) => item.id === id);
+    (id: string, problemProcess?: string[], candidate?: Behaviour): { ok: boolean; name?: string; error?: string; behaviour?: Behaviour } => {
+      const behaviour = candidate?.id === id && candidate.edited
+        ? candidate
+        : behaviours.find((item) => item.id === id) ?? (candidate?.id === id ? candidate : undefined);
       if (!behaviour) return { ok: false, error: `No behaviour with id '${id}' is available.` };
+      if (behaviour.edited && !canEditBehaviour) {
+        return { ok: false, error: "Only an advanced user or administrator can use an authored behaviour draft." };
+      }
       const expectedProcess = problemProcess ?? leiaConfig.problem?.spec?.process;
       if (!expectedProcess) {
         return { ok: false, error: "Select or create the problem before selecting its behaviour." };
@@ -2104,9 +2105,9 @@ const openGenerateProblemModal = () => {
         };
       }
       setLeiaConfig((previous) => ({ ...previous, behaviour }));
-      return { ok: true, name: behaviour.metadata?.name };
+      return { ok: true, name: behaviour.metadata?.name, behaviour };
     },
-    [behaviours, leiaConfig.problem],
+    [behaviours, leiaConfig.problem, canEditBehaviour],
   );
 
   const handleAssistantLeiaName = useCallback(
