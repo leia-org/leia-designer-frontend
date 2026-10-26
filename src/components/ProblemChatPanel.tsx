@@ -321,10 +321,10 @@ interface ProblemChatPanelProps {
   behaviours: Behaviour[];
   personas: Persona[];
   canEditBehaviour: boolean;
-  onApplyProblem: (spec: ProblemSpec, name?: string) => void;
+  onApplyProblem: (spec: ProblemSpec, name?: string, behaviourForTurn?: Behaviour | null) => Behaviour | null;
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => Behaviour | undefined;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
-  onUseProblem: (id: string) => { ok: boolean; name?: string; process?: string[]; error?: string };
+  onUseProblem: (id: string, behaviourForTurn?: Behaviour | null) => { ok: boolean; name?: string; process?: string[]; behaviour?: Behaviour | null; error?: string };
   onUseBehaviour: (id: string, problemProcess?: string[], candidate?: Behaviour) => { ok: boolean; name?: string; error?: string; behaviour?: Behaviour };
   onUsePersona: (id: string) => { ok: boolean; name?: string; error?: string };
   onSetLeiaName?: (name: string) => void;
@@ -332,6 +332,8 @@ interface ProblemChatPanelProps {
   apiKeyId: string | null;
   initialChatState?: ProblemChatState;
   onChatStateChange?: (state: ProblemChatState) => void;
+  onBusyChange?: (busy: boolean) => void;
+  disabled?: boolean;
 }
 
 export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
@@ -353,6 +355,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   apiKeyId,
   initialChatState,
   onChatStateChange,
+  onBusyChange,
+  disabled = false,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialChatState?.messages ?? []);
   const [input, setInput] = useState(() => initialChatState?.input ?? "");
@@ -459,6 +463,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       tools: chatTools,
       fileIds: attachments.map((a) => a.fileId),
     });
+    // This selection belongs to one user turn, not to the inherited LEIA.
+    let behaviourForTurn: Behaviour | null = null;
     let activeProblemProcess: string[] | undefined = currentProblemRef.current
       ? Array.from(currentProblemRef.current.spec?.process ?? [])
       : undefined;
@@ -508,10 +514,16 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           const { name, spec } = takeName();
           const problemSpec = stripAvatar(spec);
           activeProblemProcess = Array.from(problemSpec.process ?? []);
-          onApplyProblem(problemSpec, name);
-          currentBehaviourRef.current = null;
+          behaviourForTurn = onApplyProblem(problemSpec, name, behaviourForTurn);
+          currentBehaviourRef.current = behaviourForTurn;
           pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
-          output = { status: "applied", next: "Call list_behaviours and explicitly select a compatible saved or draft behaviour. The previous draft is still available there." };
+          output = {
+            status: "applied",
+            behaviourPreserved: Boolean(behaviourForTurn),
+            next: behaviourForTurn
+              ? "The compatible behaviour explicitly selected in this turn was preserved."
+              : "Call list_behaviours and explicitly select a compatible saved or draft behaviour before testing.",
+          };
         } else if (call.name === "apply_behaviour") {
           if (!canEditBehaviour) {
             output = { error: "this user cannot author or modify behaviours; use an existing behaviour" };
@@ -538,6 +550,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           rememberedBehavioursRef.current.set(applied.id, applied);
           previousBehaviourRef.current = applied;
           currentBehaviourRef.current = applied;
+          behaviourForTurn = applied;
           pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_persona") {
@@ -588,10 +601,14 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             }));
         } else if (call.name === "use_problem") {
           const id = typeof args.id === "string" ? args.id : "";
-          const result = onUseProblem(id);
+          const problemChanged = currentProblemRef.current?.id !== id;
+          const result = onUseProblem(id, behaviourForTurn);
           if (result.ok) {
             activeProblemProcess = result.process;
-            currentBehaviourRef.current = currentProblemRef.current?.id === id ? currentBehaviourRef.current : null;
+            if (problemChanged) {
+              behaviourForTurn = result.behaviour ?? null;
+              currentBehaviourRef.current = behaviourForTurn;
+            }
             pushMessage("system", `✓ Using existing problem${result.name ? ` ("${result.name}")` : ""}.`);
             output = { status: "selected", name: result.name };
           } else {
@@ -622,6 +639,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             : { ok: false, error: `no behaviour with id '${id}'` };
           if (result.ok) {
             currentBehaviourRef.current = result.behaviour ?? candidate ?? null;
+            behaviourForTurn = currentBehaviourRef.current;
             previousBehaviourRef.current = currentBehaviourRef.current;
             pushMessage("system", `✓ Using existing behaviour${result.name ? ` ("${result.name}")` : ""}.`);
             output = { status: "selected", name: result.name };
@@ -664,12 +682,13 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if (!text || sending || disabled) return;
     setError(null);
     setInput("");
     inspectedLibrariesRef.current.clear();
     pushMessage("user", text);
     setSending(true);
+    onBusyChange?.(true);
     try {
       const chatId = await ensureSession();
       const reply = await runTurn(chatId, text);
@@ -678,6 +697,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       setError(err instanceof Error ? err.message : "The assistant failed to respond");
     } finally {
       setSending(false);
+      onBusyChange?.(false);
     }
   };
 
@@ -828,7 +848,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           <IconButton
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={!ready || uploading || sending}
+            disabled={disabled || !ready || uploading || sending}
             aria-label="Attach a PDF"
             color="primary"
           >
@@ -841,7 +861,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           <TextField
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            disabled={!ready || sending}
+            disabled={disabled || !ready || sending}
             multiline
             minRows={1}
             maxRows={5}
@@ -853,7 +873,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           <IconButton
             type="button"
             onClick={() => void handleSend()}
-            disabled={!ready || sending || !input.trim()}
+            disabled={disabled || !ready || sending || !input.trim()}
             color="primary"
             sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" } }}
             aria-label="Send message"
