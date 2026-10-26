@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
   Alert,
@@ -19,10 +19,13 @@ import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { useAuth } from "../context";
 import { TurnstileWidget } from "../components/TurnstileWidget";
 import { AuthLayout } from "../components/shared/AuthLayout";
+import { TestAccountLogin } from "../components/TestAccountLogin";
 import { isTurnstileEnabled } from "../config/turnstile";
 
 export const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const chooseTestAccount = searchParams.get("testAccount") === "1";
   const { login, token } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,8 +41,8 @@ export const Login = () => {
   }, []);
 
   useEffect(() => {
-    if (token) navigate("/", { replace: true });
-  }, [navigate, token]);
+    if (token && !chooseTestAccount) navigate("/", { replace: true });
+  }, [navigate, token, chooseTestAccount]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -157,6 +160,7 @@ export const Login = () => {
           >
             {loading ? <CircularProgress size={22} color="inherit" /> : "Login"}
           </Button>
+          <TestAccountLogin />
         </Stack>
       </Box>
     </AuthLayout>
