@@ -41,6 +41,9 @@ jobs:
       - name: Test preview routing
         run: npm run test:preview
 
+      - name: Test problem chat behaviour reuse
+        run: npm run test:problem-chat
+
       - name: Build
         env:
           CI: true
