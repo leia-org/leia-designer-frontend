@@ -44,6 +44,9 @@ jobs:
       - name: Test problem chat behaviour reuse
         run: npm run test:problem-chat
 
+      - name: Test creator state
+        run: npm run test:creator
+
       - name: Build
         env:
           CI: true

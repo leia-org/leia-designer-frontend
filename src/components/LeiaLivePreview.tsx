@@ -16,9 +16,9 @@ import type { Behaviour, Persona, Problem } from "../models/Leia";
 
 interface GeneratedLeiaPreview {
   spec?: {
-    persona?: Persona;
-    problem?: Problem;
-    behaviour?: Behaviour;
+    persona?: Persona | null;
+    problem?: Problem | null;
+    behaviour?: Behaviour | null;
   };
 }
 
@@ -28,6 +28,7 @@ interface LeiaLivePreviewProps {
   onTitleChange: (value: string) => void;
   titleSuggested?: boolean;
   testAction: React.ReactNode;
+  readyToTest?: boolean;
   canEditBehaviour?: boolean;
   onComponentClick?: (component: "persona" | "behaviour" | "problem") => void;
 }
@@ -129,6 +130,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   onTitleChange,
   titleSuggested = false,
   testAction,
+  readyToTest,
   canEditBehaviour = true,
   onComponentClick,
 }) => {
@@ -136,7 +138,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   const problem = leia?.spec?.problem;
   const behaviour = leia?.spec?.behaviour;
   const displayName = title || persona?.spec?.fullName || "Untitled LEIA";
-  const isReady = Boolean(persona && problem && behaviour);
+  const isReady = readyToTest ?? Boolean(persona && problem && behaviour);
   const widgetCount = problem?.spec?.widgets?.length ?? 0;
 
   return (

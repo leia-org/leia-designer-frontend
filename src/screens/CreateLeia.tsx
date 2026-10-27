@@ -251,7 +251,6 @@ export const CreateLeia: React.FC = () => {
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>(createEmptyLeiaConfig);
   const [leiaConfigSnapShot, setLeiaConfigSnapShot] =
     useState<LeiaConfig | null>(null);
-  const [generatedLeia, setGeneratedLeia] = useState<Leia | null>(null);
 
   const [customizations, setCustomizations] = useState<LeiaCustomizations>(
     createEmptyCustomizations,
@@ -263,6 +262,7 @@ export const CreateLeia: React.FC = () => {
   const [chatSettingsAnchor, setChatSettingsAnchor] = useState<HTMLElement | null>(null);
   const [chatState, setChatState] = useState<ProblemChatState>(EMPTY_CHAT_STATE);
   const [chatResetKey, setChatResetKey] = useState(0);
+  const [chatBusy, setChatBusy] = useState(false);
   const [drafts, setDrafts] = useState<LeiaDraft<CreateLeiaDraftState>[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const [showDraftsDialog, setShowDraftsDialog] = useState(false);
@@ -288,7 +288,6 @@ export const CreateLeia: React.FC = () => {
   const [labels, setLabels] = useState<Label[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [generationError, setGenerationError] = useState<Error | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
   // Per-LEIA background supervisor (instructor-authored). Persisted into
   // spec.supervisorConfig; runs on the LEIA's own key in the workbench.
@@ -556,7 +555,6 @@ export const CreateLeia: React.FC = () => {
     setCurrentStep(1);
     setLeiaConfig(createEmptyLeiaConfig());
     setLeiaConfigSnapShot(null);
-    setGeneratedLeia(null);
     setCustomizations(createEmptyCustomizations());
     setLeiaNameManuallyEdited(false);
     setSelectedLabelIds([]);
@@ -590,7 +588,6 @@ export const CreateLeia: React.FC = () => {
       behaviour: restoredConfig.behaviour ?? null,
     });
     setLeiaConfigSnapShot(state.leiaConfigSnapShot ?? null);
-    setGeneratedLeia(null);
     setCustomizations({
       ...restoredCustomizations,
       leia: {
@@ -983,30 +980,25 @@ export const CreateLeia: React.FC = () => {
     }
   }, [location.state, navigate, location.pathname, restoreDraft]);
 
-  useEffect(() => {
-    if (
-      leiaConfig.persona &&
-      leiaConfig.behaviour &&
-      leiaConfig.problem
-    ) {
-      try {
-        setGenerationError(null);
-        const leia = generateLeia(
-          leiaConfig.persona,
-          leiaConfig.behaviour,
-          leiaConfig.problem,
-        );
-        setGeneratedLeia(leia as Leia);
-      } catch (err: unknown) {
-        const error =
-          err instanceof Error
-            ? err
-            : new Error("Unknown error occurred while generating LEIA");
-        setGenerationError(error);
-        setGeneratedLeia(null);
-      }
+  // Derive the assembled LEIA during render. An incomplete selection must never
+  // retain a previously valid LEIA, including during navigation/draft restoration.
+  const leiaAssembly = useMemo((): { generatedLeia: Leia | null; generationError: Error | null } => {
+    if (!leiaConfig.persona || !leiaConfig.behaviour || !leiaConfig.problem) {
+      return { generatedLeia: null, generationError: null };
     }
-  }, [currentStep, leiaConfig]);
+    try {
+      return {
+        generatedLeia: generateLeia(leiaConfig.persona, leiaConfig.behaviour, leiaConfig.problem) as Leia,
+        generationError: null,
+      };
+    } catch (err: unknown) {
+      return {
+        generatedLeia: null,
+        generationError: err instanceof Error ? err : new Error("Unknown error occurred while generating LEIA"),
+      };
+    }
+  }, [leiaConfig]);
+  const { generatedLeia, generationError } = leiaAssembly;
 
   const loadPersonas = async (
     visibility: "all" | "public" | "private" = "all",
@@ -1580,8 +1572,8 @@ const openGenerateProblemModal = () => {
   ]);
 
   const handleTestLeia = async () => {
-    if (!generatedLeia) {
-      console.error("No generated LEIA available");
+    if (chatBusy || testingLeia || !generatedLeia || !leiaConfig.persona || !leiaConfig.problem || !leiaConfig.behaviour) {
+      console.error("No complete LEIA available, or the designer is busy");
       return;
     }
 
@@ -1880,7 +1872,7 @@ const openGenerateProblemModal = () => {
   };
 
   const isStep1Complete = Boolean(
-    leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour && !generationError && generatedLeia,
+    leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour && !generationError && generatedLeia && !chatBusy,
   );
   const isStep2Complete = (() => {
     const customizationsValid =
@@ -1955,9 +1947,14 @@ const openGenerateProblemModal = () => {
   };
 
   const applyChatProblem = useCallback(
-    (spec: ProblemSpec, name?: string) => {
+    (spec: ProblemSpec, name?: string, behaviourForTurn?: Behaviour | null): Behaviour | null => {
       const incomingSpec = spec as unknown as Record<string, unknown>;
       const process = copyProcess(incomingSpec.process);
+      // Keep only a compatible behaviour explicitly selected in THIS assistant
+      // turn. The inherited behaviour still needs an explicit suitability check.
+      const retainedBehaviour = behaviourForTurn && haveSameProcess(behaviourForTurn.spec.process, process)
+        ? behaviourForTurn
+        : null;
       setLeiaConfig((prev) => ({
         ...prev,
         problem: {
@@ -1980,10 +1977,9 @@ const openGenerateProblemModal = () => {
           isPublished: false,
           user: currentUser!,
         } as unknown as Problem,
-        // The assistant keeps the previous behaviour as a candidate and must
-        // explicitly confirm its compatibility with the updated problem.
-        behaviour: null,
+        behaviour: retainedBehaviour,
       }));
+      return retainedBehaviour;
     },
     [currentUser],
   );
@@ -2066,20 +2062,22 @@ const openGenerateProblemModal = () => {
   );
 
   const handleUseExistingProblem = useCallback(
-    (id: string): { ok: boolean; name?: string; process?: string[]; error?: string } => {
+    (id: string, behaviourForTurn?: Behaviour | null): { ok: boolean; name?: string; process?: string[]; behaviour?: Behaviour | null; error?: string } => {
       const problem = problems.find((item) => item.id === id);
       if (!problem) return { ok: false, error: `No problem with id '${id}' is available.` };
+      const retainedBehaviour = behaviourForTurn && haveSameProcess(behaviourForTurn.spec.process, problem.spec.process)
+        ? behaviourForTurn
+        : null;
       setLeiaConfig((previous) => ({
         ...previous,
         problem,
-        // Selecting a problem is followed by an explicit behaviour search.
-        // Keeping the old one here caused unrelated exercise behaviours to leak.
-        behaviour: previous.problem?.id === problem.id ? previous.behaviour : null,
+        behaviour: previous.problem?.id === problem.id ? previous.behaviour : retainedBehaviour,
       }));
       return {
         ok: true,
         name: problem.metadata?.name,
         process: copyProcess(problem.spec?.process),
+        behaviour: retainedBehaviour,
       };
     },
     [problems],
@@ -2279,7 +2277,7 @@ const openGenerateProblemModal = () => {
   );
 
   const renderNewStep = () => {
-    const canTest = Boolean(resolveTestRunnerConfiguration()) && !chatOptionsLoading;
+    const canTest = Boolean(resolveTestRunnerConfiguration()) && !chatOptionsLoading && !chatBusy && isStep1Complete;
 
     const editResource = (resource: "persona" | "problem" | "behaviour") => {
       if (resource === "behaviour" && !canEditBehaviour) return;
@@ -2397,6 +2395,8 @@ const openGenerateProblemModal = () => {
               key={chatResetKey}
               initialChatState={chatState}
               onChatStateChange={setChatState}
+              onBusyChange={setChatBusy}
+              disabled={testingLeia}
             />
           </Box>
 
@@ -2410,7 +2410,8 @@ const openGenerateProblemModal = () => {
             }}
           >
             <LeiaLivePreview
-              leia={generatedLeia}
+              leia={generatedLeia ?? { spec: leiaConfig }}
+              readyToTest={Boolean(generatedLeia) && !chatBusy}
               title={customizations.leia.name}
               onTitleChange={handleLeiaNameChange}
               titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}

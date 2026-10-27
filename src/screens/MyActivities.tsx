@@ -15,6 +15,7 @@ import Editor from "@monaco-editor/react";
 import AddIcon from "@mui/icons-material/Add";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import BusinessCenterOutlinedIcon from "@mui/icons-material/BusinessCenterOutlined";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -55,6 +56,7 @@ import {
 import "../styles/monaco-tooltip-fix.css";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
+import { useDebounce } from "../hooks/useDebounce";
 
 interface TranscriptionMessage {
   text: string;
@@ -84,6 +86,7 @@ export const MyActivities: React.FC = () => {
   const [creatingNewExperiment, setCreatingNewExperiment] = useState(false);
   const [newExperimentName, setNewExperimentName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 400);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const isFetchingRef = useRef(false);
   const nextCursorRef = useRef<string | null>(null);
@@ -150,7 +153,7 @@ export const MyActivities: React.FC = () => {
     setErrorLoadingExperiments("");
     try {
       const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/user/me", {
-        params: { populated: true },
+        params: { populated: true, text: debouncedSearchQuery || undefined },
       });
       setExperiments(response.data.experiments);
       setNextCursor(response.data.nextCursor || null);
@@ -172,7 +175,7 @@ export const MyActivities: React.FC = () => {
     try {
       setLoadingMore(true);
       const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/user/me", {
-        params: { populated: true, lastActivityId: nextCursor },
+        params: { populated: true, lastActivityId: nextCursor, text: debouncedSearchQuery || undefined },
       });
       setExperiments((prev) => [...prev ?? [], ...(response.data.experiments ?? [])]);
       setNextCursor(response.data.nextCursor || null);
@@ -187,11 +190,14 @@ export const MyActivities: React.FC = () => {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingExperiments, loadingMore, nextCursor]);
+  }, [loadingExperiments, loadingMore, nextCursor, debouncedSearchQuery]);
 
   useEffect(() => {
+    nextCursorRef.current = null;
+    setNextCursor(null);
+    setExperiments(null);
     fetchExperiments();
-  }, []);
+  }, [debouncedSearchQuery]);
 
   useEffect(() => {
     isFetchingRef.current = loadingExperiments || loadingMore;
@@ -211,7 +217,7 @@ export const MyActivities: React.FC = () => {
           void loadMoreActivities();
         }
       };
-  
+
       window.addEventListener("scroll", handleWindowScroll, { passive: true });
       return () => window.removeEventListener("scroll", handleWindowScroll);
     }, [loadMoreActivities]);
@@ -476,7 +482,7 @@ export const MyActivities: React.FC = () => {
       });
     }
   };
-
+  
   const handleDeleteExperiment = async (experimentId: string) => {
     try {
       await api.delete(`/api/v1/experiments/${experimentId}`);
@@ -1066,10 +1072,6 @@ export const MyActivities: React.FC = () => {
     }
   };
 
-  const filteredExperiments = (experiments || []).filter((experiment) =>
-    experiment.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
       <Header title="My Activities" description="View and manage your activities" />
@@ -1255,7 +1257,7 @@ export const MyActivities: React.FC = () => {
             <TextField
               placeholder="Search activities..."
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) => setSearchQuery( event.target.value)}
               fullWidth
               InputProps={{
                 startAdornment: (
@@ -1284,7 +1286,7 @@ export const MyActivities: React.FC = () => {
             </Alert>
           </Stack>
         ) : experiments ? (
-          experiments.length === 0 ? (
+          experiments.length === 0 && !debouncedSearchQuery ? (
             <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 320, textAlign: "center" }}>
               <BusinessCenterOutlinedIcon sx={{ fontSize: 64, color: "text.disabled" }} />
               <Typography variant="h6">No activities yet</Typography>
@@ -1308,9 +1310,18 @@ export const MyActivities: React.FC = () => {
                 </Button>
               </Stack>
             </Stack>
+            ) : experiments.length === 0 && debouncedSearchQuery ? (
+        // Sin resultados para la búsqueda actual
+        <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 320, textAlign: "center" }}>
+          <ExtensionOutlinedIcon sx={{ fontSize: 64, color: "text.disabled" }} />
+          <Typography variant="h6">No results found</Typography>
+          <Typography color="text.secondary">
+            No activities match "{debouncedSearchQuery}".
+          </Typography>
+        </Stack>
           ) : (
             <Stack spacing={1.5}>
-              {filteredExperiments.map((experiment, experimentIndex) => {
+              {experiments?.map((experiment, experimentIndex) => {
                 const expanded = expandedExperiments.has(experiment.id);
 
                 return (
