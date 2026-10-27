@@ -734,6 +734,36 @@ export const CreateLeia: React.FC = () => {
     action?.();
   }, [hasDraftContent, saveCurrentDraft]);
 
+  const discardDraftAndLeave = useCallback(async () => {
+    const action = pendingLeaveActionRef.current;
+    setDraftError(null);
+    setIsSavingDraft(true);
+
+    try {
+      const pendingSave = draftSavePromiseRef.current;
+      if (pendingSave) {
+        await pendingSave;
+      }
+
+      const draftId = currentDraftIdRef.current;
+      if (draftId) {
+        await deleteLeiaDraft(draftId);
+        setDrafts((previous) => previous.filter((draft) => draft.id !== draftId));
+        currentDraftIdRef.current = null;
+        setCurrentDraftId(null);
+      }
+
+      pendingLeaveActionRef.current = null;
+      setShowLeaveDraftDialog(false);
+      action?.();
+    } catch (draftDiscardError) {
+      console.error("Error discarding LEIA draft:", draftDiscardError);
+      setDraftError("Could not discard this draft. It was not deleted.");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }, []);
+
   useEffect(() => {
     currentDraftIdRef.current = currentDraftId;
   }, [currentDraftId]);
@@ -3284,7 +3314,15 @@ const openGenerateProblemModal = () => {
             {draftError && <Alert severity="error">{draftError}</Alert>}
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions disableSpacing sx={{ px: 3, py: 2,  justifyContent: "space-between" }}>
+          <Button
+            color="error"
+            variant="outlined"
+            onClick={() => void discardDraftAndLeave()}
+            disabled={isSavingDraft}
+          >
+            Discard and leave
+          </Button>
           <Button color="inherit" onClick={continueEditingDraft} disabled={isSavingDraft}>
             Continue editing
           </Button>
