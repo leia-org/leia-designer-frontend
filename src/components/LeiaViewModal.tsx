@@ -175,6 +175,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const persona = personaResource?.spec;
   const behaviour = displayLeia.spec?.behaviour?.spec;
   const isAdmin = user?.role === "admin";
+  const canViewBehaviour = isAdmin || user?.role === "advanced";
   const canRegenerateLeia = isAdmin || getUserId(displayLeia.user) === user?.id;
   const canRegenerateProblem = isAdmin || getUserId(problemResource?.user) === user?.id;
   const canRegeneratePersona = isAdmin || getUserId(personaResource?.user) === user?.id;
@@ -387,7 +388,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
       >
         <Tab value="problem" icon={<ExtensionOutlinedIcon fontSize="small" />} iconPosition="start" label="Problem" />
         <Tab value="persona" icon={<PersonOutlineIcon fontSize="small" />} iconPosition="start" label="Persona" />
-        {user?.role === "admin" && <Tab value="behaviour" icon={<PsychologyOutlinedIcon fontSize="small" />} iconPosition="start" label="Behaviour" />}
+        {canViewBehaviour && <Tab value="behaviour" icon={<PsychologyOutlinedIcon fontSize="small" />} iconPosition="start" label="Behaviour" />}
         <Tab value="infographics" icon={<InsertChartOutlinedIcon fontSize="small" />} iconPosition="start" label="Infographics" />
       </Tabs>
       <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
@@ -484,7 +485,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
           </Stack>
         )}
 
-        {viewMode === "behaviour" && user?.role === "admin" && (
+        {viewMode === "behaviour" && canViewBehaviour && (
           <Stack spacing={2.5}>
             <ContentSection title="Behaviour Configuration">
               <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour?.description || "No description available"}</Typography>
