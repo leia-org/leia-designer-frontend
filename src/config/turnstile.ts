@@ -1,4 +1,10 @@
-export const turnstileSiteKey = import.meta.env.VITE_CLOUDFLARE_SITE_KEY?.trim();
+import { getTurnstilePolicy } from "./turnstilePolicy.mjs";
 
-export const isTurnstileEnabled =
-  import.meta.env.VITE_TURNSTILE_ENABLED?.toLowerCase() !== "false" && Boolean(turnstileSiteKey);
+const turnstilePolicy = getTurnstilePolicy(
+  import.meta.env.VITE_TURNSTILE_ENABLED,
+  import.meta.env.VITE_CLOUDFLARE_SITE_KEY,
+);
+
+export const turnstileSiteKey = turnstilePolicy.siteKey;
+export const isTurnstileEnabled = turnstilePolicy.enabled;
+export const turnstileState = turnstilePolicy.state;
