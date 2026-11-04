@@ -734,6 +734,36 @@ export const CreateLeia: React.FC = () => {
     action?.();
   }, [hasDraftContent, saveCurrentDraft]);
 
+  const discardDraftAndLeave = useCallback(async () => {
+    const action = pendingLeaveActionRef.current;
+    setDraftError(null);
+    setIsSavingDraft(true);
+
+    try {
+      const pendingSave = draftSavePromiseRef.current;
+      if (pendingSave) {
+        await pendingSave;
+      }
+
+      const draftId = currentDraftIdRef.current;
+      if (draftId) {
+        await deleteLeiaDraft(draftId);
+        setDrafts((previous) => previous.filter((draft) => draft.id !== draftId));
+        currentDraftIdRef.current = null;
+        setCurrentDraftId(null);
+      }
+
+      pendingLeaveActionRef.current = null;
+      setShowLeaveDraftDialog(false);
+      action?.();
+    } catch (draftDiscardError) {
+      console.error("Error discarding LEIA draft:", draftDiscardError);
+      setDraftError("Could not discard this draft. It was not deleted.");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }, []);
+
   useEffect(() => {
     currentDraftIdRef.current = currentDraftId;
   }, [currentDraftId]);
@@ -2084,9 +2114,14 @@ const openGenerateProblemModal = () => {
   );
 
   const handleUseExistingBehaviour = useCallback(
-    (id: string, problemProcess?: string[]): { ok: boolean; name?: string; behaviour?: Behaviour; error?: string } => {
-      const behaviour = behaviours.find((item) => item.id === id);
+    (id: string, problemProcess?: string[], candidate?: Behaviour): { ok: boolean; name?: string; error?: string; behaviour?: Behaviour } => {
+      const behaviour = candidate?.id === id && candidate.edited
+        ? candidate
+        : behaviours.find((item) => item.id === id) ?? (candidate?.id === id ? candidate : undefined);
       if (!behaviour) return { ok: false, error: `No behaviour with id '${id}' is available.` };
+      if (behaviour.edited && !canEditBehaviour) {
+        return { ok: false, error: "Only an advanced user or administrator can use an authored behaviour draft." };
+      }
       const expectedProcess = problemProcess ?? leiaConfig.problem?.spec?.process;
       if (!expectedProcess) {
         return { ok: false, error: "Select or create the problem before selecting its behaviour." };
@@ -2100,7 +2135,7 @@ const openGenerateProblemModal = () => {
       setLeiaConfig((previous) => ({ ...previous, behaviour }));
       return { ok: true, name: behaviour.metadata?.name, behaviour };
     },
-    [behaviours, leiaConfig.problem],
+    [behaviours, leiaConfig.problem, canEditBehaviour],
   );
 
   const handleAssistantLeiaName = useCallback(
@@ -3279,7 +3314,15 @@ const openGenerateProblemModal = () => {
             {draftError && <Alert severity="error">{draftError}</Alert>}
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions disableSpacing sx={{ px: 3, py: 2,  justifyContent: "space-between" }}>
+          <Button
+            color="error"
+            variant="outlined"
+            onClick={() => void discardDraftAndLeave()}
+            disabled={isSavingDraft}
+          >
+            Discard and leave
+          </Button>
           <Button color="inherit" onClick={continueEditingDraft} disabled={isSavingDraft}>
             Continue editing
           </Button>

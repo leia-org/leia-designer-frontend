@@ -4,6 +4,7 @@ import { AuthProvider } from './context'
 import { AppRoutes } from './routes'
 import { LeiaThemeProvider } from './theme/LeiaThemeProvider'
 import { WorkspaceFrame } from './components/shared/WorkspaceFrame'
+import { ImageRegenerationProvider } from './context/ImageRegenerationProvider'
 
 const AUTH_ROUTES = new Set(['/login', '/register'])
 const SIDEBARLESS_ROUTES = new Set(['/create'])
@@ -39,7 +40,9 @@ function App() {
     <LeiaThemeProvider>
       <Router>
         <AuthProvider>
+          <ImageRegenerationProvider>
           <RoutedApplication />
+          </ImageRegenerationProvider>
         </AuthProvider>
       </Router>
     </LeiaThemeProvider>

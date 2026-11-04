@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import {
@@ -33,10 +33,12 @@ export const InfographicViewer = forwardRef<InfographicViewerHandle, Infographic
     { src, fallbackSrc, candidateSources: candidateSourcesProp, title, compact = false, hidden = false },
     ref,
   ) {
-    const candidateSources = useMemo(
-      () => buildStoredImageCandidateSources(...(candidateSourcesProp?.length ? candidateSourcesProp : [src, fallbackSrc])),
-      [candidateSourcesProp, fallbackSrc, src],
-    );
+    // Polling a job rerenders View. Equal URLs must not restart a failed
+    // candidate chain on every poll just because the array is a new object.
+    const sourcesKey = JSON.stringify(buildStoredImageCandidateSources(
+      ...(candidateSourcesProp?.length ? candidateSourcesProp : [src, fallbackSrc]),
+    ));
+    const candidateSources = useMemo<string[]>(() => JSON.parse(sourcesKey), [sourcesKey]);
     const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const resolvedSrc = candidateSources[currentSourceIndex] || "";
@@ -48,11 +50,11 @@ export const InfographicViewer = forwardRef<InfographicViewerHandle, Infographic
     const loadNextSource = () => {
       setCurrentSourceIndex((previous) => Math.min(previous + 1, candidateSources.length));
     };
-    const open = () => {
+    const open = useCallback(() => {
       if (resolvedSrc) setIsOpen(true);
-    };
+    }, [resolvedSrc]);
 
-    useImperativeHandle(ref, () => ({ open }), [resolvedSrc]);
+    useImperativeHandle(ref, () => ({ open }), [open]);
 
     if (hidden) {
       return resolvedSrc ? <img src={resolvedSrc} alt="" onError={loadNextSource} style={{ display: "none" }} /> : null;

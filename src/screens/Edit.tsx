@@ -21,6 +21,7 @@ import { Header } from "../components/shared/Header";
 import { FormatEditor } from "../components/FormatEditor";
 import { FormatPreview } from "../components/FormatPreview";
 import api from "../lib/axios";
+import { useTestConversationDynamics } from "../hooks/useTestConversationDynamics";
 
 const EDIT_STATE_KEY = "designerEditState";
 const CHAT_SAVE_STATE_KEY = "designerChatSaveState";
@@ -146,6 +147,7 @@ export const Edit: React.FC = () => {
 
   const storedState = parseJSON<StoredEditState>(localStorage.getItem(EDIT_STATE_KEY));
   const sessionId = routeSessionId || storedState?.sessionId || "";
+  const dynamics = useTestConversationDynamics(sessionId);
   const exercise = storedState?.exercise;
   const solutionFormat = exercise?.solutionFormat || "mermaid";
   const codeStorageKey = useMemo(
@@ -249,7 +251,7 @@ export const Edit: React.FC = () => {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!sessionId || isSubmitting) return;
+    if (!sessionId || isSubmitting || !dynamics.canFinish) return;
     setSubmitError(null);
     setIsSubmitting(true);
     try {
@@ -273,7 +275,7 @@ export const Edit: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [code, isSubmitting, sessionId]);
+  }, [code, isSubmitting, sessionId, dynamics.canFinish]);
 
   const handleContinueConfiguration = useCallback(() => {
     const savedChatState = parseJSON<SavedNavigationState>(
@@ -318,7 +320,7 @@ export const Edit: React.FC = () => {
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting || !sessionId || !!error}
+              disabled={isSubmitting || !sessionId || !!error || !dynamics.canFinish}
               variant="outlined"
               startIcon={isSubmitting ? <CircularProgress size={14} color="inherit" /> : undefined}
             >
@@ -331,6 +333,8 @@ export const Edit: React.FC = () => {
         }
       />
 
+      {dynamics.error && <Alert severity="error">{dynamics.error}</Alert>}
+      {!dynamics.error && !dynamics.canFinish && <Alert severity="info">Return to chat and continue until LEIA decides the conversation has ended before evaluating.</Alert>}
       <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", px: { xs: 2, md: 3 }, py: 2 }}>
         <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
           {submitError && (

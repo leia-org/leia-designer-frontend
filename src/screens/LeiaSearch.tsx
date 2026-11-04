@@ -31,6 +31,8 @@ import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import api from "../lib/axios";
+import { useImageRegeneration } from "../context/ImageRegenerationContext";
+import { applyImageJob } from "../lib/imageRegeneration";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import { PageShell } from "../components/shared/PageShell";
@@ -53,6 +55,7 @@ export const LeiaSearch: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuth().user;
+  const { jobs: imageJobs } = useImageRegeneration();
   const {
     apiKeys,
     isLoading: isApiKeysLoading,
@@ -101,6 +104,13 @@ export const LeiaSearch: React.FC = () => {
     [params]
   );
 
+  useEffect(() => {
+    const jobs = Object.values(imageJobs).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    setLeias(current => {
+      const next = current.map(leia => jobs.reduce(applyImageJob, leia));
+      return next.every((leia, index) => leia === current[index]) ? current : next;
+    });
+  }, [imageJobs]);
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [retry, setRetry] = useState(false);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);

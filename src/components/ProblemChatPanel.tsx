@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
+import { behaviourCandidates, CORE_BEHAVIOUR_REFERENCES, missingBehaviourReferences, templateReferences } from "../lib/chatBehaviours.mjs";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
@@ -188,13 +189,13 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "list_behaviours",
     description:
-      "Lists existing behaviours that can be reused. You MUST call this, wait for its result and inspect it before apply_behaviour. Reuse one only when its full instructions fit the exact selected Problem, including its real task and subject; a matching role, technology or process alone is not enough.",
+      "Lists saved behaviours and drafts authored earlier in this conversation, including their full instructions and template references. Inspect this result after changing the Problem. Prefer reusing a compatible generic interaction role with dynamic {{problem.*}} / {{persona.*}} references; a change of scenario alone does not require a new behaviour. Do not reuse incompatible hardcoded case instructions merely because the process matches.",
     parameters: { type: "object", properties: {} },
   },
   {
     name: "use_behaviour",
     description:
-      "Selects an existing behaviour by id from list_behaviours only when its full instructions fit the exact selected Problem. Its process must exactly match the selected problem process, but matching process alone is not enough.",
+      "Selects a saved or draft behaviour by id from list_behaviours, preserving its identity and template placeholders. Reuse a compatible generic role across different scenarios; the dynamic problem/persona references supply the current context. Its process must exactly match the selected problem process. Inspect its full instructions and reject incompatible hardcoded case data.",
     parameters: {
       type: "object",
       properties: {
@@ -206,7 +207,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_behaviour",
     description:
-      "Writes a NEW, COMPLETE behaviour into the editor for the exact current Problem. Include its real task, subject, and technology or programming language where relevant. Never reuse content from another exercise just because its language or process matches. Call list_behaviours first and use this only when no existing behaviour's full instructions fit this exact Problem. Use {{persona.firstName}}-style template tags where natural. Set `name` so the instructor doesn't have to rename it.",
+      "Writes a COMPLETE reusable behaviour into the editor. Call list_behaviours first; prefer use_behaviour when a saved or draft role is compatible. Define the interaction pattern, boundaries and guidance using dynamic problem/persona references rather than hardcoding the current exercise. Preserve all template references in the previous behaviour when editing it. Required references in description: " + CORE_BEHAVIOUR_REFERENCES.join(", ") + ". Missing references return an error without changing the editor. Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -324,7 +325,7 @@ interface ProblemChatPanelProps {
   onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => Behaviour | undefined;
   onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
   onUseProblem: (id: string, behaviourForTurn?: Behaviour | null) => { ok: boolean; name?: string; process?: string[]; behaviour?: Behaviour | null; error?: string };
-  onUseBehaviour: (id: string, problemProcess?: string[]) => { ok: boolean; name?: string; behaviour?: Behaviour; error?: string };
+  onUseBehaviour: (id: string, problemProcess?: string[], candidate?: Behaviour) => { ok: boolean; name?: string; error?: string; behaviour?: Behaviour };
   onUsePersona: (id: string) => { ok: boolean; name?: string; error?: string };
   onSetLeiaName?: (name: string) => void;
   modelName: string;
@@ -381,6 +382,16 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentProblemRef.current = currentProblem;
   const currentBehaviourRef = useRef<Behaviour | null>(currentBehaviour);
   currentBehaviourRef.current = currentBehaviour;
+  // Applying a new Problem clears the selection, but must not discard the
+  // reusable draft that existed before that change.
+  const rememberedBehavioursRef = useRef<Map<string, Behaviour>>(new Map());
+  const previousBehaviourRef = useRef<Behaviour | null>(currentBehaviour);
+  useEffect(() => {
+    if (currentBehaviour) {
+      rememberedBehavioursRef.current.set(currentBehaviour.id, currentBehaviour);
+      previousBehaviourRef.current = currentBehaviour;
+    }
+  }, [currentBehaviour]);
   const currentPersonaRef = useRef<Persona | null>(currentPersona);
   currentPersonaRef.current = currentPersona;
   const problemsRef = useRef<Problem[]>(problems);
@@ -441,6 +452,10 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
 
   // One user turn → loop while the model returns tool calls.
   const runTurn = async (chatId: string, message: string): Promise<string> => {
+    if (currentBehaviourRef.current) {
+      rememberedBehavioursRef.current.set(currentBehaviourRef.current.id, currentBehaviourRef.current);
+      previousBehaviourRef.current = currentBehaviourRef.current;
+    }
     // Send the uploaded PDF ids with the turn so the runner attaches them even
     // if the session was re-opened; it only attaches each one once.
     let response = await sendProblemChatMessage(chatId, {
@@ -519,13 +534,23 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             return { callId: call.callId, output };
           }
           const { name, spec } = takeName();
+          const missing = missingBehaviourReferences(
+            typeof spec.description === "string" ? spec.description : undefined,
+            previousBehaviourRef.current?.spec.description,
+          );
+          if (missing.length > 0) {
+            output = { error: "Keep a reusable behaviour template. Include the missing references in description and retry, or use_behaviour to reuse the compatible previous draft.", missingReferences: missing };
+            return { callId: call.callId, output };
+          }
           const applied = onApplyBehaviour({ ...spec, process: activeProblemProcess ?? spec.process }, name);
           if (!applied) {
             output = { error: "The behaviour could not be applied." };
             return { callId: call.callId, output };
           }
-          behaviourForTurn = applied;
+          rememberedBehavioursRef.current.set(applied.id, applied);
+          previousBehaviourRef.current = applied;
           currentBehaviourRef.current = applied;
+          behaviourForTurn = applied;
           pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_persona") {
@@ -591,25 +616,31 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           }
         } else if (call.name === "list_behaviours") {
           inspectedLibrariesRef.current.add("behaviour");
-          output = behavioursRef.current
-            .filter((behaviour) => behaviour.id && !behaviour.id.startsWith("generated-"))
+          output = behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values())
             .map((behaviour) => ({
               id: behaviour.id,
               name: behaviour.metadata?.name,
               role: behaviour.spec?.role,
               description:
                 typeof behaviour.spec?.description === "string"
-                  ? behaviour.spec.description.slice(0, 240)
+                  ? behaviour.spec.description
                   : undefined,
               tooltip: behaviour.spec?.tooltip,
               process: behaviour.spec?.process,
+              templateReferences: templateReferences(behaviour.spec?.description),
+              isDraft: behaviour.edited === true,
+              conversationDynamics: behaviour.spec?.conversationDynamics,
             }));
         } else if (call.name === "use_behaviour") {
           const id = typeof args.id === "string" ? args.id : "";
-          const result = onUseBehaviour(id, activeProblemProcess);
+          const candidate = behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values()).find(item => item.id === id);
+          const result: ReturnType<ProblemChatPanelProps["onUseBehaviour"]> = candidate
+            ? onUseBehaviour(id, activeProblemProcess, candidate)
+            : { ok: false, error: `no behaviour with id '${id}'` };
           if (result.ok) {
-            behaviourForTurn = result.behaviour ?? null;
-            currentBehaviourRef.current = behaviourForTurn;
+            currentBehaviourRef.current = result.behaviour ?? candidate ?? null;
+            behaviourForTurn = currentBehaviourRef.current;
+            previousBehaviourRef.current = currentBehaviourRef.current;
             pushMessage("system", `✓ Using existing behaviour${result.name ? ` ("${result.name}")` : ""}.`);
             output = { status: "selected", name: result.name };
           } else {

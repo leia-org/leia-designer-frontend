@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { UIEvent } from "react";
 import {
   Alert,
   Autocomplete,
@@ -16,6 +17,7 @@ import {
 import type { Experiment } from "../models/Experiment";
 import type { Leia } from "../models/Leia";
 import api from "../lib/axios";
+import { useDebounce } from "../hooks/useDebounce";
 
 type Activity = Experiment;
 
@@ -36,37 +38,90 @@ export const AddLeiaToAnActivity = ({
 }: AddLeiaToAnActivityProps) => {
   const [draftActivities, setDraftActivities] = useState<Activity[] | null>(null);
   const [loadingDraftActivities, setLoadingDraftActivities] = useState(false);
+  const [loadingMoreDraftActivities, setLoadingMoreDraftActivities] = useState(false);
   const [errorLoadingDraftActivities, setErrorLoadingDraftActivities] = useState<string | null>(null);
   const [selectedDraftActivityId, setSelectedDraftActivityId] = useState<string | null>(null);
   const [creatingNewActivity, setCreatingNewActivity] = useState(false);
   const [addingLeiaToActivity, setAddingLeiaToActivity] = useState(false);
   const [pendingNewName, setPendingNewName] = useState<string | null>(null);
   const [activityInput, setActivityInput] = useState("");
+  const [activitySearch, setActivitySearch] = useState("");
+  const debouncedActivitySearch = useDebounce(activitySearch, 400);
   const [actionError, setActionError] = useState<string | null>(null);
+  const nextActivityCursorRef = useRef<string | null>(null);
+  const isFetchingActivitiesRef = useRef(false);
 
-  const loadDraftActivities = async () => {
+  const fetchDraftActivities = useCallback(async () => {
     setErrorLoadingDraftActivities(null);
+    setLoadingDraftActivities(true);
     try {
-      setLoadingDraftActivities(true);
-      const response = await api.get<Experiment[]>("/api/v1/experiments/user/me", {
-        params: { visibility: "private" },
+      const response = await api.get<{ experiments: Experiment[]; nextCursor: string | null }>("/api/v1/experiments/user/me", {
+        params: {
+          populated: true,
+          visibility: "private",
+          text: debouncedActivitySearch || undefined,
+        },
       });
-      setDraftActivities(response.data || []);
+      setDraftActivities(response.data.experiments || []);
+      nextActivityCursorRef.current = response.data.nextCursor || null;
     } catch {
       setErrorLoadingDraftActivities("Could not load draft activities");
     } finally {
       setLoadingDraftActivities(false);
     }
-  };
+  }, [debouncedActivitySearch]);
+
+  const loadMoreDraftActivities = useCallback(async () => {
+    if (!nextActivityCursorRef.current || isFetchingActivitiesRef.current || loadingDraftActivities || loadingMoreDraftActivities) {
+      return;
+    }
+
+    isFetchingActivitiesRef.current = true;
+    setErrorLoadingDraftActivities(null);
+    setLoadingMoreDraftActivities(true);
+    try {
+      const response = await api.get<{ experiments: Experiment[]; nextCursor: string | null }>("/api/v1/experiments/user/me", {
+        params: {
+          populated: true,
+          visibility: "private",
+          text: debouncedActivitySearch || undefined,
+          lastActivityId: nextActivityCursorRef.current,
+        },
+      });
+      setDraftActivities((previous) => [...(previous || []), ...(response.data.experiments || [])]);
+      nextActivityCursorRef.current = response.data.nextCursor || null;
+    } catch {
+      setErrorLoadingDraftActivities("Could not load more activities");
+    } finally {
+      setLoadingMoreDraftActivities(false);
+      isFetchingActivitiesRef.current = false;
+    }
+  }, [debouncedActivitySearch, loadingDraftActivities, loadingMoreDraftActivities]);
 
   useEffect(() => {
     if (!isOpen) return;
     setSelectedDraftActivityId(null);
     setPendingNewName(null);
     setActivityInput("");
+    setActivitySearch("");
+    setDraftActivities(null);
+    nextActivityCursorRef.current = null;
     setActionError(null);
-    void loadDraftActivities();
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDraftActivities(null);
+    nextActivityCursorRef.current = null;
+    void fetchDraftActivities();
+  }, [debouncedActivitySearch, isOpen, fetchDraftActivities]);
+
+  const handleActivityListScroll = useCallback((event: UIEvent<HTMLUListElement>) => {
+    const listbox = event.currentTarget;
+    if (listbox.scrollTop + listbox.clientHeight >= listbox.scrollHeight - 48) {
+      void loadMoreDraftActivities();
+    }
+  }, [loadMoreDraftActivities]);
 
   const handleAddLeiaToActivity = async (activityId: string) => {
     if (!selectedLeia) return;
@@ -128,7 +183,7 @@ export const AddLeiaToAnActivity = ({
           {errorLoadingDraftActivities ? (
             <Stack spacing={1.5}>
               <Alert severity="error">{errorLoadingDraftActivities}</Alert>
-              <Box><Button variant="outlined" color="error" onClick={() => void loadDraftActivities()}>Try Again</Button></Box>
+              <Box><Button variant="outlined" color="error" onClick={() => void fetchDraftActivities()}>Try Again</Button></Box>
             </Stack>
           ) : (
             <Autocomplete<Activity, false, false, true>
@@ -137,14 +192,19 @@ export const AddLeiaToAnActivity = ({
               value={selectedActivity}
               inputValue={activityInput}
               loading={loadingDraftActivities || creatingNewActivity}
-              disabled={busy || loadingDraftActivities}
+              disabled={busy}
               getOptionLabel={(option) => typeof option === "string" ? option : option.name}
               isOptionEqualToValue={(option, value) => typeof value !== "string" && option.id === value.id}
               onInputChange={(_, value, reason) => {
                 setActivityInput(value);
                 if (reason === "input") {
+                  setActivitySearch(value);
                   setSelectedDraftActivityId(null);
                   setPendingNewName(value.trim() || null);
+                } else if (reason === "clear") {
+                  setActivitySearch("");
+                  setSelectedDraftActivityId(null);
+                  setPendingNewName(null);
                 }
               }}
               onChange={(_, value) => {
@@ -158,9 +218,15 @@ export const AddLeiaToAnActivity = ({
                   setPendingNewName(null);
                 } else {
                   setActivityInput("");
+                  setActivitySearch("");
                   setSelectedDraftActivityId(null);
                   setPendingNewName(null);
                 }
+              }}
+              slotProps={{
+                listbox: {
+                  onScroll: handleActivityListScroll,
+                },
               }}
               renderInput={(params) => (
                 <TextField
@@ -181,6 +247,12 @@ export const AddLeiaToAnActivity = ({
                 />
               )}
             />
+          )}
+          {loadingMoreDraftActivities && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CircularProgress size={16} />
+              <Typography variant="body2" color="text.secondary">Loading more activities...</Typography>
+            </Stack>
           )}
           {creatingNewActivity && <Typography variant="body2" color="primary.main">Creating new activity...</Typography>}
           {actionError && <Alert severity="error">{actionError}</Alert>}
