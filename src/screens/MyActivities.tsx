@@ -1395,11 +1395,7 @@ export const MyActivities: React.FC = () => {
                           <Chip label="MultiLEIA" color="primary" size="small" variant="outlined" />
                         )}
                         {experiment.isPublished && <Chip label="Published" color="success" size="small" />}
-                        {experiment.isPublished ? (
-                          <Button size="small" color="secondary" variant="contained" startIcon={<ContentCopyIcon />} onClick={() => handleFastReplication(experiment.id)}>
-                            Replicate
-                          </Button>
-                        ) : (
+                        {!experiment.isPublished && (
                           <>
                             <Button
                               size="small"
@@ -1421,6 +1417,9 @@ export const MyActivities: React.FC = () => {
                             </Button>
                           </>
                         )}
+                        <Button size="small" color="secondary" variant="contained" startIcon={<ContentCopyIcon />} onClick={() => handleFastReplication(experiment.id)}>
+                          Replicate
+                        </Button>
                         <IconButton
                           aria-label={expanded ? "Collapse activity" : "Expand activity"}
                           onClick={() => toggleExperiment(experiment.id)}
