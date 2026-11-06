@@ -30,7 +30,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
-import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
+import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import {
@@ -1369,11 +1369,11 @@ export const MyActivities: React.FC = () => {
                     >
                       <Box>
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <Tooltip title={isOwner ? "Your activity" : "Shared activity"}>
+                          <Tooltip title={isOwner ? "Your activity" : "Public activity"}>
                             {isOwner ? (
                               <PersonOutlineIcon color="action" role="img" aria-label="Your activity" />
                             ) : (
-                              <PeopleOutlineIcon color="action" role="img" aria-label="Shared activity" />
+                              <PublicOutlinedIcon color="action" role="img" aria-label="Public activity" />
                             )}
                           </Tooltip>
                           <Typography variant="h6">{experiment.name}</Typography>
