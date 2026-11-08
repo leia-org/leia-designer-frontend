@@ -19,7 +19,12 @@
     "deploy:preview": "node scripts/cloudflare-preview.mjs",
     "test:preview": "node --test tests/cloudflare-preview.test.mjs",
     "test:turnstile": "node --test tests/turnstile-policy.test.mjs",
-    "test:creator": "node --test tests/creator-state.test.mjs"
+    "test:creator": "node --test tests/creator-state.test.mjs",
+    "test": "npm run test:regression",
+    "test:legacy": "node --test tests/*.test.mjs",
+    "test:regression": "npm run test:legacy && vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -49,6 +54,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.20.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
@@ -58,9 +64,11 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
+    "jsdom": "^26.1.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
     "vite": "^7.0.4",
+    "vitest": "^3.2.7",
     "wrangler": "^4.151.1"
   },
   "engines": {
