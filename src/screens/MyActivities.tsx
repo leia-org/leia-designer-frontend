@@ -310,6 +310,7 @@ export const MyActivities: React.FC = () => {
 
   // Publish experiment (one-way action)
   const publishExperiment = async (experiment: Experiment) => {
+    if (user?.role !== "admin") return;
     setPublishingExperiments((prev) => new Set([...prev, experiment.id]));
 
     try {
@@ -1397,7 +1398,7 @@ export const MyActivities: React.FC = () => {
                         {experiment.isPublished && <Chip label="Published" color="success" size="small" />}
                         {!experiment.isPublished && (
                           <>
-                            <Button
+                            {user?.role === "admin" && <Button
                               size="small"
                               variant="contained"
                               onClick={() => publishExperiment(experiment)}
@@ -1405,7 +1406,7 @@ export const MyActivities: React.FC = () => {
                               startIcon={publishingExperiments.has(experiment.id) ? <CircularProgress color="inherit" size={14} /> : <AddIcon />}
                             >
                               {publishingExperiments.has(experiment.id) ? "Publishing..." : "Publish"}
-                            </Button>
+                            </Button>}
                             <Button
                               size="small"
                               variant="contained"
