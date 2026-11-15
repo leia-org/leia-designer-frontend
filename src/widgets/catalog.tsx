@@ -6,7 +6,8 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { Autocomplete, Box, Button, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import { CodeEditorWidget } from "./CodeEditorWidget";
 import type { SlotId, WidgetDefinition } from "./types";
-import type { EditorLanguage } from "./codeEditor/types";
+import type { EditorLanguage, ProblemDef } from "./codeEditor/types";
+import { DEFAULT_PROBLEM } from "./codeEditor/problem";
 import type { ProblemWidget } from "../models/Leia";
 
 // Designer-side widget catalog. Mirrors the workbench widget catalog
@@ -60,55 +61,84 @@ interface CodeEditorParams {
   fnName: string;
   description: string;
   language: EditorLanguage;
-  starter: { javascript: string; python: string; java: string; rust: string; text?: string };
+  starter: ProblemDef["starter"];
   tests: Array<{ name: string; args: unknown[]; expected: unknown }>;
 }
 
 const LANGUAGE_OPTIONS: { value: EditorLanguage; label: string }[] = [
   { value: "javascript", label: "JavaScript" },
+  { value: "typescript", label: "TypeScript" },
   { value: "python", label: "Python" },
-  { value: "text", label: "Plain text" },
   { value: "java", label: "Java" },
   { value: "rust", label: "Rust" },
+  { value: "c", label: "C" },
+  { value: "cpp", label: "C++" },
+  { value: "csharp", label: "C#" },
+  { value: "php", label: "PHP" },
+  { value: "go", label: "Go" },
+  { value: "kotlin", label: "Kotlin" },
+  { value: "swift", label: "Swift" },
+  { value: "ruby", label: "Ruby" },
+  { value: "r", label: "R" },
+  { value: "matlab", label: "MATLAB" },
+  { value: "dart", label: "Dart" },
+  { value: "scala", label: "Scala" },
+  { value: "perl", label: "Perl" },
+  { value: "lua", label: "Lua" },
+  { value: "objective-c", label: "Objective-C" },
+  { value: "assembly", label: "Assembly" },
+  { value: "sql", label: "SQL" },
+  { value: "plsql", label: "PL/SQL" },
+  { value: "haskell", label: "Haskell" },
+  { value: "elixir", label: "Elixir" },
+  { value: "erlang", label: "Erlang" },
+  { value: "clojure", label: "Clojure" },
+  { value: "fsharp", label: "F#" },
+  { value: "vb", label: "Visual Basic" },
+  { value: "delphi", label: "Delphi (Object Pascal)" },
+  { value: "fortran", label: "Fortran" },
+  { value: "cobol", label: "COBOL" },
+  { value: "julia", label: "Julia" },
+  { value: "groovy", label: "Groovy" },
+  { value: "bash", label: "Bash" },
+  { value: "powershell", label: "PowerShell" },
+  { value: "solidity", label: "Solidity" },
+  { value: "zig", label: "Zig" },
+  { value: "nim", label: "Nim" },
+  { value: "ocaml", label: "OCaml" },
+  { value: "prolog", label: "Prolog" },
+  { value: "scheme", label: "Scheme" },
+  { value: "lisp", label: "Lisp" },
+  { value: "scratch", label: "Scratch" },
+  { value: "gdscript", label: "GDScript" },
+  { value: "apex", label: "Apex" },
+  { value: "abap", label: "ABAP" },
+  { value: "v", label: "V" },
+  { value: "crystal", label: "Crystal" },
+  { value: "d", label: "D" },
+  { value: "text", label: "Plain text" },
 ];
 
 const CODE_EDITOR_DEFAULT: CodeEditorParams = {
-  fnName: "twoSum",
-  language: "javascript",
-  description:
-    "Given an array of integers `nums` and an integer `target`, return the indices of the two numbers that add up to `target`.",
-  starter: {
-    javascript:
-      "function twoSum(nums, target) {\n    // your code here\n    return [];\n}\n",
-    python: "def twoSum(nums, target):\n    # your code here\n    return []\n",
-    java: "public int[] twoSum(int[] nums, int target) {\n    // your code here\n    return new int[0];\n}\n",
-    rust: "fn twoSum(nums: &[i32], target: i32) -> [i32; 2] {\n    // your code here\n    [0, 0]\n}\n",
-    text: "",
-  },
-  tests: [
-    { name: "[2,7,11,15], target=9", args: [[2, 7, 11, 15], 9], expected: [0, 1] },
-    { name: "[3,2,4], target=6", args: [[3, 2, 4], 6], expected: [1, 2] },
-    { name: "[3,3], target=6", args: [[3, 3], 6], expected: [0, 1] },
-  ],
+  fnName: DEFAULT_PROBLEM.fnName,
+  language: DEFAULT_PROBLEM.language ?? "javascript",
+  description: DEFAULT_PROBLEM.description,
+  starter: DEFAULT_PROBLEM.starter,
+  tests: DEFAULT_PROBLEM.tests,
 };
 
 function asCodeEditorParams(value: Record<string, unknown> | undefined): CodeEditorParams {
   const def = CODE_EDITOR_DEFAULT;
   if (!value) return def;
   const v = value as Partial<CodeEditorParams>;
-  const language: EditorLanguage =
-    v.language === "python" || v.language === "text" ||v.language === "rust" || v.language === "java" ? v.language : "javascript";
+  const language = LANGUAGE_OPTIONS.some((option) => option.value === v.language)
+    ? v.language as EditorLanguage
+    : "javascript";
   return {
     fnName: typeof v.fnName === "string" ? v.fnName : def.fnName,
     description: typeof v.description === "string" ? v.description : def.description,
     language,
-    starter: {
-      javascript: v.starter?.javascript ?? def.starter.javascript,
-      python: v.starter?.python ?? def.starter.python,
-      java: v.starter?.java ?? def.starter.java,
-      rust: v.starter?.rust ?? def.starter.rust,
-      text: v.starter?.text ?? def.starter.text ?? "",
-    },
+    starter: { ...def.starter, ...(v.starter ?? {}) },
     tests: Array.isArray(v.tests) ? v.tests : def.tests,
   };
 }
@@ -140,6 +170,7 @@ const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) =>
   };
 
   const isText = params.language === "text";
+  const supportsTests = params.language === "javascript" || params.language === "python";
   const monacoLang = isText ? "plaintext" : params.language;
 
   return (
@@ -156,7 +187,7 @@ const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) =>
         fullWidth
       />
       <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-        The student works in this language and cannot change it. Plain text has no tests/execution.
+        The student works in this language and cannot change it. Tests are currently available only for JavaScript and Python; other languages provide syntax highlighting only.
       </Typography>
 
       {!isText && (
@@ -196,7 +227,7 @@ const CodeEditorParamsForm: FC<WidgetParamsFormProps> = ({ value, onChange }) =>
         </Paper>
       </Box>
 
-      {!isText && (
+      {supportsTests && (
         <Box>
           <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
             <Typography variant="caption" fontWeight={600}>Tests</Typography>
@@ -342,7 +373,7 @@ export const WIDGET_CATALOG: DesignerWidgetEntry[] = [
     widgetType: "codeEditor",
     label: "Editor",
     description:
-      "Monaco editor (JavaScript, Python or plain text). LEIA can read, comment and rewrite the content while the student works, and run the configured test suite.",
+      "Monaco editor with templates for 50 programming, scripting, query and visual languages. LEIA can read, comment and rewrite the content while the student works; tests run for JavaScript and Python.",
     defaultParams: CODE_EDITOR_DEFAULT as unknown as Record<string, unknown>,
     tools: [
       { name: "codeEditor_read", label: "Read code", description: "Reads the current content of the editor." },
