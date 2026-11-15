@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Editor } from "@monaco-editor/react";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import {
@@ -21,11 +21,6 @@ import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
 
 type ResourceType = "persona" | "problem" | "behaviour";
-
-type HighlightSegment = {
-  text: string;
-  highlight: boolean;
-};
 
 type ProblemEditorData = {
   solutionFormat?: unknown;
@@ -108,188 +103,106 @@ const restoreOriginalAvatar = (
   };
 };
 
-const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
-  if (!text) return [];
-
-  const segments: HighlightSegment[] = [];
-  const expression = /\{\{[^}]+\}\}/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = expression.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ text: text.slice(lastIndex, match.index), highlight: false });
-    }
-    segments.push({ text: match[0], highlight: true });
-    lastIndex = expression.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ text: text.slice(lastIndex), highlight: false });
-  }
-
-  return segments.length ? segments : [{ text, highlight: false }];
-};
-
 type HighlightableInputProps = Omit<
-  React.InputHTMLAttributes<HTMLInputElement>,
-  "className" | "color" | "value"
-> & {
-  value?: string | number | readonly string[];
+  React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement>,
+  "className" | "color"
+> & Pick<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "rows" | "wrap"> & {
+  multiline?: boolean;
 };
 
-const highlightTokenSx = {
-  borderRadius: 0.5,
-  bgcolor: "#F3E8FF",
-  color: "#7E22CE",
-};
-
-const highlightableControlSx = {
-  width: "100%",
-  display: "block",
+const highlightTokenSx = { borderRadius: 0.5, bgcolor: "#F3E8FF", color: "#7E22CE" };
+const highlightableTextSx = {
   boxSizing: "border-box",
   px: 1.5,
   py: 1,
-  border: 1,
-  borderColor: "divider",
-  borderRadius: 1,
-  bgcolor: "transparent",
-  color: "transparent",
-  caretColor: "primary.main",
   font: "inherit",
   lineHeight: 1.5,
-  position: "relative",
-  zIndex: 1,
-  "&:focus": {
-    outline: "none",
-    borderColor: "primary.main",
-    boxShadow: "0 0 0 2px rgba(37, 99, 235, 0.16)",
-  },
-};
+  letterSpacing: "inherit",
+} as const;
 
 const HighlightableInput: React.FC<HighlightableInputProps> = ({
-  value,
-  placeholder,
-  ...rest
+  value, placeholder, multiline = false, onScroll, ...rest
 }) => {
-  const normalizedValue =
-    value === undefined || value === null
-      ? ""
-      : Array.isArray(value)
-        ? value.join(", ")
-        : String(value);
-  const segments = useMemo(() => splitPlaceholderSegments(normalizedValue), [normalizedValue]);
-
-  return (
-    <Box sx={{ position: "relative", width: "100%" }}>
-      <Box
-        component="input"
-        {...rest}
-        value={normalizedValue}
-        placeholder={placeholder}
-        sx={highlightableControlSx}
-      />
-      <Box
-        aria-hidden="true"
-        sx={{
-          pointerEvents: "none",
-          position: "absolute",
-          inset: 1,
-          zIndex: 0,
-          display: "flex",
-          alignItems: "center",
-          overflow: "hidden",
-          px: 1.5,
-          py: 1,
-          color: "text.primary",
-          whiteSpace: "pre",
-          borderRadius: 1,
-          font: "inherit",
-        }}
-      >
-        {normalizedValue.length === 0 ? (
-          placeholder && <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
-        ) : (
-          segments.map((segment, index) => (
-            <Box component="span" key={`${segment.text}-${index}`} sx={segment.highlight ? highlightTokenSx : undefined}>
-              {segment.text}
-            </Box>
-          ))
-        )}
-      </Box>
-    </Box>
-  );
-};
-
-type HighlightableTextareaProps = Omit<
-  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
-  "className" | "color" | "value"
-> & {
-  value?: string | number | readonly string[];
-};
-
-const HighlightableTextarea: React.FC<HighlightableTextareaProps> = ({
-  value,
-  placeholder,
-  onScroll,
-  ...rest
-}) => {
-  const normalizedValue = value === undefined || value === null ? "" : String(value);
-  const segments = useMemo(() => splitPlaceholderSegments(normalizedValue), [normalizedValue]);
+  const text = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+  const controlRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const whiteSpace = multiline && rest.wrap !== "off" ? "pre-wrap" : "pre";
 
-  const handleScroll: React.UIEventHandler<HTMLTextAreaElement> = (event) => {
-    if (overlayRef.current) {
-      overlayRef.current.scrollTop = event.currentTarget.scrollTop;
-      overlayRef.current.scrollLeft = event.currentTarget.scrollLeft;
-    }
-    onScroll?.(event);
-  };
+  const syncOverlay = useCallback(() => {
+    const control = controlRef.current;
+    if (!control || !overlayRef.current || !contentRef.current) return;
+    const { borderLeftWidth: left, borderTopWidth: top } = getComputedStyle(control);
+    Object.assign(overlayRef.current.style, {
+      left, top, width: `${control.clientWidth}px`, height: `${control.clientHeight}px`,
+    });
+    contentRef.current.style.transform = `translate(${-control.scrollLeft}px, ${-control.scrollTop}px)`;
+  }, []);
+
+  useLayoutEffect(syncOverlay);
+  useLayoutEffect(() => {
+    const observer = new ResizeObserver(syncOverlay);
+    if (controlRef.current) observer.observe(controlRef.current);
+    return () => observer.disconnect();
+  }, [syncOverlay]);
 
   return (
     <Box sx={{ position: "relative", width: "100%" }}>
       <Box
-        component="textarea"
+        component={multiline ? "textarea" : "input"}
         {...rest}
-        value={normalizedValue}
+        ref={controlRef}
+        value={text}
         placeholder={placeholder}
-        onScroll={handleScroll}
+        onScroll={(event: React.UIEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          syncOverlay();
+          onScroll?.(event);
+        }}
         sx={{
-          ...highlightableControlSx,
-          resize: "vertical",
+          ...highlightableTextSx,
+          width: "100%",
+          display: "block",
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1,
+          bgcolor: "transparent",
+          color: "transparent",
+          caretColor: "primary.main",
+          position: "relative",
+          zIndex: 1,
+          resize: multiline ? "vertical" : "none",
+          whiteSpace,
+          overflowWrap: "break-word",
+          "&::placeholder": { color: "transparent" },
+          "&::selection": { color: "HighlightText", backgroundColor: "Highlight" },
+          "&:focus": {
+            outline: "none",
+            borderColor: "primary.main",
+            boxShadow: "0 0 0 2px rgba(37, 99, 235, 0.16)",
+          },
         }}
       />
-      <Box
-        ref={overlayRef}
-        aria-hidden="true"
-        sx={{
-          pointerEvents: "none",
-          position: "absolute",
-          inset: 1,
-          zIndex: 0,
-          overflow: "auto",
-          px: 1.5,
-          py: 1,
-          color: "text.primary",
-          whiteSpace: "pre-wrap",
-          overflowWrap: "break-word",
-          borderRadius: 1,
-          font: "inherit",
-        }}
-      >
-        {normalizedValue.length === 0 ? (
-          placeholder && <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
-        ) : (
-          segments.map((segment, index) => (
-            <Box component="span" key={`${segment.text}-${index}`} sx={segment.highlight ? highlightTokenSx : undefined}>
-              {segment.text}
+      <Box ref={overlayRef} aria-hidden="true" sx={{
+        position: "absolute", overflow: "hidden", pointerEvents: "none", borderRadius: 1,
+      }}>
+        <Box ref={contentRef} sx={{
+          ...highlightableTextSx, whiteSpace, overflowWrap: "break-word", color: "text.primary",
+        }}>
+          {text ? text.split(/(\{\{[^}]+\}\})/g).map((part, index) => (
+            <Box component="span" key={index} sx={index % 2 ? highlightTokenSx : undefined}>
+              {part}
             </Box>
-          ))
-        )}
+          )) : <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>}
+          {multiline && text.endsWith("\n") && "\u200b"}
+        </Box>
       </Box>
     </Box>
   );
 };
+
+const HighlightableTextarea: React.FC<HighlightableInputProps> = (props) => (
+  <HighlightableInput {...props} multiline />
+);
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <Box>

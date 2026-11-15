@@ -29,7 +29,10 @@ import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
+import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import api from "../lib/axios";
+import { useImageRegeneration } from "../context/ImageRegenerationContext";
+import { applyImageJob } from "../lib/imageRegeneration";
 import { useApiKeys } from "../hooks/useApiKeys";
 import { useProviders } from "../hooks/useProviders";
 import { PageShell } from "../components/shared/PageShell";
@@ -52,6 +55,7 @@ export const LeiaSearch: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuth().user;
+  const { jobs: imageJobs } = useImageRegeneration();
   const {
     apiKeys,
     isLoading: isApiKeysLoading,
@@ -100,12 +104,21 @@ export const LeiaSearch: React.FC = () => {
     [params]
   );
 
+  useEffect(() => {
+    const jobs = Object.values(imageJobs).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    setLeias(current => {
+      const next = current.map(leia => jobs.reduce(applyImageJob, leia));
+      return next.every((leia, index) => leia === current[index]) ? current : next;
+    });
+  }, [imageJobs]);
   const [selectedLeia, setSelectedLeia] = useState<Leia | null>(null);
   const [retry, setRetry] = useState(false);
   const [showExperimentsModal, setShowExperimentsModal] = useState(false);
   const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
   const [nameActivityReplication, setNameActivityReplication] = useState("");
   const [openLabelModalLeia, setOpenLabelModalLeia] = useState<Leia | null>(null);
+  const [expandedLeiaId, setExpandedLeiaId] = useState<string | null>(null);
+  const [isTourActive, setIsTourActive] = useState(false);
   const [tryMenuOpenId, setTryMenuOpenId] = useState<string | null>(null);
   const [trySettingsAnchor, setTrySettingsAnchor] = useState<HTMLElement | null>(null);
   const [tryConfigByLeia, setTryConfigByLeia] = useState<
@@ -451,16 +464,22 @@ export const LeiaSearch: React.FC = () => {
           
         onDestroyed: () => {
           setShowDropdown(false);
+          setIsTourActive(false);
         if (tourRef.current === tour) {
           tourRef.current = null;
         }
       }
       });
         tourRef.current = tour;
-        tour.drive(startStep);
-        if (tour.getActiveIndex() === 7) {
-          setShowDropdown(true);
-        }
+        setIsTourActive(true);
+        // Reveal the example row before Driver measures its action buttons.
+        window.requestAnimationFrame(() => {
+          if (tourRef.current !== tour) return;
+          tour.drive(startStep);
+          if (tour.getActiveIndex() === 7) {
+            setShowDropdown(true);
+          }
+        });
         
 
   }, [handlePersonalize, leias, navigate, user?.role]);
@@ -1124,6 +1143,8 @@ export const LeiaSearch: React.FC = () => {
                   const validTryModels = getTryModels(leia);
                   const validTryApiKeys = getTryApiKeys(leia, tryModelName);
                   const isTryMenuOpen = tryMenuOpenId === leia.id;
+                  const isExpanded = expandedLeiaId === leia.id || isTryMenuOpen || (isTourActive && index === 1);
+                  const actionsId = `leia-actions-${leia.id}`;
                   const isTryLoading = isProvidersLoading || isApiKeysLoading;
                   const canStartTry = Boolean(tryModelName && tryApiKeyId) && !isTryLoading;
                   const showNoApiKeys =
@@ -1146,42 +1167,35 @@ export const LeiaSearch: React.FC = () => {
                       component="li"
                       key={leia.id}
                       id={index === 1 ? "first-leia" : undefined}
-                      className={isTryMenuOpen ? "try-settings-open" : undefined}
+                      onPointerEnter={(event) => {
+                        if (event.pointerType === "mouse") setExpandedLeiaId(leia.id);
+                      }}
+                      onPointerLeave={(event) => {
+                        if (event.pointerType !== "mouse") return;
+                        const focusedElement = document.activeElement;
+                        if (focusedElement && event.currentTarget.contains(focusedElement) && focusedElement.matches(":focus-visible")) return;
+                        setExpandedLeiaId((current) => current === leia.id ? null : current);
+                      }}
+                      onFocusCapture={(event) => {
+                        if (event.target.matches(":focus-visible")) setExpandedLeiaId(leia.id);
+                      }}
+                      onBlurCapture={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget) && !event.currentTarget.matches(":hover")) {
+                          setExpandedLeiaId((current) => current === leia.id ? null : current);
+                        }
+                      }}
                       sx={{
-                        px: { xs: 2, md: 2.5 },
-                        py: 2,
+                        px: { xs: 1.5, md: 2 },
+                        py: 1.5,
                         borderBottom: index < leias.length - 1 ? "1px solid" : 0,
                         borderColor: "divider",
-                        display: "flex",
-                        flexDirection: { xs: "column", xl: "row" },
-                        alignItems: { xl: "center" },
-                        justifyContent: "space-between",
-                        gap: 2,
-                        position: "relative",
-                        transition: "background-color 180ms ease, padding-bottom 240ms ease",
-                        "&:hover, &.try-settings-open": { bgcolor: "surfaces.hover" },
-                        "@media (hover: hover) and (pointer: fine)": {
-                          "& .leia-card-actions": {
-                            opacity: 0,
-                            pointerEvents: "none",
-                          },
-                          "&:hover .leia-card-actions, &:focus-within .leia-card-actions, &:has(.driver-active-element) .leia-card-actions, &.try-settings-open .leia-card-actions": {
-                            opacity: 1,
-                            pointerEvents: "auto",
-                          },
-                        },
-                        "@media (min-width: 1536px) and (hover: hover) and (pointer: fine)": {
-                          "&:hover, &:focus-within, &:has(.driver-active-element), &.try-settings-open": {
-                            pb: 9,
-                          },
-                          "& .leia-card-actions": {
-                            position: "absolute",
-                            bottom: 16,
-                            right: 20,
-                            zIndex: 1,
-                            flexWrap: "nowrap",
-                          },
-                        },
+                        display: "grid",
+                        gridTemplateColumns: "48px minmax(0, 1fr) 28px",
+                        columnGap: { xs: 1.25, sm: 1.5 },
+                        alignItems: "start",
+                        bgcolor: isExpanded ? "surfaces.hover" : undefined,
+                        transition: "background-color 160ms ease",
+                        "@media (prefers-reduced-motion: reduce)": { transition: "none" },
                       }}
                     >
                       <Avatar
@@ -1189,11 +1203,11 @@ export const LeiaSearch: React.FC = () => {
                         fallbackSrc={leiaAvatarFallback}
                         alt={`${leia.metadata.name} avatar`}
                         label={leia.metadata.name}
-                        size="lg"
+                        size="md"
                       />
-                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Box sx={{ minWidth: 0 }}>
                         <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
-                          <Typography sx={{ fontSize: 15, fontWeight: 700, lineHeight: 1.35 }}>
+                          <Typography sx={{ fontSize: 14, fontWeight: 700, lineHeight: 1.35, overflowWrap: "anywhere" }}>
                             {leia.metadata.name}
                           </Typography>
                           <Chip
@@ -1227,26 +1241,17 @@ export const LeiaSearch: React.FC = () => {
                               }}
                             />
                           ))}
-                          {canManageLabels && (
-                            <Button
-                              size="small"
-                              onClick={() => setOpenLabelModalLeia(leia)}
-                              sx={{ minWidth: 0, px: 0.75, fontSize: 11, textTransform: "none" }}
-                            >
-                              + Label
-                            </Button>
-                          )}
                         </Stack>
 
                         {description && (
                           <Typography
                             sx={{
-                              mt: 0.75,
+                              mt: 0.5,
                               fontSize: 13,
                               color: "text.secondary",
                               lineHeight: 1.5,
                               display: "-webkit-box",
-                              WebkitLineClamp: 2,
+                              WebkitLineClamp: isExpanded ? 2 : 1,
                               WebkitBoxOrient: "vertical",
                               overflow: "hidden",
                             }}
@@ -1256,9 +1261,9 @@ export const LeiaSearch: React.FC = () => {
                         )}
 
                         {leia.user?.email && (
-                          <Stack direction="row" spacing={0.65} alignItems="center" sx={{ mt: 1, color: "text.disabled" }}>
+                          <Stack direction="row" spacing={0.65} alignItems="center" sx={{ mt: 0.5, color: "text.disabled", minWidth: 0 }}>
                             <AccountCircleOutlinedIcon sx={{ fontSize: 15 }} />
-                            <Typography sx={{ fontSize: 11.5 }}>{leia.user.email}</Typography>
+                            <Typography noWrap sx={{ fontSize: 11.5 }}>{leia.user.email}</Typography>
                             {leia.user.role && (
                               <Typography sx={{ fontSize: 11.5 }}>· {leia.user.role}</Typography>
                             )}
@@ -1266,137 +1271,185 @@ export const LeiaSearch: React.FC = () => {
                         )}
                       </Box>
 
-                      <Stack
-                        className="leia-card-actions"
-                        direction="row"
-                        spacing={0.75}
-                        useFlexGap
-                        flexWrap="wrap"
-                        alignItems="center"
+                      <IconButton
+                        size="small"
+                        aria-label={`Actions for ${leia.metadata.name}`}
+                        aria-expanded={isExpanded}
+                        aria-controls={actionsId}
+                        onClick={(event) => {
+                          const isMouseClick = "pointerType" in event.nativeEvent && event.nativeEvent.pointerType === "mouse";
+                          setExpandedLeiaId((current) => isMouseClick ? leia.id : current === leia.id ? null : leia.id);
+                        }}
                         sx={{
-                          flexShrink: 0,
-                          transition: "opacity 180ms ease",
+                          width: 28,
+                          height: 28,
+                          color: "text.secondary",
+                          "&.Mui-focusVisible": {
+                            outline: "2px solid",
+                            outlineColor: "primary.main",
+                            outlineOffset: 2,
+                          },
                         }}
                       >
-                        <Tooltip title="Design from this LEIA">
-                          <Button
-                            size="small"
-                            variant="contained"
-                            startIcon={<PaletteOutlinedIcon />}
-                            onClick={() => handlePersonalize(leia, false)}
-                            id={index === 1 ? "first-design-from-this-button" : undefined}
+                        <ExpandMoreOutlinedIcon
+                          fontSize="small"
+                          sx={{
+                            transform: isExpanded ? "rotate(180deg)" : undefined,
+                            transition: "transform 180ms ease",
+                            "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+                          }}
+                        />
+                      </IconButton>
+
+                      <Box
+                        id={actionsId}
+                        inert={!isExpanded}
+                        sx={{
+                          gridColumn: { xs: "1 / -1", sm: "2 / -1" },
+                          display: "grid",
+                          gridTemplateRows: isExpanded ? "1fr" : "0fr",
+                          opacity: isExpanded ? 1 : 0,
+                          visibility: isExpanded ? "visible" : "hidden",
+                          transition: "grid-template-rows 180ms ease, opacity 180ms ease",
+                          "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+                        }}
+                      >
+                        <Box sx={{ minHeight: 0, overflow: "hidden" }}>
+                          <Stack
+                            className="leia-card-actions"
+                            direction="row"
+                            spacing={0.75}
+                            useFlexGap
+                            flexWrap="wrap"
+                            alignItems="center"
+                            sx={{ pt: 1.25, mt: 1.25, borderTop: "1px solid", borderColor: "divider" }}
                           >
-                            Design from this
-                          </Button>
-                        </Tooltip>
-                        <Tooltip title="View LEIA content">
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<VisibilityOutlinedIcon />}
-                            onClick={() => handleViewLeiaContent(leia)}
-                            id={index === 1 ? "view-button" : undefined}
-                          >
-                            View
-                          </Button>
-                        </Tooltip>
-                        <Box sx={{ display: "flex", alignItems: "center" }}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<LightbulbOutlinedIcon />}
-                            onClick={() => void handleDefaultTry(leia)}
-                            disabled={initializingId === leia.id}
-                            id={index === 1 ? "try-button" : undefined}
-                            sx={{
-                              borderTopRightRadius: showNoApiKeys ? undefined : 0,
-                              borderBottomRightRadius: showNoApiKeys ? undefined : 0,
-                            }}
-                          >
-                            {initializingId === leia.id ? "Starting…" : "Test LEIA"}
-                          </Button>
-                          {!showNoApiKeys && (
-                            <Tooltip title="Test settings">
-                              <IconButton
+                            <Tooltip title="Design from this LEIA">
+                              <Button
                                 size="small"
-                                aria-label="Choose Test LEIA settings"
-                                aria-expanded={isTryMenuOpen}
-                                aria-haspopup="dialog"
-                                onClick={(event) => handleTryMenuToggle(leia, event.currentTarget)}
+                                variant="contained"
+                                startIcon={<PaletteOutlinedIcon />}
+                                onClick={() => handlePersonalize(leia, false)}
+                                id={index === 1 ? "first-design-from-this-button" : undefined}
+                              >
+                                Design from this
+                              </Button>
+                            </Tooltip>
+                            <Tooltip title="View LEIA content">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<VisibilityOutlinedIcon />}
+                                onClick={() => handleViewLeiaContent(leia)}
+                                id={index === 1 ? "view-button" : undefined}
+                              >
+                                View
+                              </Button>
+                            </Tooltip>
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<LightbulbOutlinedIcon />}
+                                onClick={() => void handleDefaultTry(leia)}
                                 disabled={initializingId === leia.id}
+                                id={index === 1 ? "try-button" : undefined}
                                 sx={{
-                                  alignSelf: "stretch",
-                                  border: "1px solid",
-                                  borderLeft: 0,
-                                  borderColor: "divider",
-                                  borderRadius: 0,
-                                  borderTopRightRadius: 6,
-                                  borderBottomRightRadius: 6,
+                                  borderTopRightRadius: showNoApiKeys ? undefined : 0,
+                                  borderBottomRightRadius: showNoApiKeys ? undefined : 0,
                                 }}
                               >
-                                <TuneOutlinedIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          <LeiaTryDropdown
-                            isOpen={isTryMenuOpen}
-                            anchorEl={trySettingsAnchor}
-                            onClose={closeTrySettings}
-                            isLoading={isTryLoading}
-                            providersError={providersError}
-                            apiKeysError={apiKeysError}
-                            modelValue={tryModelName}
-                            models={validTryModels}
-                            apiKeys={validTryApiKeys}
-                            apiKeyValue={tryApiKeyId}
-                            apiKeyProvidersMapped={apiKeyProvidersMapped}
-                            toolsRestricted={requiresTools}
-                            onModelChange={(value) => handleTryModelChange(leia, value)}
-                            onApiKeyChange={(value) => handleTryApiKeyChange(leia, value)}
-                            canStart={canStartTry}
-                            onStart={() => handleStartTry(leia)}
-                            isStarting={initializingId === leia.id}
-                            showNoApiKeys={showNoApiKeys}
-                            showNoMatchingKeys={showNoMatchingKeys}
-                          />
+                                {initializingId === leia.id ? "Starting…" : "Test LEIA"}
+                              </Button>
+                              {!showNoApiKeys && (
+                                <Tooltip title="Test settings">
+                                  <IconButton
+                                    size="small"
+                                    aria-label="Choose Test LEIA settings"
+                                    aria-expanded={isTryMenuOpen}
+                                    aria-haspopup="dialog"
+                                    onClick={(event) => handleTryMenuToggle(leia, event.currentTarget)}
+                                    disabled={initializingId === leia.id}
+                                    sx={{
+                                      alignSelf: "stretch",
+                                      border: "1px solid",
+                                      borderLeft: 0,
+                                      borderColor: "divider",
+                                      borderRadius: 0,
+                                      borderTopRightRadius: 6,
+                                      borderBottomRightRadius: 6,
+                                    }}
+                                  >
+                                    <TuneOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              <LeiaTryDropdown
+                                isOpen={isTryMenuOpen}
+                                anchorEl={trySettingsAnchor}
+                                onClose={closeTrySettings}
+                                isLoading={isTryLoading}
+                                providersError={providersError}
+                                apiKeysError={apiKeysError}
+                                modelValue={tryModelName}
+                                models={validTryModels}
+                                apiKeys={validTryApiKeys}
+                                apiKeyValue={tryApiKeyId}
+                                apiKeyProvidersMapped={apiKeyProvidersMapped}
+                                toolsRestricted={requiresTools}
+                                onModelChange={(value) => handleTryModelChange(leia, value)}
+                                onApiKeyChange={(value) => handleTryApiKeyChange(leia, value)}
+                                canStart={canStartTry}
+                                onStart={() => handleStartTry(leia)}
+                                isStarting={initializingId === leia.id}
+                                showNoApiKeys={showNoApiKeys}
+                                showNoMatchingKeys={showNoMatchingKeys}
+                              />
+                            </Box>
+                            {(user?.role === "admin" || user?.role === "advanced") && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<ExtensionOutlinedIcon />}
+                                onClick={() => {
+                                  setSelectedLeia(leia);
+                                  handleOpenExperimentsModal();
+                                }}
+                                id={index === 1 ? "activity-button" : undefined}
+                              >
+                                Add to activity
+                              </Button>
+                            )}
+                            {(user?.role === "admin" || user?.role === "advanced") && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<LibraryBooksOutlinedIcon />}
+                                onClick={() => handleQuickReplication(leia)}
+                              >
+                                Quick replication
+                              </Button>
+                            )}
+                            {canManageLabels && (
+                              <Button size="small" onClick={() => setOpenLabelModalLeia(leia)}>
+                                + Label
+                              </Button>
+                            )}
+                            {canDeleteLeia(leia) && (
+                              <Tooltip title="Delete LEIA">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  aria-label={"Delete " + leia.metadata.name}
+                                  onClick={() => handleDeleteLeia(leia)}
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Stack>
                         </Box>
-                        {(user?.role === "admin" || user?.role === "advanced") && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<ExtensionOutlinedIcon />}
-                            onClick={() => {
-                              setSelectedLeia(leia);
-                              handleOpenExperimentsModal();
-                            }}
-                            id={index === 1 ? "activity-button" : undefined}
-                          >
-                            Add to activity
-                          </Button>
-                        )}
-                        {(user?.role === "admin" || user?.role === "advanced") && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<LibraryBooksOutlinedIcon />}
-                            onClick={() => handleQuickReplication(leia)}
-                          >
-                            Quick replication
-                          </Button>
-                        )}
-                        {canDeleteLeia(leia) && (
-                          <Tooltip title="Delete LEIA">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              aria-label={"Delete " + leia.metadata.name}
-                              onClick={() => handleDeleteLeia(leia)}
-                            >
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Stack>
+                      </Box>
                     </Box>
                   );
                 })}
