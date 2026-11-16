@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
-import { behaviourCandidates, CORE_BEHAVIOUR_REFERENCES, missingBehaviourReferences, templateReferences } from "../lib/chatBehaviours.mjs";
+import { behaviourPage, behaviourCandidates, CORE_BEHAVIOUR_REFERENCES, missingBehaviourReferences, templateReferences } from "../lib/chatBehaviours.mjs";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
@@ -189,8 +189,21 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "list_behaviours",
     description:
-      "Lists saved behaviours and drafts authored earlier in this conversation, including their full instructions and template references. Inspect this result after changing the Problem. Prefer reusing a compatible generic interaction role with dynamic {{problem.*}} / {{persona.*}} references; a change of scenario alone does not require a new behaviour. Do not reuse incompatible hardcoded case instructions merely because the process matches.",
-    parameters: { type: "object", properties: {} },
+      "Lists saved behaviours and previous conversation drafts as short summaries, 10 per page. Pass nextOffset as offset to read the next page until nextOffset is null. After changing the Problem, look for a compatible reusable role. Call get_behaviour with a candidate id to inspect its complete instructions and template references before selecting or editing it. A change of scenario alone does not require a new behaviour.",
+    parameters: {
+      type: "object",
+      properties: { offset: { type: "integer", minimum: 0, description: "Start offset; omit for the first page." } },
+    },
+  },
+  {
+    name: "get_behaviour",
+    description:
+      "Returns the complete spec and template references of one saved behaviour or conversation draft by id from list_behaviours. Inspect it before use_behaviour to reject incompatible hardcoded case instructions and preserve dynamic references when editing. Does not change the selected behaviour.",
+    parameters: {
+      type: "object",
+      properties: { id: { type: "string", description: "Behaviour id from list_behaviours." } },
+      required: ["id"],
+    },
   },
   {
     name: "use_behaviour",
@@ -616,21 +629,16 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           }
         } else if (call.name === "list_behaviours") {
           inspectedLibrariesRef.current.add("behaviour");
-          output = behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values())
-            .map((behaviour) => ({
-              id: behaviour.id,
-              name: behaviour.metadata?.name,
-              role: behaviour.spec?.role,
-              description:
-                typeof behaviour.spec?.description === "string"
-                  ? behaviour.spec.description
-                  : undefined,
-              tooltip: behaviour.spec?.tooltip,
-              process: behaviour.spec?.process,
-              templateReferences: templateReferences(behaviour.spec?.description),
-              isDraft: behaviour.edited === true,
-              conversationDynamics: behaviour.spec?.conversationDynamics,
-            }));
+          output = behaviourPage(
+            behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values()),
+            typeof args.offset === "number" ? args.offset : 0,
+          );
+        } else if (call.name === "get_behaviour") {
+          const candidate = behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values())
+            .find(item => item.id === args.id);
+          output = candidate
+            ? { id: candidate.id, spec: candidate.spec, templateReferences: templateReferences(candidate.spec?.description), isDraft: candidate.edited === true }
+            : { error: `no behaviour with id '${args.id}'` };
         } else if (call.name === "use_behaviour") {
           const id = typeof args.id === "string" ? args.id : "";
           const candidate = behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values()).find(item => item.id === id);
