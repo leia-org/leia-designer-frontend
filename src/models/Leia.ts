@@ -1,3 +1,13 @@
+export interface ConversationDynamic<T = Record<string, unknown>> {
+  enabled: boolean;
+  config: T;
+}
+export interface ConversationDynamics {
+  leiaSpeaksFirst?: ConversationDynamic<{ firstMessage: string }>;
+  stoppingCondition?: ConversationDynamic<{ condition: string }>;
+  [name: string]: ConversationDynamic | undefined;
+}
+
 import type { User } from "./User";
 
 export interface Label {
@@ -5,7 +15,7 @@ export interface Label {
   name: string,
   color: string,
   secundaryColor: string,
-  user: string,
+  user: string | User | null,
   isGlobal: boolean,
 }
 
@@ -47,7 +57,8 @@ export interface Behaviour {
     process: [
       string
     ],
-    tooltip?: string
+    conversationDynamics?: ConversationDynamics,
+      tooltip?: string
   },
   isPublished: boolean,
   createdAt: string,
@@ -183,7 +194,8 @@ export interface Leia {
         process: [
           string
         ],
-        tooltip?: string
+        conversationDynamics?: ConversationDynamics,
+      tooltip?: string
       },
       createdAt: string,
       updatedAt: string,
