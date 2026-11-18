@@ -2,6 +2,7 @@ import type React from "react";
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   Divider,
   Paper,
@@ -66,18 +67,10 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
 }) => (
   <Paper
     variant="outlined"
-    role={onClick ? "button" : undefined}
-    tabIndex={onClick ? 0 : undefined}
-    onClick={onClick}
-    onKeyDown={(event) => {
-      if (!onClick || (event.key !== "Enter" && event.key !== " ")) return;
-      event.preventDefault();
-      onClick();
-    }}
+
     sx={{
       borderRadius: 2,
       overflow: "hidden",
-      cursor: onClick ? "pointer" : "default",
       flexShrink: isBlocked ? 0 : 1,
       transition: onClick ? "border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease" : undefined,
       ...(isBlocked && {
@@ -120,6 +113,36 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
           </Typography>
         )}
       </Box>
+      {onClick && (
+        <Button
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick();
+          }}
+          sx={{
+            flexShrink: 0,
+            textTransform: "none",
+            minWidth: 0,
+            px: 1.5,
+            py: 0.4,
+            fontSize: 12,
+            fontWeight: 600,
+            borderRadius: 999,
+            bgcolor: "background.paper",
+            border: 1,
+            borderColor: "divider",
+            color: "text.secondary",
+            "&:hover": {
+              bgcolor: accent,
+              borderColor: accent,
+              color: "common.white",
+            },
+          }}
+        >
+          Edit {title}
+        </Button>
+      )}
     </Stack>
     {isBlocked ? (
   <Box sx={{ p: 1.5, minWidth: 0 }}>
@@ -223,7 +246,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
             </Stack>
           ) : <EmptySection />}
         </PreviewSection>
-        
+
         <PreviewSection
           accent="#0EA5E9"
           icon={<PsychologyOutlinedIcon sx={{ fontSize: 17 }} />}
