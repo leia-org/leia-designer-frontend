@@ -222,6 +222,7 @@ export interface ReviewedChange {
   before: string;
   after: string;
   version?: string;
+  reason?: string;
   fields: FieldChange[];
 }
 export interface CreatorProposal {
@@ -234,6 +235,10 @@ export function reviewCreatorChanges(base: CreatorDraft, staged: CreatorDraft, a
   const next = staged !== base && !staged.nameManuallyEdited && !staged.customizations.leia.name.trim()
     ? setTitle(staged, suggestedTitle(staged.config)) : staged;
   const changes: ReviewedChange[] = [];
+  const previousBehaviour = base.config.behaviour;
+  const newProblem = next.config.problem;
+  const requiresCompatibleBehaviour = previousBehaviour && newProblem && newProblem !== base.config.problem
+    && !sameProcess(previousBehaviour.spec.process, newProblem.spec.process);
   for (const target of components) {
     const previous = base.config[target];
     const resource = next.config[target];
@@ -250,6 +255,9 @@ export function reviewCreatorChanges(base: CreatorDraft, staged: CreatorDraft, a
       before: previous ? base.customizations[target]?.name || previous.metadata.name : "",
       after: next.customizations[target]?.name || resource.metadata.name,
       version: netAction === "Reuse" && !resource.edited ? resource.metadata.version : undefined,
+      reason: target === "behaviour" && requiresCompatibleBehaviour
+        ? "The proposed Problem uses a different process. It needs a compatible Behaviour."
+        : undefined,
       fields,
     });
   }

@@ -143,6 +143,18 @@ test("a new problem with a different process cannot be applied with an incompati
   assert.match(e.results.at(-1).output.warning, /different processes/);
 });
 
+test("an incompatible Problem change lists the required Behaviour change before approval", async () => {
+  const original = preset();
+  const compatible = resource("game-client", behaviour(["game"]));
+  const chat = chatFixture({ config: original, canEdit: true, behaviours: [compatible] });
+  await chat.turn([...inspect(), call("apply_problem", problem("burger-game", ["game"])), call("use_behaviour", { id: compatible.id })]);
+  assert.equal(chat.editor.draft.config, original);
+  assert.deepEqual(Array.from(chat.proposal.changes, change => change.target), ["problem", "behaviour", "leia"]);
+  assert.match(chat.proposal.changes[1].reason, /different process/);
+  chat.apply();
+  assert.equal(chat.editor.draft.config.behaviour, compatible);
+});
+
 test("selecting an existing problem preserves a compatible behaviour explicitly chosen in this turn", async () => {
   const p = resource("burger-inventory", problem("burger-inventory"));
   const b = resource("saved-interview", behaviour());

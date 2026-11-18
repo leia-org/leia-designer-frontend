@@ -28,7 +28,7 @@ export function CreatorProposalCard({ proposal, onApply, onRevise, onDiscard, di
         Proposed draft changes
       </Typography>
       <Stack component="ul" spacing={1} sx={{ listStyle: "none", m: 0, p: 0 }}>
-        {proposal.changes.map(({ target, action, before, after, version, fields }) => (
+        {proposal.changes.map(({ target, action, before, after, version, reason, fields }) => (
           <Box component="li" key={target} sx={{ pt: 1, borderTop: 1, borderColor: "divider", overflowWrap: "anywhere" }}>
             <Typography variant="body2" fontWeight={600}>
               {target === "leia" ? labels[target] : `${action} ${labels[target]}`}
@@ -36,6 +36,7 @@ export function CreatorProposalCard({ proposal, onApply, onRevise, onDiscard, di
             <Typography variant="body2" color="text.secondary">
               {before && before !== after ? <><del>{before}</del>{" → "}</> : null}{after}{version && ` (v${version})`}
             </Typography>
+            {reason && <Typography variant="body2" sx={{ mt: 0.5 }}>{reason}</Typography>}
             {fields.map(({ field, before: previous, after: updated }) => {
               if (target === "behaviour" && field === "description" && typeof previous === "string" && typeof updated === "string" && updated.startsWith(`${previous}\n\n`)) {
                 return (
