@@ -614,6 +614,10 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
           rows={3}
           placeholder="Describe the behaviour..."
         />
+        <Typography variant="caption" color="text.secondary">
+          In staged activities, use <code>{"{{previousStage.outputs.conversation}}"}</code> or{" "}
+          <code>{"{{previousStage.outputs.submitedSolution}}"}</code> to reuse outputs from an earlier stage.
+        </Typography>
       </Field>
       <Field label="Role">
         <HighlightableInput

@@ -9,8 +9,8 @@ import { setAuthToken } from '../../src/lib/authToken';
 import type { Leia } from '../../src/models/Leia';
 
 let server: Server;
-let activities: { id: string; name: string }[];
-let attachments: { activityId: string; leia: string }[];
+let activities: { id: string; name: string; stages?: { id: string }[] }[];
+let attachments: { activityId: string; leia: string; stageId?: string }[];
 let failAttachment = false;
 const requests: { method: string; path: string; authorization?: string }[] = [];
 const leia = { id: 'leia-114', metadata: { name: 'Router assistant' } } as Leia;
@@ -40,7 +40,11 @@ beforeAll(async () => {
   });
   app.post('/api/v1/experiments/:id/leias', (req, res) => {
     if (failAttachment) return res.status(503).json({ message: 'Temporarily unavailable' });
-    attachments.push({ activityId: req.params.id, leia: req.body.leia });
+    attachments.push({
+      activityId: req.params.id,
+      leia: req.body.leia,
+      ...(req.body.stageId ? { stageId: req.body.stageId } : {}),
+    });
     res.json({ id: req.params.id });
   });
   await new Promise<void>((resolve) => { server = app.listen(0, '127.0.0.1', resolve); });
@@ -55,17 +59,20 @@ beforeEach(() => {
   attachments = []; requests.length = 0; failAttachment = false; setAuthToken('integration-access');
 });
 
-test('selecting a loaded activity sends the chosen LEIA and closes only after the HTTP request succeeds', async () => {
+test('selecting an empty stage sends the chosen LEIA and closes only after the HTTP request succeeds', async () => {
+  activities[0].stages = [{ id: 'first-stage' }, { id: 'empty-stage' }];
   const onClose = vi.fn(), onSuccess = vi.fn();
   render(<AddLeiaToAnActivity isOpen selectedLeia={leia} onClose={onClose} onSuccess={onSuccess} />);
   const input = await screen.findByRole('combobox');
   await waitFor(() => expect(requests.some((req) => req.method === 'GET')).toBe(true));
   fireEvent.mouseDown(input);
   fireEvent.click(await screen.findByRole('option', { name: 'Existing activity' }));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Stage' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Stage 2' }));
   fireEvent.click(screen.getByRole('button', { name: 'Add to Activity' }));
   await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
   expect(onClose).toHaveBeenCalledOnce();
-  expect(attachments).toEqual([{ activityId: 'existing', leia: 'leia-114' }]);
+  expect(attachments).toEqual([{ activityId: 'existing', leia: 'leia-114', stageId: 'empty-stage' }]);
   expect(requests.every((req) => req.authorization === 'Bearer integration-access')).toBe(true);
 });
 
@@ -77,7 +84,7 @@ test('a new activity is created once and a failed attachment can be retried with
   fireEvent.change(input, { target: { value: '  New interview  ' } });
   await screen.findByText(/New activity.*New interview.*created on confirm/);
   fireEvent.click(screen.getByRole('button', { name: 'Add to Activity' }));
-  await screen.findByText('Could not add LEIA to activity');
+  await screen.findByText('Temporarily unavailable');
   expect(onClose).not.toHaveBeenCalled();
   expect(onSuccess).not.toHaveBeenCalled();
   expect(activities.map((activity) => activity.name)).toEqual(['Existing activity', 'New interview']);
