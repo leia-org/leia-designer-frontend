@@ -9,17 +9,57 @@ export const DEFAULT_PROBLEM: ProblemDef = {
     description:
         "Given an array of integers `nums` and an integer `target`, return the indices of the two numbers that add up to `target`. Each input has exactly one solution, and you may not use the same element twice.",
     starter: {
-        javascript: `// Implement twoSum(nums, target) and LEIA will run the tests for you.
-function twoSum(nums, target) {
-    // your code here
-    return [];
-}
-`,
-        python: `# Implement twoSum(nums, target) and LEIA will run the tests for you.
-def twoSum(nums, target):
-    # your code here
-    return []
-`,
+        javascript: "function twoSum(nums, target) {\n    // Return the indexes of the two matching values.\n    return [];\n}\n",
+        typescript: "function twoSum(nums: number[], target: number): [number, number] {\n    // Use typed arrays and return the matching indexes.\n    return [0, 0];\n}\n",
+        python: "def twoSum(nums, target):\n    # Return the indexes of the two matching values.\n    return []\n",
+        java: "public int[] twoSum(int[] nums, int target) {\n    // Use an int array and return the matching indexes.\n    return new int[0];\n}\n",
+        rust: "fn twoSum(nums: &[i32], target: i32) -> [i32; 2] {\n    // Return a fixed-size array of indexes.\n    [0, 0]\n}\n",
+        c: "int* twoSum(int* nums, int numsSize, int target, int* returnSize) {\n    // Allocate and return the two matching indexes.\n    *returnSize = 0;\n    return 0;\n}\n",
+        cpp: "std::vector<int> twoSum(std::vector<int>& nums, int target) {\n    // Return the two matching indexes.\n    return {};\n}\n",
+        csharp: "public int[] TwoSum(int[] nums, int target) {\n    // Return the two matching indexes.\n    return Array.Empty<int>();\n}\n",
+        php: "function twoSum(array $nums, int $target): array {\n    // Return the two matching indexes.\n    return [];\n}\n",
+        go: "func twoSum(nums []int, target int) []int {\n\t// Return the two matching indexes.\n\treturn []int{}\n}\n",
+        kotlin: "fun twoSum(nums: IntArray, target: Int): IntArray {\n    // Return the two matching indexes.\n    return intArrayOf()\n}\n",
+        swift: "func twoSum(_ nums: [Int], _ target: Int) -> [Int] {\n    // Return the two matching indexes.\n    return []\n}\n",
+        ruby: "def two_sum(nums, target)\n  # Return the two matching indexes.\n  []\nend\n",
+        r: "twoSum <- function(nums, target) {\n  # Return the two matching indexes.\n  integer(0)\n}\n",
+        matlab: "function result = twoSum(nums, target)\n% Return the two matching indexes.\nresult = [];\nend\n",
+        dart: "List<int> twoSum(List<int> nums, int target) {\n  // Return the two matching indexes.\n  return <int>[];\n}\n",
+        scala: "def twoSum(nums: Array[Int], target: Int): Array[Int] = {\n  // Return the two matching indexes.\n  Array.empty[Int]\n}\n",
+        perl: "sub twoSum {\n    my ($nums, $target) = @_;\n    # Return the two matching indexes.\n    return [];\n}\n",
+        lua: "function twoSum(nums, target)\n    -- Return the two matching indexes.\n    return {}\nend\n",
+        "objective-c": "- (NSArray<NSNumber *> *)twoSum:(NSArray<NSNumber *> *)nums target:(NSInteger)target {\n    // Return the two matching indexes.\n    return @[];\n}\n",
+        assembly: "; Implement twoSum using the calling convention of the target platform.\n; Return the two matching indexes in the documented registers.\n",
+        sql: "-- SQL exercises use a query rather than a function.\nSELECT index_a, index_b\nFROM matching_pairs\nWHERE value_a + value_b = :target;\n",
+        plsql: "CREATE OR REPLACE FUNCTION twoSum(p_target NUMBER) RETURN SYS.ODCINUMBERLIST IS\nBEGIN\n    -- Return the two matching indexes from the source table.\n    RETURN SYS.ODCINUMBERLIST();\nEND;\n/\n",
+        haskell: "twoSum :: [Int] -> Int -> [Int]\ntwoSum nums target =\n  -- Return the two matching indexes.\n  []\n",
+        elixir: "def two_sum(nums, target) do\n  # Return the two matching indexes.\n  []\nend\n",
+        erlang: "-module(solution).\n-export([two_sum/2]).\ntwo_sum(Nums, Target) ->\n    % Return the two matching indexes.\n    [].\n",
+        clojure: "(defn two-sum [nums target]\n  ;; Return the two matching indexes.\n  [])\n",
+        fsharp: "let twoSum (nums: int array) (target: int) =\n    // Return the two matching indexes.\n    [||]\n",
+        vb: "Public Function TwoSum(nums As Integer(), target As Integer) As Integer()\n    ' Return the two matching indexes.\n    Return Array.Empty(Of Integer)()\nEnd Function\n",
+        delphi: "function TwoSum(const Nums: TArray<Integer>; Target: Integer): TArray<Integer>;\nbegin\n  // Return the two matching indexes.\n  Result := [];\nend;\n",
+        fortran: "function two_sum(nums, target) result(answer)\n  integer, intent(in) :: nums(:), target\n  integer :: answer(0)\n  ! Return the two matching indexes.\nend function two_sum\n",
+        cobol: "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. TWO-SUM.\n       PROCEDURE DIVISION.\n           *> Return the two matching indexes.\n           GOBACK.\n",
+        julia: "function twoSum(nums, target)\n    # Return the two matching indexes.\n    Int[]\nend\n",
+        groovy: "int[] twoSum(int[] nums, int target) {\n    // Return the two matching indexes.\n    [] as int[]\n}\n",
+        bash: "two_sum() {\n  # Shell exercises commonly process positional parameters.\n  printf '%s\\n' \"Implement the matching-index lookup\"\n}\n",
+        powershell: "function Get-TwoSum {\n    param([int[]]$Nums, [int]$Target)\n    # Return the two matching indexes.\n    return @()\n}\n",
+        solidity: "function twoSum(uint256[] memory nums, uint256 target) public pure returns (uint256[] memory) {\n    // Return the two matching indexes.\n    uint256[] memory result = new uint256[](0);\n    return result;\n}\n",
+        zig: "fn twoSum(nums: []const i32, target: i32) [2]i32 {\n    // Return the two matching indexes.\n    return .{ 0, 0 };\n}\n",
+        nim: "proc twoSum(nums: seq[int], target: int): seq[int] =\n  # Return the two matching indexes.\n  @[]\n",
+        ocaml: "let two_sum nums target =\n  (* Return the two matching indexes. *)\n  []\n",
+        prolog: "two_sum(Nums, Target, Result) :-\n    % Return the two matching indexes.\n    Result = [].\n",
+        scheme: "(define (two-sum nums target)\n  ; Return the two matching indexes.\n  '())\n",
+        lisp: "(defun two-sum (nums target)\n  ;; Return the two matching indexes.\n  nil)\n",
+        scratch: "when green flag clicked\n  // Build a list with the two matching indexes.\n  say [Implement the two-sum lookup]\n",
+        gdscript: "func two_sum(nums: Array[int], target: int) -> Array[int]:\n    # Return the two matching indexes.\n    return []\n",
+        apex: "public static List<Integer> twoSum(List<Integer> nums, Integer target) {\n    // Return the two matching indexes.\n    return new List<Integer>();\n}\n",
+        abap: "METHOD two_sum.\n  \" Return the two matching indexes.\n  result = VALUE #( ).\nENDMETHOD.\n",
+        v: "fn two_sum(nums []int, target int) []int {\n    // Return the two matching indexes.\n    return []int{}\n}\n",
+        crystal: "def two_sum(nums : Array(Int32), target : Int32) : Array(Int32)\n  # Return the two matching indexes.\n  [] of Int32\nend\n",
+        d: "int[] twoSum(int[] nums, int target) {\n    // Return the two matching indexes.\n    return [];\n}\n",
+        text: "",
     },
     tests: [
         { name: "[2,7,11,15], target=9", args: [[2, 7, 11, 15], 9], expected: [0, 1] },

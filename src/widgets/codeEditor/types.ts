@@ -24,7 +24,15 @@ export interface TestRunSummary {
 }
 
 /** Editor language. "text" is a plain-text editor with no execution/tests. */
-export type EditorLanguage = "javascript" | "python" | "text";
+export type EditorLanguage =
+    | "javascript" | "typescript" | "python" | "java" | "rust" | "c" | "cpp"
+    | "csharp" | "php" | "go" | "kotlin" | "swift" | "ruby" | "r" | "matlab"
+    | "dart" | "scala" | "perl" | "lua" | "objective-c" | "assembly" | "sql"
+    | "plsql" | "haskell" | "elixir" | "erlang" | "clojure" | "fsharp"
+    | "vb" | "delphi" | "fortran" | "cobol" | "julia" | "groovy" | "bash"
+    | "powershell" | "solidity" | "zig" | "nim" | "ocaml" | "prolog"
+    | "scheme" | "lisp" | "scratch" | "gdscript" | "apex" | "abap" | "v"
+    | "crystal" | "d" | "text";
 
 export interface ProblemDef {
     /** Function name the user must implement. */
@@ -34,7 +42,55 @@ export interface ProblemDef {
     language?: EditorLanguage;
     starter: {
         javascript: string;
+        typescript: string;
         python: string;
+        java: string;
+        rust: string;
+        c: string;
+        cpp: string;
+        csharp: string;
+        php: string;
+        go: string;
+        kotlin: string;
+        swift: string;
+        ruby: string;
+        r: string;
+        matlab: string;
+        dart: string;
+        scala: string;
+        perl: string;
+        lua: string;
+        "objective-c": string;
+        assembly: string;
+        sql: string;
+        plsql: string;
+        haskell: string;
+        elixir: string;
+        erlang: string;
+        clojure: string;
+        fsharp: string;
+        vb: string;
+        delphi: string;
+        fortran: string;
+        cobol: string;
+        julia: string;
+        groovy: string;
+        bash: string;
+        powershell: string;
+        solidity: string;
+        zig: string;
+        nim: string;
+        ocaml: string;
+        prolog: string;
+        scheme: string;
+        lisp: string;
+        scratch: string;
+        gdscript: string;
+        apex: string;
+        abap: string;
+        v: string;
+        crystal: string;
+        d: string;
         text?: string;
     };
     tests: TestCase[];

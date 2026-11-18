@@ -62,11 +62,7 @@ function mergeProblem(p?: Partial<ProblemDef>): ProblemDef {
         fnName: p.fnName ?? DEFAULT_PROBLEM.fnName,
         description: p.description ?? DEFAULT_PROBLEM.description,
         language: p.language ?? DEFAULT_PROBLEM.language ?? "javascript",
-        starter: {
-            javascript: p.starter?.javascript ?? DEFAULT_PROBLEM.starter.javascript,
-            python: p.starter?.python ?? DEFAULT_PROBLEM.starter.python,
-            text: p.starter?.text ?? DEFAULT_PROBLEM.starter.text ?? "",
-        },
+        starter: { ...DEFAULT_PROBLEM.starter, ...p.starter },
         tests: p.tests ?? DEFAULT_PROBLEM.tests,
     };
 }
@@ -86,7 +82,7 @@ export function CodeEditorWidget({ params }: CodeEditorWidgetProps = {}) {
     const problem = useMemo(() => mergeProblem(params), [params]);
     const language: EditorLanguage = problem.language ?? "javascript";
     // Tests only make sense for an executable language with a suite defined.
-    const hasTests = language !== "text" && problem.tests.length > 0;
+    const hasTests = (language === "javascript" || language === "python") && problem.tests.length > 0;
 
     const editorRef = useRef<MinimalEditor | null>(null);
     const [running, setRunning] = useState(false);
