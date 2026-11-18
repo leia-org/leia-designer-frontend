@@ -105,6 +105,21 @@ test("basic users can reuse saved templates but cannot author or select an autho
   assert.equal(e.config.behaviour, saved);
 });
 
+test("editing a saved Behaviour proposes a draft copy with an available name", async () => {
+  const saved = { id: "saved-client", metadata: { name: "saved-client" }, spec: behaviour() };
+  const copy = { ...saved, id: "existing-copy", metadata: { name: "saved-client-copy" } };
+  const chat = chatFixture({
+    config: { problem: null, behaviour: saved, persona: null }, canEdit: true, behaviours: [saved, copy],
+  });
+  chat.editor.draft.customizations.behaviour = { name: "saved-client" };
+  await chat.turn([call("edit_behaviour", { changes: {}, appendInstructions: "Be concise." })]);
+  assert.equal(chat.proposal.changes[0].after, "saved-client-copy-2");
+  chat.apply();
+  assert.equal(chat.editor.draft.config.behaviour.metadata.name, "saved-client-copy-2");
+  assert.equal(chat.editor.draft.customizations.behaviour, undefined);
+  assert.equal(saved.spec.description, template);
+});
+
 test("template checks accept supported whitespace and keep draft edits ahead of the saved version", () => {
   assert.deepEqual(missingBehaviourReferences(CORE_BEHAVIOUR_REFERENCES.map(x => x.replace("{{", "{{ ").replace("}}", " }}")).join("\n")), []);
   const saved = { id: "a", spec: { description: "old" } };

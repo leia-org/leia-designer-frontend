@@ -182,8 +182,10 @@ export function stageCreatorCommand(
     createdAt: editing && selected?.edited ? selected.createdAt : now,
     updatedAt: now,
   } as Resource;
+  const customizedName = draft.customizations[component]?.name.trim();
+  const keepCustomization = editing && Boolean(selected?.edited || (customizedName && customizedName !== selected?.metadata.name));
   return {
-    draft: setComponent(draft, component, resource, editing),
+    draft: setComponent(draft, component, resource, keepCustomization),
     action: editing ? "Edit" : selected ? "Replace" : "Create",
   };
 }
