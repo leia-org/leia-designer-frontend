@@ -51,7 +51,6 @@ import type {
   Persona,
   Behaviour,
   Problem,
-  ProblemSpec,
   ProblemWidget,
   Leia as LeiaResource,
 } from "../models/Leia";
@@ -66,6 +65,14 @@ import {
   updateLeiaDraft,
 } from "../lib/leiaDrafts";
 import { generateLeia } from "../lib/leia";
+import {
+  copyProcess,
+  suggestedTitle,
+  type CreatorDraft,
+  type CreatorProposal,
+  type LeiaConfig,
+  type LeiaCustomizations,
+} from "../lib/creatorCommands";
 import { toast, ToastContainer } from "react-toastify";
 
 interface Label {
@@ -96,12 +103,6 @@ type LabelOption = {
   createName?: string;
 };
 
-interface LeiaConfig {
-  persona: Persona | null;
-  problem: Problem | null;
-  behaviour: Behaviour | null;
-}
-
 interface Leia {
   spec: {
     persona: Persona;
@@ -109,13 +110,6 @@ interface Leia {
     behaviour: Behaviour;
   };
 }
-
-type LeiaCustomizations = {
-  persona?: { name: string; version?: string };
-  problem?: { name: string; version?: string };
-  behaviour?: { name: string; version?: string };
-  leia: { name: string; version?: string };
-};
 
 type SupervisorConfig = {
   enabled: boolean;
@@ -210,19 +204,13 @@ const createEmptyCustomizations = (): LeiaCustomizations => ({
   leia: { name: "", version: "1.0.0" },
 });
 
-const copyProcess = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((process): process is string => typeof process === "string")
-    : [];
-
-const haveSameProcess = (left: unknown, right: unknown): boolean => {
-  const normalize = (value: unknown) => [...new Set(copyProcess(value))].sort();
-  const leftProcess = normalize(left);
-  const rightProcess = normalize(right);
-  return (
-    leftProcess.length === rightProcess.length &&
-    leftProcess.every((process, index) => process === rightProcess[index])
-  );
+const updateDraftField = <K extends keyof CreatorDraft>(
+  draft: CreatorDraft,
+  field: K,
+  update: React.SetStateAction<CreatorDraft[K]>,
+): CreatorDraft => {
+  const value = typeof update === "function" ? update(draft[field]) : update;
+  return Object.is(value, draft[field]) ? draft : { ...draft, [field]: value };
 };
 
 export const CreateLeia: React.FC = () => {
@@ -248,14 +236,22 @@ export const CreateLeia: React.FC = () => {
   const [tourRequested, setTourRequested] = useState(false);
   const [nameActivityReplication, setNameActivityReplication] = useState("");
   const [showActivityReplicationModal, setShowActivityReplicationModal] = useState(false);
-  const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>(createEmptyLeiaConfig);
-  const [leiaConfigSnapShot, setLeiaConfigSnapShot] =
-    useState<LeiaConfig | null>(null);
-
-  const [customizations, setCustomizations] = useState<LeiaCustomizations>(
-    createEmptyCustomizations,
-  );
-  const [leiaNameManuallyEdited, setLeiaNameManuallyEdited] = useState(false);
+  const [creatorDraft, setCreatorDraft] = useState<CreatorDraft>(() => ({
+    config: createEmptyLeiaConfig(),
+    customizations: createEmptyCustomizations(),
+    nameManuallyEdited: false,
+  }));
+  const { config: leiaConfig, customizations, nameManuallyEdited: leiaNameManuallyEdited } = creatorDraft;
+  const setLeiaConfig = useCallback((update: React.SetStateAction<LeiaConfig>) => {
+    setCreatorDraft(previous => updateDraftField(previous, "config", update));
+  }, []);
+  const setCustomizations = useCallback((update: React.SetStateAction<LeiaCustomizations>) => {
+    setCreatorDraft(previous => updateDraftField(previous, "customizations", update));
+  }, []);
+  const setLeiaNameManuallyEdited = useCallback((value: boolean) => {
+    setCreatorDraft(previous => updateDraftField(previous, "nameManuallyEdited", value));
+  }, []);
+  const [leiaConfigSnapShot, setLeiaConfigSnapShot] = useState<LeiaConfig | null>(null);
   const [showComponentSelector, setShowComponentSelector] = useState(false);
   const [chatApiKeyId, setChatApiKeyId] = useState<string | null>(null);
   const [chatModelName, setChatModelName] = useState("");
@@ -572,7 +568,7 @@ export const CreateLeia: React.FC = () => {
     setPersonaPublish(true);
     setEditingResource({ resource: null, content: null, apiVersion: "v1" });
     setDraftError(null);
-  }, []);
+  }, [setCustomizations, setLeiaConfig, setLeiaNameManuallyEdited]);
 
   const restoreDraft = useCallback((draft: LeiaDraft<CreateLeiaDraftState>) => {
     const state = draft.state as Partial<CreateLeiaDraftState>;
@@ -619,7 +615,7 @@ export const CreateLeia: React.FC = () => {
     setEditingResource({ resource: null, content: null, apiVersion: "v1" });
     setDraftError(null);
     setShowDraftsDialog(false);
-  }, []);
+  }, [setCustomizations, setLeiaConfig, setLeiaNameManuallyEdited]);
 
   const loadDrafts = useCallback(async () => {
     setIsDraftsLoading(true);
@@ -956,7 +952,7 @@ export const CreateLeia: React.FC = () => {
       } catch (e) {
         console.error("Error clearing navigation state after starting tour:", e);}
     }
-  }, [location.pathname, location.state, navigate, startGuidedTour]);
+  }, [location.pathname, location.state, navigate, setLeiaConfig, startGuidedTour]);
 
   // Restaurar estado cuando se vuelve del chat
   useEffect(() => {
@@ -1008,7 +1004,7 @@ export const CreateLeia: React.FC = () => {
         state: { ...navigationState, save: undefined } as NavigationState,
       });
     }
-  }, [location.state, navigate, location.pathname, restoreDraft]);
+  }, [location.state, navigate, location.pathname, restoreDraft, setCustomizations, setLeiaConfig, setLeiaNameManuallyEdited]);
 
   // Derive the assembled LEIA during render. An incomplete selection must never
   // retain a previously valid LEIA, including during navigation/draft restoration.
@@ -1976,43 +1972,9 @@ const openGenerateProblemModal = () => {
     );
   };
 
-  const applyChatProblem = useCallback(
-    (spec: ProblemSpec, name?: string, behaviourForTurn?: Behaviour | null): Behaviour | null => {
-      const incomingSpec = spec as unknown as Record<string, unknown>;
-      const process = copyProcess(incomingSpec.process);
-      // Keep only a compatible behaviour explicitly selected in THIS assistant
-      // turn. The inherited behaviour still needs an explicit suitability check.
-      const retainedBehaviour = behaviourForTurn && haveSameProcess(behaviourForTurn.spec.process, process)
-        ? behaviourForTurn
-        : null;
-      setLeiaConfig((prev) => ({
-        ...prev,
-        problem: {
-          apiVersion: "v1",
-          metadata: {
-            name: name || prev.problem?.metadata?.name || "ai-generated-problem",
-            version: "1.0.0",
-          },
-          spec: {
-            ...incomingSpec,
-            process,
-            extends: incomingSpec.extends ?? {},
-            overrides: incomingSpec.overrides ?? {},
-            constrainedTo: incomingSpec.constrainedTo ?? {},
-          },
-          id: "generated-" + Date.now(),
-          edited: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isPublished: false,
-          user: currentUser!,
-        } as unknown as Problem,
-        behaviour: retainedBehaviour,
-      }));
-      return retainedBehaviour;
-    },
-    [currentUser],
-  );
+  const applyCreatorProposal = (proposal: CreatorProposal) => {
+    setCreatorDraft(previous => previous === proposal.base ? proposal.next : previous);
+  };
 
   const handleProblemWidgetsChange = useCallback((widgets: ProblemWidget[]) => {
     setLeiaConfig((previous) => {
@@ -2031,124 +1993,7 @@ const openGenerateProblemModal = () => {
         },
       };
     });
-  }, []);
-
-  const applyChatBehaviour = useCallback(
-    (spec: Record<string, unknown>, name?: string) => {
-      if (!canEditBehaviour) return;
-      // The chat supplies the final Problem process, including when both
-      // resources are applied in the same tool response before React renders.
-      const behaviour = {
-        apiVersion: "v1",
-        metadata: {
-          name: name || "ai-generated-behaviour",
-          version: "1.0.0",
-        },
-        spec: { ...spec, process: copyProcess(spec.process) },
-        id: "generated-" + Date.now(),
-        edited: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isPublished: false,
-        user: currentUser!,
-      } as unknown as Behaviour;
-      setLeiaConfig(prev => ({ ...prev, behaviour }));
-      return behaviour;
-    },
-    [canEditBehaviour, currentUser],
-  );
-
-  const applyChatPersona = useCallback(
-    (spec: Record<string, unknown>, name?: string) => {
-      setLeiaConfig((prev) => ({
-        ...prev,
-        persona: {
-          apiVersion: "v1",
-          metadata: {
-            name: name || prev.persona?.metadata?.name || "ai-generated-persona",
-            version: "1.0.0",
-          },
-          spec: { ...spec },
-          id: "generated-" + Date.now(),
-          edited: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isPublished: false,
-          user: currentUser!,
-        } as unknown as Persona,
-      }));
-    },
-    [currentUser],
-  );
-
-  const handleUseExistingPersona = useCallback(
-    (id: string): { ok: boolean; name?: string } => {
-      const persona = personas.find((item) => item.id === id);
-      if (!persona) return { ok: false };
-      setLeiaConfig((previous) => ({ ...previous, persona }));
-      return { ok: true, name: persona.metadata?.name };
-    },
-    [personas],
-  );
-
-  const handleUseExistingProblem = useCallback(
-    (id: string, behaviourForTurn?: Behaviour | null): { ok: boolean; name?: string; process?: string[]; behaviour?: Behaviour | null; error?: string } => {
-      const problem = problems.find((item) => item.id === id);
-      if (!problem) return { ok: false, error: `No problem with id '${id}' is available.` };
-      const retainedBehaviour = behaviourForTurn && haveSameProcess(behaviourForTurn.spec.process, problem.spec.process)
-        ? behaviourForTurn
-        : null;
-      setLeiaConfig((previous) => ({
-        ...previous,
-        problem,
-        behaviour: previous.problem?.id === problem.id ? previous.behaviour : retainedBehaviour,
-      }));
-      return {
-        ok: true,
-        name: problem.metadata?.name,
-        process: copyProcess(problem.spec?.process),
-        behaviour: retainedBehaviour,
-      };
-    },
-    [problems],
-  );
-
-  const handleUseExistingBehaviour = useCallback(
-    (id: string, problemProcess?: string[], candidate?: Behaviour): { ok: boolean; name?: string; error?: string; behaviour?: Behaviour } => {
-      const behaviour = candidate?.id === id && candidate.edited
-        ? candidate
-        : behaviours.find((item) => item.id === id) ?? (candidate?.id === id ? candidate : undefined);
-      if (!behaviour) return { ok: false, error: `No behaviour with id '${id}' is available.` };
-      if (behaviour.edited && !canEditBehaviour) {
-        return { ok: false, error: "Only an advanced user or administrator can use an authored behaviour draft." };
-      }
-      const expectedProcess = problemProcess ?? leiaConfig.problem?.spec?.process;
-      if (!expectedProcess) {
-        return { ok: false, error: "Select or create the problem before selecting its behaviour." };
-      }
-      if (!haveSameProcess(behaviour.spec?.process, expectedProcess)) {
-        return {
-          ok: false,
-          error: "The behaviour process must exactly match the selected problem process.",
-        };
-      }
-      setLeiaConfig((previous) => ({ ...previous, behaviour }));
-      return { ok: true, name: behaviour.metadata?.name, behaviour };
-    },
-    [behaviours, leiaConfig.problem, canEditBehaviour],
-  );
-
-  const handleAssistantLeiaName = useCallback(
-    (name: string) => {
-      const suggestion = name.trim();
-      if (!suggestion || leiaNameManuallyEdited) return;
-      setCustomizations((previous) => ({
-        ...previous,
-        leia: { ...previous.leia, name: suggestion },
-      }));
-    },
-    [leiaNameManuallyEdited],
-  );
+  }, [setLeiaConfig]);
 
   const handleLeiaNameChange = useCallback((name: string) => {
     setLeiaNameManuallyEdited(true);
@@ -2156,25 +2001,18 @@ const openGenerateProblemModal = () => {
       ...previous,
       leia: { ...previous.leia, name },
     }));
-  }, []);
+  }, [setCustomizations, setLeiaNameManuallyEdited]);
 
   useEffect(() => {
     if (leiaNameManuallyEdited || customizations.leia.name.trim()) return;
 
-    const sourceName =
-      leiaConfig.problem?.metadata?.name ||
-      leiaConfig.persona?.metadata?.name ||
-      "";
-    if (!sourceName || sourceName.startsWith("ai-generated-")) return;
-
-    const readableName = sourceName
-      .replace(/[-_]+/g, " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const readableName = suggestedTitle(leiaConfig);
+    if (!readableName) return;
     setCustomizations((previous) => ({
       ...previous,
       leia: { ...previous.leia, name: readableName },
     }));
-  }, [customizations.leia.name, leiaConfig.persona?.metadata?.name, leiaConfig.problem?.metadata?.name, leiaNameManuallyEdited]);
+  }, [customizations.leia.name, leiaConfig, leiaNameManuallyEdited, setCustomizations]);
 
   const MuiVisibilitySelector: React.FC<{
     value: "all" | "private" | "public";
@@ -2406,20 +2244,13 @@ const openGenerateProblemModal = () => {
             }}
           >
             <ProblemChatPanel
-              currentProblem={leiaConfig.problem}
-              currentBehaviour={leiaConfig.behaviour}
-              currentPersona={leiaConfig.persona}
+              draft={creatorDraft}
+              user={currentUser ?? undefined}
               problems={problems}
               behaviours={behaviours}
               personas={personas}
               canEditBehaviour={canEditBehaviour}
-              onApplyProblem={applyChatProblem}
-              onApplyBehaviour={applyChatBehaviour}
-              onApplyPersona={applyChatPersona}
-              onUseProblem={handleUseExistingProblem}
-              onUseBehaviour={handleUseExistingBehaviour}
-              onUsePersona={handleUseExistingPersona}
-              onSetLeiaName={handleAssistantLeiaName}
+              onApplyProposal={applyCreatorProposal}
               modelName={chatModelName}
               apiKeyId={chatApiKeyId}
               key={chatResetKey}
