@@ -8,7 +8,7 @@ import type { Leia } from '../../src/models/Leia';
 test('saves an empty stage and only asks for an earlier source after a LEIA references it', async () => {
   const firstStage: ActivityStage = {
     id: 'initial-stage',
-    previousStageId: null,
+    outputSources: { conversation: null, submitedSolution: null },
     orchestration: {
       mode: 'single', maxInternalTurns: 2, openingLeiaId: null, problemLeiaId: null, sharedTask: '',
     },
@@ -26,14 +26,14 @@ test('saves an empty stage and only asks for an earlier source after a LEIA refe
 
   fireEvent.click(screen.getByRole('button', { name: 'Add stage' }));
   expect(screen.getByRole('img', { name: 'Stage 2' }).textContent).toBe('2');
-  expect(screen.queryByRole('combobox', { name: /Source of previous stage outputs/ })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: /Source of conversation output/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Save stages' }));
   await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
   const secondStage = experiment.stages![1];
-  expect(secondStage.previousStageId).toBeNull();
+  expect(secondStage.outputSources).toEqual({ conversation: null, submitedSolution: null });
 
-  const assignLeia = (id: string, description: string): LeiaConfig => ({
-    id, stageId: secondStage.id, configuration: { mode: 'standard', data: {} },
+  const assignLeia = (id: string, description: string, stageId = secondStage.id): LeiaConfig => ({
+    id, stageId, configuration: { mode: 'standard', data: {} },
     leia: {
       id, metadata: { name: id },
       spec: { behaviour: { spec: { description } } },
@@ -41,20 +41,59 @@ test('saves an empty stage and only asks for an earlier source after a LEIA refe
   });
   experiment = { ...experiment, leias: [assignLeia('Interview', 'Ask an open question')] };
   rerender(editor());
-  expect(screen.queryByRole('combobox', { name: /Source of previous stage outputs/ })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: /Source of conversation output/ })).toBeNull();
 
   experiment = {
     ...experiment,
     leias: [...experiment.leias, assignLeia('Reflection', 'Reflect on {{previousStage.outputs.conversation}}')],
   };
   rerender(editor());
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of previous stage outputs/ }));
+  expect(screen.queryByRole('combobox', { name: /Source of submitted solution output/ })).toBeNull();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of conversation output/ }));
   fireEvent.click(await screen.findByRole('option', { name: 'Stage 1' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save stages' }));
   await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(2));
   expect(patch).toHaveBeenLastCalledWith('/api/v1/experiments/activity/stages', {
-    stages: [firstStage, { ...secondStage, previousStageId: firstStage.id }],
+    stages: [firstStage, {
+      ...secondStage,
+      outputSources: { conversation: firstStage.id, submitedSolution: null },
+    }],
   });
   rerender(editor());
-  expect(screen.getByRole('combobox', { name: /Source of previous stage outputs/ }).textContent).toBe('Stage 1');
+  expect(screen.getByRole('combobox', { name: /Source of conversation output/ }).textContent).toBe('Stage 1');
+
+  // Add a third stage that resolves submitted solution from Stage 1 and conversation from Stage 2.
+  fireEvent.click(screen.getByRole('button', { name: 'Add stage' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save stages' }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(3));
+  const thirdStage = experiment.stages![2];
+  experiment = {
+    ...experiment,
+    leias: [
+      ...experiment.leias,
+      assignLeia(
+        'Evaluator',
+        'Review {{previousStage.outputs.submitedSolution}} and {{previousStage.outputs.conversation}}',
+        thirdStage.id,
+      ),
+    ],
+  };
+  rerender(editor());
+  const conversationCombos = screen.getAllByRole('combobox', { name: /Source of conversation output/ });
+  fireEvent.mouseDown(conversationCombos[1]);
+  fireEvent.click(await screen.findByRole('option', { name: 'Stage 2' }));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of submitted solution output/ }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Stage 1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save stages' }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(4));
+  expect(patch).toHaveBeenLastCalledWith('/api/v1/experiments/activity/stages', {
+    stages: [
+      firstStage,
+      experiment.stages![1],
+      {
+        ...thirdStage,
+        outputSources: { conversation: secondStage.id, submitedSolution: firstStage.id },
+      },
+    ],
+  });
 });

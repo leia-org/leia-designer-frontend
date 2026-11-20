@@ -13,9 +13,16 @@ export interface Experiment {
   updatedAt: string;
 }
 
+export type StageOutput = "conversation" | "submitedSolution";
+
+export interface StageOutputSources {
+  conversation?: string | null;
+  submitedSolution?: string | null;
+}
+
 export interface ActivityStage {
   id: string;
-  previousStageId: string | null;
+  outputSources?: StageOutputSources;
   orchestration: ActivityOrchestration;
 }
 

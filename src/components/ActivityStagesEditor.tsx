@@ -5,7 +5,30 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { isAxiosError } from "axios";
 import api from "../lib/axios";
-import type { ActivityStage, Experiment } from "../models/Experiment";
+import type { ActivityStage, Experiment, StageOutput } from "../models/Experiment";
+
+const STAGE_OUTPUTS: ReadonlyArray<{
+  key: StageOutput;
+  label: string;
+  summary: string;
+  pattern: RegExp;
+}> = [
+  {
+    key: "conversation",
+    label: "Source of conversation output",
+    summary: "Conversation",
+    pattern: /{{\s*previousStage\.outputs\.conversation\s*}}/,
+  },
+  {
+    key: "submitedSolution",
+    label: "Source of submitted solution output",
+    summary: "Submitted solution",
+    pattern: /{{\s*previousStage\.outputs\.submitedSolution\s*}}/,
+  },
+];
+
+const getOutputSource = (stage: ActivityStage, output: StageOutput): string | null =>
+  stage.outputSources?.[output] ?? null;
 
 interface ActivityStagesEditorProps {
   experiment: Experiment;
@@ -22,20 +45,37 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
     setDraft(stages.map((stage) => stage.id === id ? { ...stage, ...fields } : stage));
   };
 
+  const changeOutputSource = (stage: ActivityStage, output: StageOutput, value: string) => {
+    change(stage.id, {
+      outputSources: {
+        conversation: getOutputSource(stage, "conversation"),
+        submitedSolution: getOutputSource(stage, "submitedSolution"),
+        [output]: value || null,
+      },
+    });
+  };
+
   const move = (index: number, offset: number) => {
     const next = [...stages];
     [next[index], next[index + offset]] = [next[index + offset], next[index]];
-    setDraft(next.map((stage, position) =>
-      next.slice(0, position).some(({ id }) => id === stage.previousStageId)
-        ? stage
-        : { ...stage, previousStageId: null },
-    ));
+    setDraft(next.map((stage, position) => {
+      const earlierIds = new Set(next.slice(0, position).map(({ id }) => id));
+      const keepEarlier = (sourceId: string | null) =>
+        sourceId && earlierIds.has(sourceId) ? sourceId : null;
+      return {
+        ...stage,
+        outputSources: {
+          conversation: keepEarlier(getOutputSource(stage, "conversation")),
+          submitedSolution: keepEarlier(getOutputSource(stage, "submitedSolution")),
+        },
+      };
+    }));
   };
 
   const add = () => {
     setDraft([...stages, {
       id: crypto.randomUUID(),
-      previousStageId: null,
+      outputSources: { conversation: null, submitedSolution: null },
       orchestration: {
         mode: "single", maxInternalTurns: 2,
         openingLeiaId: null, problemLeiaId: null, sharedTask: "",
@@ -71,10 +111,15 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
           id: entry.id,
           label: (typeof entry.leia === "object" && entry.leia?.metadata.name) || `LEIA ${entryIndex + 1}`,
         }));
-        const references = entries.some(({ leia }) => typeof leia === "object" &&
+        const hasAnyReference = entries.some(({ leia }) => typeof leia === "object" &&
           /{{\s*previousStage\b/.test(leia?.spec?.behaviour?.spec?.description ?? ""));
+        const referencedOutputs = STAGE_OUTPUTS.filter(({ pattern }) => entries.some(({ leia }) =>
+          typeof leia === "object" && pattern.test(leia?.spec?.behaviour?.spec?.description ?? "")));
         const flow = stage.orchestration;
-        const sourceIndex = stages.findIndex(({ id }) => id === stage.previousStageId);
+        const publishedSourcesSummary = referencedOutputs.map(({ key, summary }) => {
+          const sourceIndex = stages.findIndex(({ id }) => id === getOutputSource(stage, key));
+          return sourceIndex >= 0 ? ` · ${summary} from Stage ${sourceIndex + 1}` : "";
+        }).join("");
         return (
           <Stack key={stage.id} spacing={1.5} sx={{ p: 2, border: 1, borderColor: "divider", borderRadius: 1 }}>
             <Stack direction="row" alignItems="center" spacing={1.25}>
@@ -89,7 +134,7 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
             {experiment.isPublished ? (
               <Typography variant="body2" color="text.secondary">
                 {flow.mode === "multi" ? "MultiLEIA" : "Single LEIA assignment"}
-                {references && sourceIndex >= 0 && ` · Uses outputs from Stage ${sourceIndex + 1}`}
+                {publishedSourcesSummary}
               </Typography>
             ) : (
               <>
@@ -104,9 +149,22 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
                   </IconButton>
                   <IconButton size="small" color="error" aria-label="Remove stage" title="Remove stage"
                     disabled={saving || entries.length > 0 || stages.length === 1}
-                    onClick={() => setDraft(stages.filter(({ id }) => id !== stage.id).map((other) =>
-                      other.previousStageId === stage.id ? { ...other, previousStageId: null } : other,
-                    ))}>
+                    onClick={() => setDraft(stages.filter(({ id }) => id !== stage.id).map((other) => {
+                      const clearRemoved = (sourceId: string | null) =>
+                        sourceId === stage.id ? null : sourceId;
+                      const conversation = clearRemoved(getOutputSource(other, "conversation"));
+                      const submitedSolution = clearRemoved(getOutputSource(other, "submitedSolution"));
+                      if (
+                        other.outputSources?.conversation !== stage.id &&
+                        other.outputSources?.submitedSolution !== stage.id
+                      ) {
+                        return other;
+                      }
+                      return {
+                        ...other,
+                        outputSources: { conversation, submitedSolution },
+                      };
+                    }))}>
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 </Stack>
@@ -138,18 +196,21 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
                       onChange={(event) => change(stage.id, { orchestration: { ...flow, sharedTask: event.target.value } })} />
                   </>
                 )}
-                {references && index === 0 && <Alert severity="error">Move this stage after its source stage.</Alert>}
-                {references && index > 0 && (
-                  <TextField select size="small" label="Source of previous stage outputs" value={stage.previousStageId ?? ""}
-                    disabled={saving} required error={!stage.previousStageId}
-                    helperText={!stage.previousStageId ? "Choose an earlier stage before publishing the activity." : undefined}
-                    onChange={(event) => change(stage.id, { previousStageId: event.target.value || null })}>
-                    <MenuItem value="">None</MenuItem>
-                    {stages.slice(0, index).map((earlier, earlierIndex) => (
-                      <MenuItem key={earlier.id} value={earlier.id}>Stage {earlierIndex + 1}</MenuItem>
-                    ))}
-                  </TextField>
-                )}
+                {hasAnyReference && index === 0 && <Alert severity="error">Move this stage after its source stage.</Alert>}
+                {index > 0 && referencedOutputs.map(({ key, label }) => {
+                  const sourceId = getOutputSource(stage, key);
+                  return (
+                    <TextField key={key} select size="small" label={label} value={sourceId ?? ""}
+                      disabled={saving} required error={!sourceId}
+                      helperText={!sourceId ? "Choose an earlier stage before publishing the activity." : undefined}
+                      onChange={(event) => changeOutputSource(stage, key, event.target.value)}>
+                      <MenuItem value="">None</MenuItem>
+                      {stages.slice(0, index).map((earlier, earlierIndex) => (
+                        <MenuItem key={earlier.id} value={earlier.id}>Stage {earlierIndex + 1}</MenuItem>
+                      ))}
+                    </TextField>
+                  );
+                })}
               </>
             )}
           </Stack>
