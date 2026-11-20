@@ -9,6 +9,17 @@ export function getStageOutputSource(stage: ActivityStage, output: StageOutput):
   return stage.outputSources?.[output] ?? null;
 }
 
+export function leiaUsesPreviousStageOutputs(
+  leia: { spec?: { behaviour?: { spec?: { description?: string } } } } | string | null | undefined,
+): boolean {
+  if (!leia || typeof leia !== "object") return false;
+  const description = leia.spec?.behaviour?.spec?.description ?? "";
+  return (
+    STAGE_OUTPUT_PATTERNS.conversation.test(description) ||
+    STAGE_OUTPUT_PATTERNS.submitedSolution.test(description)
+  );
+}
+
 export function stageUsesOutput(experiment: Experiment, stageId: string, output: StageOutput): boolean {
   const pattern = STAGE_OUTPUT_PATTERNS[output];
   return experiment.leias.some(

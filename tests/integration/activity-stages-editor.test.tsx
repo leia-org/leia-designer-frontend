@@ -156,3 +156,54 @@ test('disables earlier stages using transcription mode only for the conversation
   const solutionStage1Option = await screen.findByRole('option', { name: 'Stage 1' });
   expect(solutionStage1Option.getAttribute('aria-disabled')).not.toBe('true');
 });
+
+test('warns when a MultiLEIA stage contains LEIAs with conversation dynamics or widgets', () => {
+  const stage: ActivityStage = {
+    id: 'stage-multi',
+    outputSources: { conversation: null, submitedSolution: null },
+    orchestration: { mode: 'multi', maxInternalTurns: 2, openingLeiaId: 'l1', problemLeiaId: 'l1', sharedTask: '' },
+  };
+  const experiment: Experiment = {
+    id: 'activity-multi-warn',
+    name: 'Multi warning activity',
+    user: 'owner',
+    isPublished: false,
+    stages: [stage],
+    leias: [
+      {
+        id: 'l1',
+        stageId: stage.id,
+        configuration: { mode: 'standard', data: {} },
+        leia: {
+          id: 'l1',
+          metadata: { name: 'Actor 1' },
+          spec: {
+            behaviour: {
+              spec: {
+                description: 'A',
+                conversationDynamics: { stoppingCondition: { enabled: true, config: { condition: 'Done' } } },
+              },
+            },
+          },
+        } as unknown as Leia,
+      },
+      {
+        id: 'l2',
+        stageId: stage.id,
+        configuration: { mode: 'standard', data: {} },
+        leia: {
+          id: 'l2',
+          metadata: { name: 'Actor 2' },
+          spec: { behaviour: { spec: { description: 'B' } } },
+        } as Leia,
+      },
+    ],
+    createdAt: '',
+    updatedAt: '',
+  };
+
+  render(<ActivityStagesEditor experiment={experiment} onSaved={vi.fn()} />);
+  expect(
+    screen.getByText(/Conversation dynamics and problem widgets are only active in single-LEIA stages/i),
+  ).toBeTruthy();
+});

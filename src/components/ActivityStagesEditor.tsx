@@ -183,6 +183,25 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
                 </TextField>
                 {flow.mode === "multi" && (
                   <>
+                    {entries.some(({ leia }) => {
+                      if (!leia || typeof leia !== "object") return false;
+                      const dynamics = (leia.spec?.behaviour?.spec as {
+                        conversationDynamics?: {
+                          leiaSpeaksFirst?: { enabled?: boolean };
+                          stoppingCondition?: { enabled?: boolean };
+                        };
+                      } | undefined)?.conversationDynamics;
+                      const widgets = (leia.spec?.problem?.spec as { widgets?: unknown[] } | undefined)?.widgets;
+                      return Boolean(
+                        dynamics?.leiaSpeaksFirst?.enabled ||
+                        dynamics?.stoppingCondition?.enabled ||
+                        (Array.isArray(widgets) && widgets.length > 0),
+                      );
+                    }) && (
+                      <Alert severity="info">
+                        Conversation dynamics and problem widgets are only active in single-LEIA stages and will be ignored in MultiLEIA mode.
+                      </Alert>
+                    )}
                     {(["openingLeiaId", "problemLeiaId"] as const).map((field) => (
                       <TextField key={field} select size="small" label={field === "openingLeiaId" ? "Preferred first LEIA" : "Shared problem"}
                         disabled={saving} value={flow[field] ?? options[0]?.id ?? ""}

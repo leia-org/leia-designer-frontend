@@ -11,7 +11,10 @@ import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
 import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
 import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
-import { getDependentStagesForConversation } from "../lib/activityStages";
+import {
+  getDependentStagesForConversation,
+  leiaUsesPreviousStageOutputs,
+} from "../lib/activityStages";
 import { ActivityListSkeleton } from "../components/ActivityListSkeleton";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
@@ -1457,11 +1460,14 @@ export const MyActivities: React.FC = () => {
                                 experiment,
                                 leiaConfig.stageId,
                               );
+                              const usesPreviousStage = leiaUsesPreviousStageOutputs(leia);
                               const transcriptionDisabledReason = stageIsMulti
                                 ? "Transcription mode is unavailable in MultiLEIA stages."
-                                : conversationDependents.length > 0
-                                  ? `Transcription unavailable because ${conversationDependents.map((n) => `Stage ${n}`).join(", ")} ${conversationDependents.length === 1 ? "uses" : "use"} this stage's conversation.`
-                                  : "";
+                                : usesPreviousStage
+                                  ? "Transcription unavailable because this LEIA uses outputs from an earlier stage."
+                                  : conversationDependents.length > 0
+                                    ? `Transcription unavailable because ${conversationDependents.map((n) => `Stage ${n}`).join(", ")} ${conversationDependents.length === 1 ? "uses" : "use"} this stage's conversation.`
+                                    : "";
                               const leiaKey = experiment.id + "-" + leiaConfig.id;
                               const hasTranscription =
                                 Boolean(leiaConfig.configuration?.data?.messages) ||

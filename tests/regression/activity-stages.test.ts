@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   getDependentStagesForConversation,
+  leiaUsesPreviousStageOutputs,
   stageHasTranscriptionMode,
 } from '../../src/lib/activityStages';
 import type { Experiment } from '../../src/models/Experiment';
@@ -50,5 +51,7 @@ describe('activityStages transcription helpers', () => {
     expect(getDependentStagesForConversation(experiment, 's2')).toEqual([3]);
     expect(stageHasTranscriptionMode(experiment, 's1')).toBe(true);
     expect(stageHasTranscriptionMode(experiment, 's2')).toBe(false);
+    expect(leiaUsesPreviousStageOutputs(experiment.leias[0].leia)).toBe(false);
+    expect(leiaUsesPreviousStageOutputs(experiment.leias[2].leia)).toBe(true);
   });
 });
