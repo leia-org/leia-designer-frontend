@@ -47,6 +47,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Fade,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -1456,6 +1457,11 @@ export const MyActivities: React.FC = () => {
                                 experiment,
                                 leiaConfig.stageId,
                               );
+                              const transcriptionDisabledReason = stageIsMulti
+                                ? "Transcription mode is unavailable in MultiLEIA stages."
+                                : conversationDependents.length > 0
+                                  ? `Transcription unavailable because ${conversationDependents.map((n) => `Stage ${n}`).join(", ")} ${conversationDependents.length === 1 ? "uses" : "use"} this stage's conversation.`
+                                  : "";
                               const leiaKey = experiment.id + "-" + leiaConfig.id;
                               const hasTranscription =
                                 Boolean(leiaConfig.configuration?.data?.messages) ||
@@ -1488,38 +1494,69 @@ export const MyActivities: React.FC = () => {
                                           experiment.isPublished ? (
                                             <Chip label={leiaConfig.configuration.mode} size="small" color="primary" variant="outlined" />
                                           ) : (
-                                            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-                                              <TextField
-                                                select
-                                                label="Mode"
-                                                size="small"
-                                                value={leiaConfig.configuration.mode}
-                                                onChange={(event) =>
-                                                  handleUpdateExperimentLeiaMode(
-                                                    experiment.id,
-                                                    leiaConfig.id,
-                                                    leiaConfig,
-                                                    event.target.value,
-                                                  )
+                                            <TextField
+                                              select
+                                              label="Mode"
+                                              size="small"
+                                              value={leiaConfig.configuration.mode}
+                                              onChange={(event) => {
+                                                if (event.target.value === "transcription" && transcriptionDisabledReason) {
+                                                  return;
                                                 }
-                                                sx={{ minWidth: 150 }}
+                                                void handleUpdateExperimentLeiaMode(
+                                                  experiment.id,
+                                                  leiaConfig.id,
+                                                  leiaConfig,
+                                                  event.target.value,
+                                                );
+                                              }}
+                                              sx={{ minWidth: 150 }}
+                                            >
+                                              <MenuItem value="standard">standard</MenuItem>
+                                              <MenuItem
+                                                value="transcription"
+                                                disabled={Boolean(transcriptionDisabledReason)}
+                                                disableRipple={Boolean(transcriptionDisabledReason)}
+                                                sx={
+                                                  transcriptionDisabledReason
+                                                    ? {
+                                                        "&.Mui-disabled": {
+                                                          pointerEvents: "auto",
+                                                          cursor: "not-allowed",
+                                                          p: 0,
+                                                          "&:hover": { backgroundColor: "transparent" },
+                                                        },
+                                                      }
+                                                    : undefined
+                                                }
                                               >
-                                                <MenuItem value="standard">standard</MenuItem>
-                                                <MenuItem
-                                                  value="transcription"
-                                                  disabled={stageIsMulti || conversationDependents.length > 0}
-                                                >
-                                                  transcription
-                                                </MenuItem>
-                                              </TextField>
-                                              {conversationDependents.length > 0 && (
-                                                <Typography variant="caption" color="text.secondary">
-                                                  Transcription unavailable because{" "}
-                                                  {conversationDependents.map((n) => `Stage ${n}`).join(", ")}{" "}
-                                                  {conversationDependents.length === 1 ? "uses" : "use"} this stage&apos;s conversation.
-                                                </Typography>
-                                              )}
-                                            </Stack>
+                                                {transcriptionDisabledReason ? (
+                                                  <Tooltip
+                                                    title={transcriptionDisabledReason}
+                                                    placement="right"
+                                                    arrow
+                                                    disableInteractive
+                                                    slots={{ transition: Fade }}
+                                                    slotProps={{ transition: { timeout: 120 } }}
+                                                  >
+                                                    <Box
+                                                      component="span"
+                                                      sx={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        width: "100%",
+                                                        px: 2,
+                                                        py: 0.75,
+                                                      }}
+                                                    >
+                                                      transcription
+                                                    </Box>
+                                                  </Tooltip>
+                                                ) : (
+                                                  "transcription"
+                                                )}
+                                              </MenuItem>
+                                            </TextField>
                                           )
                                         )}
                                       </Stack>
