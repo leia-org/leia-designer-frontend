@@ -1,29 +1,27 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Editor } from "@monaco-editor/react";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import {
   Alert,
   Box,
   Button,
   Checkbox,
-  Divider,
   FormControlLabel,
-  IconButton,
   MenuItem,
   Paper,
-  Popover,
   Stack,
   Tab,
   Tabs,
   TextField,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia";
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
+import { BEHAVIOUR_PLACEHOLDER_ITEMS, type PlaceholderItem } from "../lib/behaviourPlaceholders";
+import { PlaceholderAutocompletePopper } from "./PlaceholderAutocompletePopper";
+import { usePlaceholderAutocomplete } from "../hooks/usePlaceholderAutocomplete";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
@@ -113,6 +111,9 @@ type HighlightableInputProps = Omit<
   "className" | "color"
 > & Pick<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "rows" | "wrap"> & {
   multiline?: boolean;
+  autoResize?: boolean;
+  autocompleteItems?: readonly PlaceholderItem[];
+  onValueChange?: (value: string) => void;
 };
 
 const highlightTokenSx = { borderRadius: 0.5, bgcolor: "#F3E8FF", color: "#7E22CE" };
@@ -126,13 +127,43 @@ const highlightableTextSx = {
 } as const;
 
 const HighlightableInput: React.FC<HighlightableInputProps> = ({
-  value, placeholder, multiline = false, onScroll, ...rest
+  value,
+  placeholder,
+  multiline = false,
+  autoResize = false,
+  autocompleteItems,
+  onValueChange,
+  onScroll,
+  onChange,
+  onKeyDown,
+  onKeyUp,
+  onClick,
+  onBlur,
+  ...rest
 }) => {
   const text = Array.isArray(value) ? value.join(", ") : String(value ?? "");
   const controlRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const lastWidthRef = useRef<number | null>(null);
   const whiteSpace = multiline && rest.wrap !== "off" ? "pre-wrap" : "pre";
+  const autocomplete = usePlaceholderAutocomplete({
+    text,
+    items: autocompleteItems,
+    controlRef,
+    onValueChange,
+  });
+
+  const adjustHeight = useCallback(() => {
+    const control = controlRef.current;
+    if (!multiline || !autoResize || !control) return;
+    control.style.height = "auto";
+    if (control.scrollHeight > 0) {
+      control.style.height = `${control.scrollHeight}px`;
+    } else {
+      control.style.height = "";
+    }
+  }, [autoResize, multiline]);
 
   const syncOverlay = useCallback(() => {
     const control = controlRef.current;
@@ -144,12 +175,33 @@ const HighlightableInput: React.FC<HighlightableInputProps> = ({
     contentRef.current.style.transform = `translate(${-control.scrollLeft}px, ${-control.scrollTop}px)`;
   }, []);
 
-  useLayoutEffect(syncOverlay);
   useLayoutEffect(() => {
-    const observer = new ResizeObserver(syncOverlay);
-    if (controlRef.current) observer.observe(controlRef.current);
+    adjustHeight();
+    syncOverlay();
+  }, [adjustHeight, syncOverlay, text]);
+
+  useLayoutEffect(() => {
+    const observer = new ResizeObserver(() => {
+      const control = controlRef.current;
+      if (control && lastWidthRef.current !== control.clientWidth) {
+        lastWidthRef.current = control.clientWidth;
+        adjustHeight();
+      }
+      syncOverlay();
+    });
+    if (controlRef.current) {
+      lastWidthRef.current = controlRef.current.clientWidth;
+      observer.observe(controlRef.current);
+    }
     return () => observer.disconnect();
-  }, [syncOverlay]);
+  }, [adjustHeight, syncOverlay]);
+
+  const renderHighlightedText = (segment: string, keyPrefix: string) =>
+    segment.split(/(\{\{[^}]+\}\})/g).map((part, index) => (
+      <Box component="span" key={`${keyPrefix}-${index}`} sx={index % 2 ? highlightTokenSx : undefined}>
+        {part}
+      </Box>
+    ));
 
   return (
     <Box sx={{ position: "relative", width: "100%" }}>
@@ -159,6 +211,40 @@ const HighlightableInput: React.FC<HighlightableInputProps> = ({
         ref={controlRef}
         value={text}
         placeholder={placeholder}
+        onChange={(event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onChange?.(event);
+          autocomplete.updateFromControl(event.target.value, event.target.selectionStart);
+        }}
+        onKeyDown={(event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          if (autocomplete.handleKeyDown(event)) return;
+          onKeyDown?.(event);
+        }}
+        onKeyUp={(event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onKeyUp?.(event);
+          if (
+            event.key !== "ArrowDown" &&
+            event.key !== "ArrowUp" &&
+            event.key !== "Enter" &&
+            event.key !== "Tab" &&
+            event.key !== "Escape"
+          ) {
+            autocomplete.updateFromControl(
+              event.currentTarget.value,
+              event.currentTarget.selectionStart,
+            );
+          }
+        }}
+        onClick={(event: React.MouseEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onClick?.(event);
+          autocomplete.updateFromControl(
+            event.currentTarget.value,
+            event.currentTarget.selectionStart,
+          );
+        }}
+        onBlur={(event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onBlur?.(event);
+          autocomplete.close();
+        }}
         onScroll={(event: React.UIEvent<HTMLInputElement | HTMLTextAreaElement>) => {
           syncOverlay();
           onScroll?.(event);
@@ -172,7 +258,7 @@ const HighlightableInput: React.FC<HighlightableInputProps> = ({
           borderRadius: 1,
           bgcolor: "transparent",
           color: "transparent",
-          caretColor: "primary.main",
+          caretColor: (theme) => theme.palette.text.primary,
           position: "relative",
           zIndex: 1,
           resize: multiline ? "vertical" : "none",
@@ -193,14 +279,33 @@ const HighlightableInput: React.FC<HighlightableInputProps> = ({
         <Box ref={contentRef} sx={{
           ...highlightableTextSx, whiteSpace, overflowWrap: "break-word", color: "text.primary",
         }}>
-          {text ? text.split(/(\{\{[^}]+\}\})/g).map((part, index) => (
-            <Box component="span" key={index} sx={index % 2 ? highlightTokenSx : undefined}>
-              {part}
-            </Box>
-          )) : <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>}
+          {text ? (
+            autocomplete.trigger ? (
+              <>
+                {renderHighlightedText(text.slice(0, autocomplete.trigger.start), "before")}
+                <Box
+                  component="span"
+                  ref={autocomplete.caretMarkerRef}
+                  sx={{ display: "inline-block", width: 0, height: "1.2em", verticalAlign: "text-bottom" }}
+                />
+                {renderHighlightedText(text.slice(autocomplete.trigger.start), "after")}
+              </>
+            ) : (
+              renderHighlightedText(text, "full")
+            )
+          ) : (
+            <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
+          )}
           {multiline && text.endsWith("\n") && "\u200b"}
         </Box>
       </Box>
+      <PlaceholderAutocompletePopper
+        open={autocomplete.isOpen}
+        anchorEl={autocomplete.caretAnchor}
+        suggestions={autocomplete.suggestions}
+        activeIndex={autocomplete.activeIndex}
+        onSelect={autocomplete.selectSuggestion}
+      />
     </Box>
   );
 };
@@ -211,147 +316,19 @@ const HighlightableTextarea: React.FC<HighlightableInputProps> = (props) => (
 
 const Field: React.FC<{
   label: string;
-  labelAction?: React.ReactNode;
+  labelExtra?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ label, labelAction, children }) => (
+}> = ({ label, labelExtra, children }) => (
   <Box>
-    <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75 }}>
+    <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 0.75 }}>
       <Typography variant="body2" fontWeight={600}>
         {label}
       </Typography>
-      {labelAction}
+      {labelExtra}
     </Stack>
     {children}
   </Box>
 );
-
-const BEHAVIOUR_PLACEHOLDER_GROUPS = [
-  {
-    title: "Persona",
-    items: [
-      { token: "{{persona.fullName}}", description: "Full name of the persona" },
-      { token: "{{persona.firstName}}", description: "First name of the persona" },
-      { token: "{{persona.description}}", description: "Persona description" },
-      { token: "{{persona.personality}}", description: "Personality traits" },
-      { token: "{{persona.subjectPronoum}}", description: "Subject pronoun (he, she, they)" },
-      { token: "{{persona.objectPronoum}}", description: "Object pronoun (him, her, them)" },
-      { token: "{{persona.possesivePronoum}}", description: "Possessive pronoun (his, hers, theirs)" },
-      { token: "{{persona.possesiveAdjective}}", description: "Possessive adjective (his, her, their)" },
-    ],
-  },
-  {
-    title: "Problem",
-    items: [
-      { token: "{{problem.description}}", description: "Scenario / problem statement" },
-      { token: "{{problem.details}}", description: "Additional details and requirements" },
-      { token: "{{problem.personaBackground}}", description: "Persona background for this problem" },
-      { token: "{{problem.solution}}", description: "Expected reference solution" },
-      { token: "{{problem.initialSolution}}", description: "Initial solution template" },
-      { token: "{{problem.solutionFormat}}", description: "Expected solution format" },
-      { token: "{{problem.evaluationPrompt}}", description: "Custom evaluation prompt" },
-      { token: "{{problem.process}}", description: "Problem process type(s)" },
-    ],
-  },
-  {
-    title: "Behaviour",
-    items: [
-      { token: "{{behaviour.role}}", description: "Agent role in this behaviour" },
-      { token: "{{behaviour.process}}", description: "Behaviour process type(s)" },
-      { token: "{{behaviour.tooltip}}", description: "Behaviour tooltip summary" },
-    ],
-  },
-  {
-    title: "Staged activities",
-    items: [
-      { token: "{{previousStage.outputs.conversation}}", description: "Conversation transcript from an earlier stage" },
-      { token: "{{previousStage.outputs.submitedSolution}}", description: "Submitted solution from an earlier stage" },
-    ],
-  },
-] as const;
-
-const BehaviourPlaceholdersInfoButton: React.FC = () => {
-  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
-  const open = Boolean(anchorEl);
-
-  return (
-    <>
-      <Tooltip title="Available {{}} placeholders">
-        <IconButton
-          size="small"
-          aria-label="Available placeholders cheat sheet"
-          aria-expanded={open}
-          onClick={(event) => setAnchorEl(event.currentTarget)}
-          sx={{ p: 0.25, color: "text.secondary" }}
-        >
-          <InfoOutlinedIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
-        slotProps={{
-          paper: {
-            sx: { width: { xs: 320, sm: 480 }, maxHeight: 420, overflowY: "auto", p: 2 },
-          },
-        }}
-      >
-        <Stack spacing={1.5}>
-          <Box>
-            <Typography variant="subtitle2" fontWeight={700}>
-              {"Available {{}} placeholders"}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Dynamic references replaced at runtime when building the agent prompt.
-            </Typography>
-          </Box>
-          {BEHAVIOUR_PLACEHOLDER_GROUPS.map((group, groupIndex) => (
-            <React.Fragment key={group.title}>
-              {groupIndex > 0 && <Divider />}
-              <Box>
-                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase" }}>
-                  {group.title}
-                </Typography>
-                <Stack spacing={0.5} sx={{ mt: 0.75 }}>
-                  {group.items.map((item) => (
-                    <Stack
-                      key={item.token}
-                      direction="row"
-                      alignItems="baseline"
-                      justifyContent="space-between"
-                      spacing={1.5}
-                    >
-                      <Box
-                        component="code"
-                        sx={{
-                          px: 0.75,
-                          py: 0.25,
-                          borderRadius: 0.75,
-                          bgcolor: "#F3E8FF",
-                          color: "#7E22CE",
-                          fontSize: "0.75rem",
-                          fontFamily: "'JetBrains Mono Variable', monospace",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {item.token}
-                      </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: "right" }}>
-                        {item.description}
-                      </Typography>
-                    </Stack>
-                  ))}
-                </Stack>
-              </Box>
-            </React.Fragment>
-          ))}
-        </Stack>
-      </Popover>
-    </>
-  );
-};
 
 interface ResourceEditorProps {
   resourceType: ResourceType;
@@ -747,17 +724,23 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const renderBehaviourForm = () => (
     <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
-      <Field label="Description" labelAction={<BehaviourPlaceholdersInfoButton />}>
+      <Field
+        label="Description"
+        labelExtra={
+          <Typography variant="caption" color="text.secondary">
+            Start typing <code>{"{{"}</code> to insert dynamic placeholders
+          </Typography>
+        }
+      >
         <HighlightableTextarea
+          autoResize
           value={visualData.description || ""}
           onChange={(event) => handleVisualChange("description", event.target.value)}
+          onValueChange={(nextValue) => handleVisualChange("description", nextValue)}
+          autocompleteItems={BEHAVIOUR_PLACEHOLDER_ITEMS}
           rows={3}
           placeholder="Describe the behaviour..."
         />
-        <Typography variant="caption" color="text.secondary">
-          In staged activities, use <code>{"{{previousStage.outputs.conversation}}"}</code> or{" "}
-          <code>{"{{previousStage.outputs.submitedSolution}}"}</code> to reuse outputs from an earlier stage.
-        </Typography>
       </Field>
       <Field label="Role">
         <HighlightableInput
