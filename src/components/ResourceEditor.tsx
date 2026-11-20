@@ -1,18 +1,23 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Editor } from "@monaco-editor/react";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import {
   Alert,
   Box,
   Button,
   Checkbox,
+  Divider,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Paper,
+  Popover,
   Stack,
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia";
@@ -204,14 +209,149 @@ const HighlightableTextarea: React.FC<HighlightableInputProps> = (props) => (
   <HighlightableInput {...props} multiline />
 );
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+const Field: React.FC<{
+  label: string;
+  labelAction?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ label, labelAction, children }) => (
   <Box>
-    <Typography variant="body2" fontWeight={600} sx={{ display: "block", mb: 0.75 }}>
-      {label}
-    </Typography>
+    <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 0.75 }}>
+      <Typography variant="body2" fontWeight={600}>
+        {label}
+      </Typography>
+      {labelAction}
+    </Stack>
     {children}
   </Box>
 );
+
+const BEHAVIOUR_PLACEHOLDER_GROUPS = [
+  {
+    title: "Persona",
+    items: [
+      { token: "{{persona.fullName}}", description: "Full name of the persona" },
+      { token: "{{persona.firstName}}", description: "First name of the persona" },
+      { token: "{{persona.description}}", description: "Persona description" },
+      { token: "{{persona.personality}}", description: "Personality traits" },
+      { token: "{{persona.subjectPronoum}}", description: "Subject pronoun (he, she, they)" },
+      { token: "{{persona.objectPronoum}}", description: "Object pronoun (him, her, them)" },
+      { token: "{{persona.possesivePronoum}}", description: "Possessive pronoun (his, hers, theirs)" },
+      { token: "{{persona.possesiveAdjective}}", description: "Possessive adjective (his, her, their)" },
+    ],
+  },
+  {
+    title: "Problem",
+    items: [
+      { token: "{{problem.description}}", description: "Scenario / problem statement" },
+      { token: "{{problem.details}}", description: "Additional details and requirements" },
+      { token: "{{problem.personaBackground}}", description: "Persona background for this problem" },
+      { token: "{{problem.solution}}", description: "Expected reference solution" },
+      { token: "{{problem.initialSolution}}", description: "Initial solution template" },
+      { token: "{{problem.solutionFormat}}", description: "Expected solution format" },
+      { token: "{{problem.evaluationPrompt}}", description: "Custom evaluation prompt" },
+      { token: "{{problem.process}}", description: "Problem process type(s)" },
+    ],
+  },
+  {
+    title: "Behaviour",
+    items: [
+      { token: "{{behaviour.role}}", description: "Agent role in this behaviour" },
+      { token: "{{behaviour.process}}", description: "Behaviour process type(s)" },
+      { token: "{{behaviour.tooltip}}", description: "Behaviour tooltip summary" },
+    ],
+  },
+  {
+    title: "Staged activities",
+    items: [
+      { token: "{{previousStage.outputs.conversation}}", description: "Conversation transcript from an earlier stage" },
+      { token: "{{previousStage.outputs.submitedSolution}}", description: "Submitted solution from an earlier stage" },
+    ],
+  },
+] as const;
+
+const BehaviourPlaceholdersInfoButton: React.FC = () => {
+  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const open = Boolean(anchorEl);
+
+  return (
+    <>
+      <Tooltip title="Available {{}} placeholders">
+        <IconButton
+          size="small"
+          aria-label="Available placeholders cheat sheet"
+          aria-expanded={open}
+          onClick={(event) => setAnchorEl(event.currentTarget)}
+          sx={{ p: 0.25, color: "text.secondary" }}
+        >
+          <InfoOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        slotProps={{
+          paper: {
+            sx: { width: { xs: 320, sm: 480 }, maxHeight: 420, overflowY: "auto", p: 2 },
+          },
+        }}
+      >
+        <Stack spacing={1.5}>
+          <Box>
+            <Typography variant="subtitle2" fontWeight={700}>
+              {"Available {{}} placeholders"}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Dynamic references replaced at runtime when building the agent prompt.
+            </Typography>
+          </Box>
+          {BEHAVIOUR_PLACEHOLDER_GROUPS.map((group, groupIndex) => (
+            <React.Fragment key={group.title}>
+              {groupIndex > 0 && <Divider />}
+              <Box>
+                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase" }}>
+                  {group.title}
+                </Typography>
+                <Stack spacing={0.5} sx={{ mt: 0.75 }}>
+                  {group.items.map((item) => (
+                    <Stack
+                      key={item.token}
+                      direction="row"
+                      alignItems="baseline"
+                      justifyContent="space-between"
+                      spacing={1.5}
+                    >
+                      <Box
+                        component="code"
+                        sx={{
+                          px: 0.75,
+                          py: 0.25,
+                          borderRadius: 0.75,
+                          bgcolor: "#F3E8FF",
+                          color: "#7E22CE",
+                          fontSize: "0.75rem",
+                          fontFamily: "'JetBrains Mono Variable', monospace",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {item.token}
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: "right" }}>
+                        {item.description}
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              </Box>
+            </React.Fragment>
+          ))}
+        </Stack>
+      </Popover>
+    </>
+  );
+};
 
 interface ResourceEditorProps {
   resourceType: ResourceType;
@@ -607,7 +747,7 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const renderBehaviourForm = () => (
     <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
-      <Field label="Description">
+      <Field label="Description" labelAction={<BehaviourPlaceholdersInfoButton />}>
         <HighlightableTextarea
           value={visualData.description || ""}
           onChange={(event) => handleVisualChange("description", event.target.value)}
