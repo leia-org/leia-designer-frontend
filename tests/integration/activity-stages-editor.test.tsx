@@ -97,3 +97,62 @@ test('saves an empty stage and only asks for an earlier source after a LEIA refe
     ],
   });
 });
+
+test('disables earlier stages using transcription mode only for the conversation output selector', async () => {
+  const stages: ActivityStage[] = [
+    {
+      id: 'stage-1',
+      outputSources: { conversation: null, submitedSolution: null },
+      orchestration: { mode: 'single', maxInternalTurns: 2, openingLeiaId: null, problemLeiaId: null, sharedTask: '' },
+    },
+    {
+      id: 'stage-2',
+      outputSources: { conversation: null, submitedSolution: null },
+      orchestration: { mode: 'single', maxInternalTurns: 2, openingLeiaId: null, problemLeiaId: null, sharedTask: '' },
+    },
+  ];
+  const experiment: Experiment = {
+    id: 'activity-transcription',
+    name: 'Transcription activity',
+    user: 'owner',
+    isPublished: false,
+    stages,
+    leias: [
+      {
+        id: 'l1',
+        stageId: 'stage-1',
+        configuration: { mode: 'transcription', data: {} },
+        leia: { id: 'l1', metadata: { name: 'Read transcript' }, spec: { behaviour: { spec: { description: 'Read' } } } } as Leia,
+      },
+      {
+        id: 'l2',
+        stageId: 'stage-2',
+        configuration: { mode: 'standard', data: {} },
+        leia: {
+          id: 'l2',
+          metadata: { name: 'Review' },
+          spec: {
+            behaviour: {
+              spec: {
+                description: '{{previousStage.outputs.conversation}} {{previousStage.outputs.submitedSolution}}',
+              },
+            },
+          },
+        } as Leia,
+      },
+    ],
+    createdAt: '',
+    updatedAt: '',
+  };
+
+  render(<ActivityStagesEditor experiment={experiment} onSaved={vi.fn()} />);
+
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of conversation output/ }));
+  const conversationStage1Option = await screen.findByRole('option', { name: /Stage 1 \(transcription mode\)/ });
+  expect(conversationStage1Option.getAttribute('aria-disabled')).toBe('true');
+  fireEvent.keyDown(conversationStage1Option, { key: 'Escape' });
+
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of submitted solution output/ }));
+  const solutionStage1Option = await screen.findByRole('option', { name: 'Stage 1' });
+  expect(solutionStage1Option.getAttribute('aria-disabled')).not.toBe('true');
+});

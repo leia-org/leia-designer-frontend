@@ -11,6 +11,7 @@ import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
 import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
 import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
+import { getDependentStagesForConversation } from "../lib/activityStages";
 import { ActivityListSkeleton } from "../components/ActivityListSkeleton";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
@@ -1447,6 +1448,14 @@ export const MyActivities: React.FC = () => {
                             {experiment.leias.map((leiaConfig, leiaIndex) => {
                               const leia = typeof leiaConfig.leia === "object" ? leiaConfig.leia : null;
                               const stageIndex = experiment.stages?.findIndex(({ id }) => id === leiaConfig.stageId) ?? -1;
+                              const stageIsMulti =
+                                (experiment.stages
+                                  ? experiment.stages[stageIndex]?.orchestration
+                                  : experiment.orchestration)?.mode === "multi";
+                              const conversationDependents = getDependentStagesForConversation(
+                                experiment,
+                                leiaConfig.stageId,
+                              );
                               const leiaKey = experiment.id + "-" + leiaConfig.id;
                               const hasTranscription =
                                 Boolean(leiaConfig.configuration?.data?.messages) ||
@@ -1479,31 +1488,38 @@ export const MyActivities: React.FC = () => {
                                           experiment.isPublished ? (
                                             <Chip label={leiaConfig.configuration.mode} size="small" color="primary" variant="outlined" />
                                           ) : (
-                                            <TextField
-                                              select
-                                              label="Mode"
-                                              size="small"
-                                              value={leiaConfig.configuration.mode}
-                                              onChange={(event) =>
-                                                handleUpdateExperimentLeiaMode(
-                                                  experiment.id,
-                                                  leiaConfig.id,
-                                                  leiaConfig,
-                                                  event.target.value,
-                                                )
-                                              }
-                                              sx={{ minWidth: 150 }}
-                                            >
-                                              <MenuItem value="standard">standard</MenuItem>
-                                              <MenuItem
-                                                value="transcription"
-                                                disabled={(experiment.stages
-                                                  ? experiment.stages[stageIndex]?.orchestration
-                                                  : experiment.orchestration)?.mode === "multi"}
+                                            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                                              <TextField
+                                                select
+                                                label="Mode"
+                                                size="small"
+                                                value={leiaConfig.configuration.mode}
+                                                onChange={(event) =>
+                                                  handleUpdateExperimentLeiaMode(
+                                                    experiment.id,
+                                                    leiaConfig.id,
+                                                    leiaConfig,
+                                                    event.target.value,
+                                                  )
+                                                }
+                                                sx={{ minWidth: 150 }}
                                               >
-                                                transcription
-                                              </MenuItem>
-                                            </TextField>
+                                                <MenuItem value="standard">standard</MenuItem>
+                                                <MenuItem
+                                                  value="transcription"
+                                                  disabled={stageIsMulti || conversationDependents.length > 0}
+                                                >
+                                                  transcription
+                                                </MenuItem>
+                                              </TextField>
+                                              {conversationDependents.length > 0 && (
+                                                <Typography variant="caption" color="text.secondary">
+                                                  Transcription unavailable because{" "}
+                                                  {conversationDependents.map((n) => `Stage ${n}`).join(", ")}{" "}
+                                                  {conversationDependents.length === 1 ? "uses" : "use"} this stage&apos;s conversation.
+                                                </Typography>
+                                              )}
+                                            </Stack>
                                           )
                                         )}
                                       </Stack>

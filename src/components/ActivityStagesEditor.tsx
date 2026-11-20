@@ -6,6 +6,11 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { isAxiosError } from "axios";
 import api from "../lib/axios";
 import type { ActivityStage, Experiment, StageOutput } from "../models/Experiment";
+import {
+  getStageOutputSource,
+  STAGE_OUTPUT_PATTERNS,
+  stageHasTranscriptionMode,
+} from "../lib/activityStages";
 
 const STAGE_OUTPUTS: ReadonlyArray<{
   key: StageOutput;
@@ -17,18 +22,17 @@ const STAGE_OUTPUTS: ReadonlyArray<{
     key: "conversation",
     label: "Source of conversation output",
     summary: "Conversation",
-    pattern: /{{\s*previousStage\.outputs\.conversation\s*}}/,
+    pattern: STAGE_OUTPUT_PATTERNS.conversation,
   },
   {
     key: "submitedSolution",
     label: "Source of submitted solution output",
     summary: "Submitted solution",
-    pattern: /{{\s*previousStage\.outputs\.submitedSolution\s*}}/,
+    pattern: STAGE_OUTPUT_PATTERNS.submitedSolution,
   },
 ];
 
-const getOutputSource = (stage: ActivityStage, output: StageOutput): string | null =>
-  stage.outputSources?.[output] ?? null;
+const getOutputSource = getStageOutputSource;
 
 interface ActivityStagesEditorProps {
   experiment: Experiment;
@@ -205,9 +209,16 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
                       helperText={!sourceId ? "Choose an earlier stage before publishing the activity." : undefined}
                       onChange={(event) => changeOutputSource(stage, key, event.target.value)}>
                       <MenuItem value="">None</MenuItem>
-                      {stages.slice(0, index).map((earlier, earlierIndex) => (
-                        <MenuItem key={earlier.id} value={earlier.id}>Stage {earlierIndex + 1}</MenuItem>
-                      ))}
+                      {stages.slice(0, index).map((earlier, earlierIndex) => {
+                        const disabledByTranscription =
+                          key === "conversation" && stageHasTranscriptionMode(experiment, earlier.id);
+                        return (
+                          <MenuItem key={earlier.id} value={earlier.id} disabled={disabledByTranscription}>
+                            Stage {earlierIndex + 1}
+                            {disabledByTranscription ? " (transcription mode)" : ""}
+                          </MenuItem>
+                        );
+                      })}
                     </TextField>
                   );
                 })}
