@@ -89,6 +89,40 @@ const ContentSection = ({ title, children }: { title: string; children: React.Re
   </Stack>
 );
 
+const DYNAMIC_LABELS: Record<string, { title: string; primaryField?: string }> = {
+  leiaSpeaksFirst: { title: "LEIA Speaks First", primaryField: "firstMessage" },
+  stoppingCondition: { title: "Stopping Condition", primaryField: "condition" },
+};
+
+function formatDynamicName(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/^./, (ch) => ch.toUpperCase());
+}
+
+function getConfiguredDynamics(
+  conversationDynamics?: Leia["spec"]["behaviour"]["spec"]["conversationDynamics"],
+): Array<{ key: string; title: string; details: string[] }> {
+  if (!conversationDynamics || typeof conversationDynamics !== "object") return [];
+  return Object.entries(conversationDynamics).flatMap(([key, dynamic]) => {
+    if (!dynamic?.enabled) return [];
+    const meta = DYNAMIC_LABELS[key];
+    const title = meta?.title ?? formatDynamicName(key);
+    const config = dynamic.config ?? {};
+    const details: string[] = [];
+    if (meta?.primaryField && typeof config[meta.primaryField] === "string" && config[meta.primaryField].trim()) {
+      details.push(config[meta.primaryField]);
+    } else {
+      for (const [fieldKey, value] of Object.entries(config)) {
+        if (typeof value === "string" && value.trim()) {
+          details.push(`${formatDynamicName(fieldKey)}: ${value}`);
+        }
+      }
+    }
+    return [{ key, title, details }];
+  });
+}
+
 interface LeiaViewModalProps {
   leia: Leia | null;
   isOpen: boolean;
@@ -499,6 +533,38 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
               </ContentSection>
             )}
             {behaviour?.tooltip && <ContentSection title="Initial Tooltip"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour.tooltip}</Typography></ContentSection>}
+            {(() => {
+              const configuredDynamics = getConfiguredDynamics(behaviour?.conversationDynamics);
+              if (configuredDynamics.length === 0) return null;
+              return (
+                <ContentSection title="Conversation Dynamics">
+                  <Stack spacing={1.5}>
+                    {configuredDynamics.map((dynamic) => (
+                      <Box key={dynamic.key}>
+                        <Typography variant="overline" sx={{ display: "block", color: "text.secondary" }}>
+                          {dynamic.title}
+                        </Typography>
+                        {dynamic.details.length > 0 ? (
+                          dynamic.details.map((detail, idx) => (
+                            <Typography
+                              key={`${dynamic.key}-${idx}`}
+                              variant="body2"
+                              sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+                            >
+                              {detail}
+                            </Typography>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Enabled
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                  </Stack>
+                </ContentSection>
+              );
+            })()}
           </Stack>
         )}
 
