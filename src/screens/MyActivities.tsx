@@ -10,6 +10,11 @@ import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
 import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
+import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
+import {
+  getDependentStagesForConversation,
+  leiaUsesPreviousStageOutputs,
+} from "../lib/activityStages";
 import { ActivityListSkeleton } from "../components/ActivityListSkeleton";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
@@ -45,6 +50,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Fade,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -456,7 +462,7 @@ export const MyActivities: React.FC = () => {
     leiaConfigId: string
   ) => {
     try {
-      await api.delete(
+      const response = await api.delete<Experiment>(
         `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`
       );
 
@@ -464,12 +470,7 @@ export const MyActivities: React.FC = () => {
         (prev) =>
           prev?.map((exp) => {
             if (exp.id === experimentId) {
-              return {
-                ...exp,
-                leias: exp.leias.filter(
-                  (leiaConfig) => leiaConfig.id !== leiaConfigId
-                ),
-              };
+              return response.data;
             }
             return exp;
           }) || null
@@ -1352,6 +1353,7 @@ export const MyActivities: React.FC = () => {
               {experiments?.map((experiment, experimentIndex) => {
                 const isOwner = (typeof experiment.user === "string" ? experiment.user : experiment.user.id) === user?.id;
                 const expanded = expandedExperiments.has(experiment.id);
+                const FlowEditor = experiment.stages ? ActivityStagesEditor : ActivityOrchestrationEditor;
 
                 return (
                   <Paper
@@ -1432,7 +1434,7 @@ export const MyActivities: React.FC = () => {
 
                     <Collapse in={expanded}>
                       <Box sx={{ borderTop: 1, borderColor: "divider" }}>
-                        <ActivityOrchestrationEditor
+                        <FlowEditor
                           experiment={experiment}
                           onSaved={(updatedExperiment) =>
                             setExperiments((previous) =>
@@ -1449,6 +1451,23 @@ export const MyActivities: React.FC = () => {
                           <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
                             {experiment.leias.map((leiaConfig, leiaIndex) => {
                               const leia = typeof leiaConfig.leia === "object" ? leiaConfig.leia : null;
+                              const stageIndex = experiment.stages?.findIndex(({ id }) => id === leiaConfig.stageId) ?? -1;
+                              const stageIsMulti =
+                                (experiment.stages
+                                  ? experiment.stages[stageIndex]?.orchestration
+                                  : experiment.orchestration)?.mode === "multi";
+                              const conversationDependents = getDependentStagesForConversation(
+                                experiment,
+                                leiaConfig.stageId,
+                              );
+                              const usesPreviousStage = leiaUsesPreviousStageOutputs(leia);
+                              const transcriptionDisabledReason = stageIsMulti
+                                ? "Transcription mode is unavailable in MultiLEIA stages."
+                                : usesPreviousStage
+                                  ? "Transcription unavailable because this LEIA uses outputs from an earlier stage."
+                                  : conversationDependents.length > 0
+                                    ? `Transcription unavailable because ${conversationDependents.map((n) => `Stage ${n}`).join(", ")} ${conversationDependents.length === 1 ? "uses" : "use"} this stage's conversation.`
+                                    : "";
                               const leiaKey = experiment.id + "-" + leiaConfig.id;
                               const hasTranscription =
                                 Boolean(leiaConfig.configuration?.data?.messages) ||
@@ -1462,6 +1481,9 @@ export const MyActivities: React.FC = () => {
                                     <Stack direction={{ xs: "column", md: "row" }} alignItems={{ md: "center" }} justifyContent="space-between" spacing={1.5}>
                                       <Stack direction="row" alignItems="center" spacing={1}>
                                         <Typography variant="subtitle2">{leia?.metadata?.name || "LEIA " + String(leiaIndex + 1)}</Typography>
+                                        {stageIndex >= 0 && (
+                                          <Chip size="small" label={`Stage ${stageIndex + 1}`} />
+                                        )}
                                         {leia && (
                                           <Tooltip title="View LEIA content">
                                             <IconButton
@@ -1483,22 +1505,62 @@ export const MyActivities: React.FC = () => {
                                               label="Mode"
                                               size="small"
                                               value={leiaConfig.configuration.mode}
-                                              onChange={(event) =>
-                                                handleUpdateExperimentLeiaMode(
+                                              onChange={(event) => {
+                                                if (event.target.value === "transcription" && transcriptionDisabledReason) {
+                                                  return;
+                                                }
+                                                void handleUpdateExperimentLeiaMode(
                                                   experiment.id,
                                                   leiaConfig.id,
                                                   leiaConfig,
                                                   event.target.value,
-                                                )
-                                              }
+                                                );
+                                              }}
                                               sx={{ minWidth: 150 }}
                                             >
                                               <MenuItem value="standard">standard</MenuItem>
                                               <MenuItem
                                                 value="transcription"
-                                                disabled={experiment.orchestration?.mode === "multi"}
+                                                disabled={Boolean(transcriptionDisabledReason)}
+                                                disableRipple={Boolean(transcriptionDisabledReason)}
+                                                sx={
+                                                  transcriptionDisabledReason
+                                                    ? {
+                                                        "&.Mui-disabled": {
+                                                          pointerEvents: "auto",
+                                                          cursor: "not-allowed",
+                                                          p: 0,
+                                                          "&:hover": { backgroundColor: "transparent" },
+                                                        },
+                                                      }
+                                                    : undefined
+                                                }
                                               >
-                                                transcription
+                                                {transcriptionDisabledReason ? (
+                                                  <Tooltip
+                                                    title={transcriptionDisabledReason}
+                                                    placement="right"
+                                                    arrow
+                                                    disableInteractive
+                                                    slots={{ transition: Fade }}
+                                                    slotProps={{ transition: { timeout: 120 } }}
+                                                  >
+                                                    <Box
+                                                      component="span"
+                                                      sx={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        width: "100%",
+                                                        px: 2,
+                                                        py: 0.75,
+                                                      }}
+                                                    >
+                                                      transcription
+                                                    </Box>
+                                                  </Tooltip>
+                                                ) : (
+                                                  "transcription"
+                                                )}
                                               </MenuItem>
                                             </TextField>
                                           )
