@@ -108,10 +108,11 @@ function getConfiguredDynamics(
     if (!dynamic?.enabled) return [];
     const meta = DYNAMIC_LABELS[key];
     const title = meta?.title ?? formatDynamicName(key);
-    const config = dynamic.config ?? {};
+    const config: Record<string, unknown> = dynamic.config ?? {};
     const details: string[] = [];
-    if (meta?.primaryField && typeof config[meta.primaryField] === "string" && config[meta.primaryField].trim()) {
-      details.push(config[meta.primaryField]);
+    const primaryValue = meta?.primaryField ? config[meta.primaryField] : undefined;
+    if (typeof primaryValue === "string" && primaryValue.trim()) {
+      details.push(primaryValue);
     } else {
       for (const [fieldKey, value] of Object.entries(config)) {
         if (typeof value === "string" && value.trim()) {
