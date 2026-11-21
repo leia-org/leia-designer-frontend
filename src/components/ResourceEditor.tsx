@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Editor } from "@monaco-editor/react";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import {
@@ -19,13 +19,11 @@ import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia"
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
+import { BEHAVIOUR_PLACEHOLDER_ITEMS, type PlaceholderItem } from "../lib/behaviourPlaceholders";
+import { PlaceholderAutocompletePopper } from "./PlaceholderAutocompletePopper";
+import { usePlaceholderAutocomplete } from "../hooks/usePlaceholderAutocomplete";
 
 type ResourceType = "persona" | "problem" | "behaviour";
-
-type HighlightSegment = {
-  text: string;
-  highlight: boolean;
-};
 
 type ProblemEditorData = {
   solutionFormat?: unknown;
@@ -108,194 +106,226 @@ const restoreOriginalAvatar = (
   };
 };
 
-const splitPlaceholderSegments = (text: string): HighlightSegment[] => {
-  if (!text) return [];
-
-  const segments: HighlightSegment[] = [];
-  const expression = /\{\{[^}]+\}\}/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = expression.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ text: text.slice(lastIndex, match.index), highlight: false });
-    }
-    segments.push({ text: match[0], highlight: true });
-    lastIndex = expression.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ text: text.slice(lastIndex), highlight: false });
-  }
-
-  return segments.length ? segments : [{ text, highlight: false }];
-};
-
 type HighlightableInputProps = Omit<
-  React.InputHTMLAttributes<HTMLInputElement>,
-  "className" | "color" | "value"
-> & {
-  value?: string | number | readonly string[];
+  React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement>,
+  "className" | "color"
+> & Pick<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "rows" | "wrap"> & {
+  multiline?: boolean;
+  autoResize?: boolean;
+  autocompleteItems?: readonly PlaceholderItem[];
+  onValueChange?: (value: string) => void;
 };
 
-const highlightTokenSx = {
-  borderRadius: 0.5,
-  bgcolor: "#F3E8FF",
-  color: "#7E22CE",
-};
-
-const highlightableControlSx = {
-  width: "100%",
-  display: "block",
+const highlightTokenSx = { borderRadius: 0.5, bgcolor: "#F3E8FF", color: "#7E22CE" };
+const highlightableTextSx = {
   boxSizing: "border-box",
   px: 1.5,
   py: 1,
-  border: 1,
-  borderColor: "divider",
-  borderRadius: 1,
-  bgcolor: "transparent",
-  color: "transparent",
-  caretColor: "primary.main",
   font: "inherit",
   lineHeight: 1.5,
-  position: "relative",
-  zIndex: 1,
-  "&:focus": {
-    outline: "none",
-    borderColor: "primary.main",
-    boxShadow: "0 0 0 2px rgba(37, 99, 235, 0.16)",
-  },
-};
+  letterSpacing: "inherit",
+} as const;
 
 const HighlightableInput: React.FC<HighlightableInputProps> = ({
   value,
   placeholder,
-  ...rest
-}) => {
-  const normalizedValue =
-    value === undefined || value === null
-      ? ""
-      : Array.isArray(value)
-        ? value.join(", ")
-        : String(value);
-  const segments = useMemo(() => splitPlaceholderSegments(normalizedValue), [normalizedValue]);
-
-  return (
-    <Box sx={{ position: "relative", width: "100%" }}>
-      <Box
-        component="input"
-        {...rest}
-        value={normalizedValue}
-        placeholder={placeholder}
-        sx={highlightableControlSx}
-      />
-      <Box
-        aria-hidden="true"
-        sx={{
-          pointerEvents: "none",
-          position: "absolute",
-          inset: 1,
-          zIndex: 0,
-          display: "flex",
-          alignItems: "center",
-          overflow: "hidden",
-          px: 1.5,
-          py: 1,
-          color: "text.primary",
-          whiteSpace: "pre",
-          borderRadius: 1,
-          font: "inherit",
-        }}
-      >
-        {normalizedValue.length === 0 ? (
-          placeholder && <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
-        ) : (
-          segments.map((segment, index) => (
-            <Box component="span" key={`${segment.text}-${index}`} sx={segment.highlight ? highlightTokenSx : undefined}>
-              {segment.text}
-            </Box>
-          ))
-        )}
-      </Box>
-    </Box>
-  );
-};
-
-type HighlightableTextareaProps = Omit<
-  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
-  "className" | "color" | "value"
-> & {
-  value?: string | number | readonly string[];
-};
-
-const HighlightableTextarea: React.FC<HighlightableTextareaProps> = ({
-  value,
-  placeholder,
+  multiline = false,
+  autoResize = false,
+  autocompleteItems,
+  onValueChange,
   onScroll,
+  onChange,
+  onKeyDown,
+  onKeyUp,
+  onClick,
+  onBlur,
   ...rest
 }) => {
-  const normalizedValue = value === undefined || value === null ? "" : String(value);
-  const segments = useMemo(() => splitPlaceholderSegments(normalizedValue), [normalizedValue]);
+  const text = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+  const controlRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const lastWidthRef = useRef<number | null>(null);
+  const whiteSpace = multiline && rest.wrap !== "off" ? "pre-wrap" : "pre";
+  const autocomplete = usePlaceholderAutocomplete({
+    text,
+    items: autocompleteItems,
+    controlRef,
+    onValueChange,
+  });
 
-  const handleScroll: React.UIEventHandler<HTMLTextAreaElement> = (event) => {
-    if (overlayRef.current) {
-      overlayRef.current.scrollTop = event.currentTarget.scrollTop;
-      overlayRef.current.scrollLeft = event.currentTarget.scrollLeft;
+  const adjustHeight = useCallback(() => {
+    const control = controlRef.current;
+    if (!multiline || !autoResize || !control) return;
+    control.style.height = "auto";
+    if (control.scrollHeight > 0) {
+      control.style.height = `${control.scrollHeight}px`;
+    } else {
+      control.style.height = "";
     }
-    onScroll?.(event);
-  };
+  }, [autoResize, multiline]);
+
+  const syncOverlay = useCallback(() => {
+    const control = controlRef.current;
+    if (!control || !overlayRef.current || !contentRef.current) return;
+    const { borderLeftWidth: left, borderTopWidth: top } = getComputedStyle(control);
+    Object.assign(overlayRef.current.style, {
+      left, top, width: `${control.clientWidth}px`, height: `${control.clientHeight}px`,
+    });
+    contentRef.current.style.transform = `translate(${-control.scrollLeft}px, ${-control.scrollTop}px)`;
+  }, []);
+
+  useLayoutEffect(() => {
+    adjustHeight();
+    syncOverlay();
+  }, [adjustHeight, syncOverlay, text]);
+
+  useLayoutEffect(() => {
+    const observer = new ResizeObserver(() => {
+      const control = controlRef.current;
+      if (control && lastWidthRef.current !== control.clientWidth) {
+        lastWidthRef.current = control.clientWidth;
+        adjustHeight();
+      }
+      syncOverlay();
+    });
+    if (controlRef.current) {
+      lastWidthRef.current = controlRef.current.clientWidth;
+      observer.observe(controlRef.current);
+    }
+    return () => observer.disconnect();
+  }, [adjustHeight, syncOverlay]);
+
+  const renderHighlightedText = (segment: string, keyPrefix: string) =>
+    segment.split(/(\{\{[^}]+\}\})/g).map((part, index) => (
+      <Box component="span" key={`${keyPrefix}-${index}`} sx={index % 2 ? highlightTokenSx : undefined}>
+        {part}
+      </Box>
+    ));
 
   return (
     <Box sx={{ position: "relative", width: "100%" }}>
       <Box
-        component="textarea"
+        component={multiline ? "textarea" : "input"}
         {...rest}
-        value={normalizedValue}
+        ref={controlRef}
+        value={text}
         placeholder={placeholder}
-        onScroll={handleScroll}
+        onChange={(event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onChange?.(event);
+          autocomplete.updateFromControl(event.target.value, event.target.selectionStart);
+        }}
+        onKeyDown={(event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          if (autocomplete.handleKeyDown(event)) return;
+          onKeyDown?.(event);
+        }}
+        onKeyUp={(event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onKeyUp?.(event);
+          if (
+            event.key !== "ArrowDown" &&
+            event.key !== "ArrowUp" &&
+            event.key !== "Enter" &&
+            event.key !== "Tab" &&
+            event.key !== "Escape"
+          ) {
+            autocomplete.updateFromControl(
+              event.currentTarget.value,
+              event.currentTarget.selectionStart,
+            );
+          }
+        }}
+        onClick={(event: React.MouseEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onClick?.(event);
+          autocomplete.updateFromControl(
+            event.currentTarget.value,
+            event.currentTarget.selectionStart,
+          );
+        }}
+        onBlur={(event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          onBlur?.(event);
+          autocomplete.close();
+        }}
+        onScroll={(event: React.UIEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+          syncOverlay();
+          onScroll?.(event);
+        }}
         sx={{
-          ...highlightableControlSx,
-          resize: "vertical",
+          ...highlightableTextSx,
+          width: "100%",
+          display: "block",
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 1,
+          bgcolor: "transparent",
+          color: "transparent",
+          caretColor: (theme) => theme.palette.text.primary,
+          position: "relative",
+          zIndex: 1,
+          resize: multiline ? "vertical" : "none",
+          whiteSpace,
+          overflowWrap: "break-word",
+          "&::placeholder": { color: "transparent" },
+          "&::selection": { color: "HighlightText", backgroundColor: "Highlight" },
+          "&:focus": {
+            outline: "none",
+            borderColor: "primary.main",
+            boxShadow: "0 0 0 2px rgba(37, 99, 235, 0.16)",
+          },
         }}
       />
-      <Box
-        ref={overlayRef}
-        aria-hidden="true"
-        sx={{
-          pointerEvents: "none",
-          position: "absolute",
-          inset: 1,
-          zIndex: 0,
-          overflow: "auto",
-          px: 1.5,
-          py: 1,
-          color: "text.primary",
-          whiteSpace: "pre-wrap",
-          overflowWrap: "break-word",
-          borderRadius: 1,
-          font: "inherit",
-        }}
-      >
-        {normalizedValue.length === 0 ? (
-          placeholder && <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
-        ) : (
-          segments.map((segment, index) => (
-            <Box component="span" key={`${segment.text}-${index}`} sx={segment.highlight ? highlightTokenSx : undefined}>
-              {segment.text}
-            </Box>
-          ))
-        )}
+      <Box ref={overlayRef} aria-hidden="true" sx={{
+        position: "absolute", overflow: "hidden", pointerEvents: "none", borderRadius: 1,
+      }}>
+        <Box ref={contentRef} sx={{
+          ...highlightableTextSx, whiteSpace, overflowWrap: "break-word", color: "text.primary",
+        }}>
+          {text ? (
+            autocomplete.trigger ? (
+              <>
+                {renderHighlightedText(text.slice(0, autocomplete.trigger.start), "before")}
+                <Box
+                  component="span"
+                  ref={autocomplete.caretMarkerRef}
+                  sx={{ display: "inline-block", width: 0, height: "1.2em", verticalAlign: "text-bottom" }}
+                />
+                {renderHighlightedText(text.slice(autocomplete.trigger.start), "after")}
+              </>
+            ) : (
+              renderHighlightedText(text, "full")
+            )
+          ) : (
+            <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>
+          )}
+          {multiline && text.endsWith("\n") && "\u200b"}
+        </Box>
       </Box>
+      <PlaceholderAutocompletePopper
+        open={autocomplete.isOpen}
+        anchorEl={autocomplete.caretAnchor}
+        suggestions={autocomplete.suggestions}
+        activeIndex={autocomplete.activeIndex}
+        onSelect={autocomplete.selectSuggestion}
+      />
     </Box>
   );
 };
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+const HighlightableTextarea: React.FC<HighlightableInputProps> = (props) => (
+  <HighlightableInput {...props} multiline />
+);
+
+const Field: React.FC<{
+  label: string;
+  labelExtra?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ label, labelExtra, children }) => (
   <Box>
-    <Typography variant="body2" fontWeight={600} sx={{ display: "block", mb: 0.75 }}>
-      {label}
-    </Typography>
+    <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 0.75 }}>
+      <Typography variant="body2" fontWeight={600}>
+        {label}
+      </Typography>
+      {labelExtra}
+    </Stack>
     {children}
   </Box>
 );
@@ -694,10 +724,20 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const renderBehaviourForm = () => (
     <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
-      <Field label="Description">
+      <Field
+        label="Description"
+        labelExtra={
+          <Typography variant="caption" color="text.secondary">
+            Start typing <code>{"{{"}</code> to insert dynamic placeholders
+          </Typography>
+        }
+      >
         <HighlightableTextarea
+          autoResize
           value={visualData.description || ""}
           onChange={(event) => handleVisualChange("description", event.target.value)}
+          onValueChange={(nextValue) => handleVisualChange("description", nextValue)}
+          autocompleteItems={BEHAVIOUR_PLACEHOLDER_ITEMS}
           rows={3}
           placeholder="Describe the behaviour..."
         />
@@ -719,6 +759,27 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
         />
       </Field>
       <Field label="Process">{renderProcessCheckboxes()}</Field>
+      <Field label="Conversation Dynamics">
+        <Stack spacing={0.25}>
+          {[
+            { key: "leiaSpeaksFirst", label: "LEIA Speaks First", field: "firstMessage", prompt: "What should LEIA say first?" },
+            { key: "stoppingCondition", label: "Stopping condition", field: "condition", prompt: "When should LEIA end the conversation?" },
+          ].map(({ key, label, field, prompt }) => {
+            const dynamics = visualData.conversationDynamics || {};
+            const dynamic = dynamics[key] || { enabled: false, config: {} };
+            const update = (patch: Record<string, unknown>) => handleVisualChange("conversationDynamics", {
+              ...dynamics, [key]: { ...dynamic, ...patch },
+            });
+            return <Stack key={key} spacing={1}>
+              <FormControlLabel label={<Typography variant="body2">{label}</Typography>} sx={{ m: 0 }} control={<Checkbox size="small" checked={dynamic.enabled === true}
+                onChange={(_, enabled) => update({ enabled })} />} />
+              {dynamic.enabled && <TextField label={prompt} multiline minRows={2} required
+                value={dynamic.config?.[field] || ""}
+                onChange={(event) => update({ config: { ...dynamic.config, [field]: event.target.value } })} />}
+            </Stack>;
+          })}
+        </Stack>
+      </Field>
     </Stack>
   );
 

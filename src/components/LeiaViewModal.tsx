@@ -1,5 +1,5 @@
 import type React from "react";
-import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -23,13 +23,20 @@ import {
 } from "@mui/material";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import CloseIcon from "@mui/icons-material/Close";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import PsychologyOutlinedIcon from "@mui/icons-material/PsychologyOutlined";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
+import InsertChartOutlinedIcon from "@mui/icons-material/InsertChartOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { toast } from "react-toastify";
 import type { Leia } from "../models/Leia";
 import { useAuth } from "../context/useAuth";
 import { useApiKeys } from "../hooks/useApiKeys";
-import api from "../lib/axios";
+import { useImageRegeneration } from "../context/ImageRegenerationContext";
+import type { RegenerationTarget } from "../lib/imageRegeneration";
 import {
   buildLeiaInfographicPaths,
   buildOriginalAvatarPath,
@@ -89,9 +96,6 @@ interface LeiaViewModalProps {
   onClose: () => void;
 }
 
-type AvatarRegenerationTarget = "leias" | "problems" | "personas";
-type InfographicRegenerationTarget = "infographic" | "infographicSolution";
-type RegenerationTarget = AvatarRegenerationTarget | InfographicRegenerationTarget | "all";
 type ViewMode = "problem" | "persona" | "behaviour" | "rubric" | "infographics";
 
 function getUserId(value: unknown): string | null {
@@ -104,12 +108,6 @@ function getUserId(value: unknown): string | null {
   return null;
 }
 
-function cacheBustStoredImage(image?: string): string {
-  if (!image) return "";
-  const separator = image.includes("?") ? "&" : "?";
-  return `${image}${separator}t=${Date.now()}`;
-}
-
 function getRegenerationError(error: unknown): string {
   if (error && typeof error === "object" && "response" in error) {
     const axiosError = error as { response?: { data?: { message?: string } } };
@@ -120,11 +118,15 @@ function getRegenerationError(error: unknown): string {
 
 export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen, onClose }) => {
   const [viewMode, setViewMode] = useState<ViewMode>("problem");
-  const [displayLeia, setDisplayLeia] = useState<Leia | null>(leia);
+  const generation = useImageRegeneration();
+  const { refresh } = generation;
+  const displayLeia = leia ? generation.leias[leia.id] || leia : null;
+  const job = leia ? generation.jobs[leia.id] : undefined;
+  const isStarting = Boolean(leia && generation.starting.has(leia.id));
+  const regeneratingTarget = job?.active ? job.target : isStarting ? "all" : null;
+  const [isSyncing, setIsSyncing] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [regenerateAnchor, setRegenerateAnchor] = useState<HTMLElement | null>(null);
-  const [regeneratingTarget, setRegeneratingTarget] = useState<RegenerationTarget | null>(null);
-  const [tabsOverflow, setTabsOverflow] = useState(false);
-  const tabsRef = useRef<HTMLDivElement | null>(null);
   const [imageApiKeyId, setImageApiKeyId] = useState<string>("");
   const { user } = useAuth();
   const {
@@ -142,10 +144,20 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   useEffect(() => {
     if (isOpen && leia?.id) {
       setViewMode("problem");
-      setDisplayLeia(leia);
       setRegenerateAnchor(null);
     }
   }, [isOpen, leia]);
+
+  useEffect(() => {
+    if (!isOpen || !leia?.id) return;
+    let cancelled = false;
+    setIsSyncing(true);
+    setSyncError(null);
+    void refresh(leia.id).catch((error: unknown) => {
+      if (!cancelled) setSyncError(getRegenerationError(error));
+    }).finally(() => { if (!cancelled) setIsSyncing(false); });
+    return () => { cancelled = true; };
+  }, [isOpen, leia?.id, refresh]);
 
   useEffect(() => {
     setImageApiKeyId((current) => {
@@ -156,29 +168,6 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
     });
   }, [geminiApiKeys, getDefaultKey]);
 
-  useEffect(() => {
-    const tabsRoot = tabsRef.current;
-    if (!isOpen || !tabsRoot) return;
-
-    const updateTabsOverflow = () => {
-      const scroller = tabsRoot.querySelector<HTMLElement>(".MuiTabs-scroller");
-      setTabsOverflow(Boolean(scroller && scroller.scrollWidth > scroller.clientWidth + 1));
-    };
-
-    updateTabsOverflow();
-    const resizeObserver = new ResizeObserver(updateTabsOverflow);
-    resizeObserver.observe(tabsRoot);
-    const mutationObserver = new MutationObserver(updateTabsOverflow);
-    mutationObserver.observe(tabsRoot, { childList: true, subtree: true });
-    window.addEventListener("resize", updateTabsOverflow);
-
-    return () => {
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-      window.removeEventListener("resize", updateTabsOverflow);
-    };
-  }, [isOpen, displayLeia?.spec?.rubric, user?.role]);
-
   if (!isOpen || !displayLeia) return null;
 
   const problemResource = displayLeia.spec?.problem;
@@ -188,22 +177,22 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const behaviour = displayLeia.spec?.behaviour?.spec;
   const rubric = displayLeia.spec?.rubric;
   const isAdmin = user?.role === "admin";
+  const canViewBehaviour = isAdmin || user?.role === "advanced";
   const canRegenerateLeia = isAdmin || getUserId(displayLeia.user) === user?.id;
   const canRegenerateProblem = isAdmin || getUserId(problemResource?.user) === user?.id;
   const canRegeneratePersona = isAdmin || getUserId(personaResource?.user) === user?.id;
   const avatarRegenerationOptions = [
-    ...(canRegenerateLeia ? [{ label: "LEIA avatar", target: "leias" as const }] : []),
-    ...(canRegenerateProblem ? [{ label: "Problem avatar", target: "problems" as const }] : []),
-    ...(canRegeneratePersona ? [{ label: "Persona avatar", target: "personas" as const }] : []),
+    { label: "LEIA avatar", target: "leias" as const, icon: <SmartToyOutlinedIcon />, allowed: canRegenerateLeia },
+    { label: "Problem avatar", target: "problems" as const, icon: <ExtensionOutlinedIcon />, allowed: canRegenerateProblem },
+    { label: "Persona avatar", target: "personas" as const, icon: <PersonOutlineIcon />, allowed: canRegeneratePersona },
   ];
-  const infographicRegenerationOptions = canRegenerateLeia
-    ? [
-        { label: "Infographic", target: "infographic" as const },
-        { label: "Infographic with solution", target: "infographicSolution" as const },
-      ]
-    : [];
-  const canOpenRegenerate = avatarRegenerationOptions.length > 0
-    || infographicRegenerationOptions.length > 0;
+  const infographicRegenerationOptions = [
+    { label: "Infographic", target: "infographic" as const, icon: <InsertChartOutlinedIcon />, allowed: canRegenerateLeia },
+    { label: "Infographic with solution", target: "infographicSolution" as const, icon: <FactCheckOutlinedIcon />, allowed: canRegenerateLeia },
+  ];
+  const availableRegenerationOptions = [...avatarRegenerationOptions, ...infographicRegenerationOptions]
+    .filter((option) => option.allowed);
+  const availableImageCount = availableRegenerationOptions.length;
   const infographicCandidates = buildStoredImageCandidateSources(
     displayLeia.spec?.infographic,
     ...buildLeiaInfographicPaths(displayLeia.id, "infographic"),
@@ -213,136 +202,26 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
     ...buildLeiaInfographicPaths(displayLeia.id, "infographicSolution"),
   );
 
-  const getTargetId = (target: AvatarRegenerationTarget): string | null => {
-    if (target === "leias") return displayLeia.id;
-    if (target === "problems") return problemResource?.id || null;
-    return personaResource?.id || null;
-  };
-
-  const requireImageApiKey = (): string | null => {
-    if (imageApiKeyId) return imageApiKeyId;
-    toast.error("Select a Gemini API key before generating images", {
-      position: "bottom-right",
-      autoClose: 3000,
-    });
-    return null;
-  };
-
-  const regenerateAvatar = async (target: AvatarRegenerationTarget, selectedImageApiKeyId: string) => {
-    const targetId = getTargetId(target);
-    if (!targetId) {
-      throw new Error("Could not find the selected resource");
-    }
-    const response = await api.post(`/api/v1/images/${target}/${targetId}/generate`, {
-      apiKeyId: selectedImageApiKeyId,
-    });
-    const avatar = cacheBustStoredImage(response.data?.avatar);
-
-    setDisplayLeia((currentLeia) => {
-      if (!currentLeia || !avatar) return currentLeia;
-      if (target === "leias") {
-        return { ...currentLeia, spec: { ...currentLeia.spec, avatar } };
-      }
-      if (target === "problems") {
-        return {
-          ...currentLeia,
-          spec: {
-            ...currentLeia.spec,
-            problem: {
-              ...currentLeia.spec.problem,
-              spec: { ...currentLeia.spec.problem.spec, avatar },
-            },
-          },
-        };
-      }
-      return {
-        ...currentLeia,
-        spec: {
-          ...currentLeia.spec,
-          persona: {
-            ...currentLeia.spec.persona,
-            spec: { ...currentLeia.spec.persona.spec, avatar },
-          },
-        },
-      };
-    });
-  };
-
-  const regenerateInfographic = async (target: InfographicRegenerationTarget, selectedImageApiKeyId: string) => {
-    const path = target === "infographic" ? "infographic" : "infographic-solution";
-    const response = await api.post(
-      `/api/v1/images/leias/${displayLeia.id}/${path}/generate`,
-      { apiKeyId: selectedImageApiKeyId },
-    );
-    const image = cacheBustStoredImage(response.data?.[target]);
-
-    setDisplayLeia((currentLeia) => {
-      if (!currentLeia || !image) return currentLeia;
-      return {
-        ...currentLeia,
-        spec: { ...currentLeia.spec, [target]: image },
-      };
-    });
-  };
-
   const handleRegenerate = async (target: RegenerationTarget) => {
-    const selectedImageApiKeyId = requireImageApiKey();
-    if (!selectedImageApiKeyId) return;
-
-    setRegeneratingTarget(target);
+    if (regeneratingTarget || isSyncing || syncError || availableImageCount === 0) return;
+    if (target !== "all" && !availableRegenerationOptions.some(option => option.target === target)) return;
+    if (!imageApiKeyId) return;
     setRegenerateAnchor(null);
     try {
-      if (target === "all") {
-        const targets = [
-          ...avatarRegenerationOptions.map((option) => option.target),
-          ...infographicRegenerationOptions.map((option) => option.target),
-        ];
-        let failedCount = 0;
-
-        // These requests can update the same LEIA document. Run them in sequence
-        // so their Mongoose saves do not race and report false failures.
-        for (const item of targets) {
-          try {
-            if (item === "infographic" || item === "infographicSolution") {
-              await regenerateInfographic(item, selectedImageApiKeyId);
-            } else {
-              await regenerateAvatar(item, selectedImageApiKeyId);
-            }
-          } catch {
-            failedCount += 1;
-          }
-        }
-        if (failedCount > 0) {
-          toast.warning(`${targets.length - failedCount} of ${targets.length} images regenerated`, {
-            position: "bottom-right",
-            autoClose: 4000,
-          });
-          return;
-        }
-      } else if (target === "infographic" || target === "infographicSolution") {
-        await regenerateInfographic(target, selectedImageApiKeyId);
-      } else {
-        await regenerateAvatar(target, selectedImageApiKeyId);
-      }
-
-      toast.success(target === "all" ? "All images regenerated successfully" : "Image regenerated successfully", {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
+      await generation.start(displayLeia, target, imageApiKeyId);
     } catch (error) {
-      toast.error(getRegenerationError(error), {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-    } finally {
-      setRegeneratingTarget(null);
+      toast.error(getRegenerationError(error), { position: "bottom-right", autoClose: 4000 });
     }
   };
+
+  const regeneratedImageCount = job?.steps.filter(step => step.status === "completed").length ?? 0;
+  const regenerationProgress = job?.steps.length ? (regeneratedImageCount / job.steps.length) * 100 : 0;
 
   return (
     <Dialog
       open={isOpen}
       onClose={onClose}
+      disableRestoreFocus
       fullWidth
       maxWidth="lg"
       sx={{ "& .MuiDialog-paper": { height: { xs: "92vh", md: "80vh" }, maxHeight: "none" } }}
@@ -361,15 +240,27 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
             <Typography variant="body2" color="text.secondary">View LEIA content</Typography>
           </Box>
         </Stack>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          {canOpenRegenerate && (
-            <>
+        <Stack direction="row" alignItems="flex-start" spacing={1}>
+          <Stack direction="column" alignItems="flex-end" spacing={0.5}>
               <ButtonGroup variant="outlined" size="small" disabled={regeneratingTarget !== null}>
                 <Button
-                  startIcon={regeneratingTarget ? <CircularProgress size={16} /> : <RefreshIcon />}
+                  startIcon={regeneratingTarget
+                    ? <CircularProgress
+                        size={16}
+                        variant="determinate"
+                        value={regenerationProgress}
+                        enableTrackSlot
+                        aria-label="Images regenerated"
+                        aria-valuetext={`${regeneratedImageCount} of ${job?.steps.length ?? 0} images regenerated`}
+                        sx={{ "& .MuiCircularProgress-track": { opacity: 0.3 } }}
+                      />
+                    : <RefreshIcon />}
+                  disabled={isSyncing || Boolean(syncError) || regeneratingTarget !== null || availableImageCount === 0 || !imageApiKeyId}
                   onClick={() => void handleRegenerate("all")}
                 >
-                  {regeneratingTarget ? "Regenerating" : "Regenerate all"}
+                  {regeneratingTarget
+                    ? `Regenerating ${regeneratedImageCount}/${job?.steps.length ?? 0}`
+                    : availableImageCount === 0 ? "No images to regenerate" : `Regenerate ${availableImageCount} ${availableImageCount === 1 ? "image" : "images"}`}
                 </Button>
                 <Button
                   size="small"
@@ -388,13 +279,14 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                 onClose={() => setRegenerateAnchor(null)}
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                 transformOrigin={{ vertical: "top", horizontal: "right" }}
-                slotProps={{ paper: { sx: { mt: 1, width: 320, maxWidth: "calc(100vw - 32px)" } } }}
+                slotProps={{ paper: { sx: { mt: 1, width: 380, maxWidth: "calc(100vw - 32px)" } } }}
               >
                 <Stack spacing={1.5} sx={{ p: 2 }}>
                   <Box>
                     <Typography variant="subtitle2">Regenerate images</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Select the Gemini key used to create the new image.
+                      You can regenerate images for components you own (
+                      {availableImageCount} of 5 images available)
                     </Typography>
                   </Box>
                   <FormControl fullWidth size="small">
@@ -427,17 +319,19 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                     <Stack spacing={0.5}>
                       <Typography variant="overline" color="text.secondary">Avatars</Typography>
                       {avatarRegenerationOptions.map((option) => (
+                        <Box key={option.target}>
                         <Button
-                          key={option.target}
                           color="inherit"
                           fullWidth
-                          startIcon={<ImageOutlinedIcon />}
+                          startIcon={option.icon}
                           onClick={() => void handleRegenerate(option.target)}
-                          disabled={!imageApiKeyId}
-                          sx={{ justifyContent: "flex-start" }}
+                          disabled={isSyncing || Boolean(syncError) || !option.allowed || !imageApiKeyId || regeneratingTarget !== null}
+                          sx={{ justifyContent: "flex-start", textAlign: "left" }}
                         >
                           {option.label}
+                          {!option.allowed && <LockOutlinedIcon sx={{ ml: "auto", fontSize: 16 }} />}
                         </Button>
+                        </Box>
                       ))}
                     </Stack>
                   )}
@@ -446,43 +340,66 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
                     <Stack spacing={0.5}>
                       <Typography variant="overline" color="text.secondary">Infographics</Typography>
                       {infographicRegenerationOptions.map((option) => (
+                        <Box key={option.target}>
                         <Button
-                          key={option.target}
                           color="inherit"
                           fullWidth
-                          startIcon={<ImageOutlinedIcon />}
+                          startIcon={option.icon}
                           onClick={() => void handleRegenerate(option.target)}
-                          disabled={!imageApiKeyId}
-                          sx={{ justifyContent: "flex-start" }}
+                          disabled={isSyncing || Boolean(syncError) || !option.allowed || !imageApiKeyId || regeneratingTarget !== null}
+                          sx={{ justifyContent: "flex-start", textAlign: "left" }}
                         >
                           {option.label}
+                          {!option.allowed && <LockOutlinedIcon sx={{ ml: "auto", fontSize: 16 }} />}
                         </Button>
+                        </Box>
                       ))}
                     </Stack>
                   )}
                 </Stack>
               </Popover>
-            </>
-          )}
+          </Stack>
           <IconButton onClick={onClose} aria-label="Close"><CloseIcon /></IconButton>
         </Stack>
       </DialogTitle>
       <Tabs
-        ref={tabsRef}
         value={viewMode}
         onChange={(_, value: ViewMode) => setViewMode(value)}
-        variant="scrollable"
-        scrollButtons={tabsOverflow}
-        allowScrollButtonsMobile
-        sx={{ px: 2, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}
+        variant="fullWidth"
+        scrollButtons={false}
+        sx={{
+          px: { xs: 0, sm: 2 },
+          flexShrink: 0,
+          minHeight: 40,
+          borderTop: "1px solid",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          "& .MuiTab-root": {
+            minWidth: 0,
+            maxWidth: "none",
+            minHeight: 40,
+            py: 0.5,
+            flexDirection: { xs: "column", sm: "row" },
+            gap: 0.5,
+            "& .MuiTab-icon": { margin: 0 },
+            px: { xs: 0.5, sm: 2 },
+            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+            overflowWrap: "anywhere",
+          },
+        }}
       >
-        <Tab value="problem" label="Problem" />
-        <Tab value="persona" label="Persona" />
-        {user?.role === "admin" && <Tab value="behaviour" label="Behaviour" />}
-        {rubric && <Tab value="rubric" label="Rubric" />}
-        <Tab value="infographics" label="Infographics" />
+        <Tab value="problem" icon={<ExtensionOutlinedIcon fontSize="small" />} iconPosition="start" label="Problem" />
+        <Tab value="persona" icon={<PersonOutlineIcon fontSize="small" />} iconPosition="start" label="Persona" />
+        {canViewBehaviour && <Tab value="behaviour" icon={<PsychologyOutlinedIcon fontSize="small" />} iconPosition="start" label="Behaviour" />}
+        {rubric && <Tab value="rubric" icon={<FactCheckOutlinedIcon fontSize="small" />} iconPosition="start" label="Rubric" />}
+        <Tab value="infographics" icon={<InsertChartOutlinedIcon fontSize="small" />} iconPosition="start" label="Infographics" />
       </Tabs>
       <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
+        {syncError && <Alert severity="error" sx={{ mb: 2 }}>{syncError}</Alert>}
+        {job && !job.active && job.status !== "completed" && <Alert severity="warning" sx={{ mb: 2 }}>
+          {job.error || job.steps.filter(step => step.status === "failed").map(step => step.error).join("; ")}
+        </Alert>}
+
         {viewMode === "problem" && (
           <Stack spacing={2.5}>
             <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -571,7 +488,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
           </Stack>
         )}
 
-        {viewMode === "behaviour" && user?.role === "admin" && (
+        {viewMode === "behaviour" && canViewBehaviour && (
           <Stack spacing={2.5}>
             <ContentSection title="Behaviour Configuration">
               <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour?.description || "No description available"}</Typography>

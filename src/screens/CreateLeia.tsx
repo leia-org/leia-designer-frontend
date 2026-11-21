@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -98,6 +99,8 @@ type LabelOption = {
   color: string;
   secundaryColor: string;
   isGlobal: boolean;
+  action?: "create";
+  createName?: string;
 };
 
 interface LeiaConfig {
@@ -186,9 +189,9 @@ interface CreateLeiaDraftState {
   personaPublish: boolean;
 }
 
-const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Sistema de biblioteca";
+const DEFAULT_PROBLEM_GENERATION_SUBJECT = "Library management system";
 const DEFAULT_PROBLEM_GENERATION_DETAILS =
-  "Incluye catalogo, prestamos, reservas, cuentas de socios y notificaciones de vencimiento.";
+  "Include catalog, loans, reservations, member accounts, and overdue notifications.";
 
 const DEFAULT_BEHAVIOUR_GENERATION_SUBJECT = "Bibliotecario experto";
 const DEFAULT_BEHAVIOUR_GENERATION_DETAILS =
@@ -220,11 +223,23 @@ const createEmptyCustomizations = (): LeiaCustomizations => ({
 
 const copyProcess = normalizeProcess;
 
+const haveSameProcess = (left: unknown, right: unknown): boolean => {
+  const normalize = (value: unknown) => [...new Set(copyProcess(value))].sort();
+  const leftProcess = normalize(left);
+  const rightProcess = normalize(right);
+  return (
+    leftProcess.length === rightProcess.length &&
+    leftProcess.every((process, index) => process === rightProcess[index])
+  );
+};
+
 export const CreateLeia: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuth().user;
   const { user: currentUser } = useAuth();
+  const canEditBehaviour =
+    currentUser?.role === "admin" || currentUser?.role === "advanced";
   const tourRef = useRef<ReturnType<typeof driver> | null>(null);
   const {
     apiKeys,
@@ -244,7 +259,6 @@ export const CreateLeia: React.FC = () => {
   const [leiaConfig, setLeiaConfig] = useState<LeiaConfig>(createEmptyLeiaConfig);
   const [leiaConfigSnapShot, setLeiaConfigSnapShot] =
     useState<LeiaConfig | null>(null);
-  const [generatedLeia, setGeneratedLeia] = useState<Leia | null>(null);
 
   const [customizations, setCustomizations] = useState<LeiaCustomizations>(
     createEmptyCustomizations,
@@ -256,6 +270,7 @@ export const CreateLeia: React.FC = () => {
   const [chatSettingsAnchor, setChatSettingsAnchor] = useState<HTMLElement | null>(null);
   const [chatState, setChatState] = useState<ProblemChatState>(EMPTY_CHAT_STATE);
   const [chatResetKey, setChatResetKey] = useState(0);
+  const [chatBusy, setChatBusy] = useState(false);
   const [drafts, setDrafts] = useState<LeiaDraft<CreateLeiaDraftState>[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const [showDraftsDialog, setShowDraftsDialog] = useState(false);
@@ -282,7 +297,6 @@ export const CreateLeia: React.FC = () => {
   const [rubricDraft, setRubricDraft] = useState<RubricSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [generationError, setGenerationError] = useState<Error | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
   // Per-LEIA background supervisor (instructor-authored). Persisted into
   // spec.supervisorConfig; runs on the LEIA's own key in the workbench.
@@ -562,7 +576,6 @@ export const CreateLeia: React.FC = () => {
     setCurrentStep(1);
     setLeiaConfig(createEmptyLeiaConfig());
     setLeiaConfigSnapShot(null);
-    setGeneratedLeia(null);
     setCustomizations(createEmptyCustomizations());
     setLeiaNameManuallyEdited(false);
     setSelectedLabelIds([]);
@@ -599,7 +612,6 @@ export const CreateLeia: React.FC = () => {
       behaviour: restoredConfig.behaviour ?? null,
     });
     setLeiaConfigSnapShot(state.leiaConfigSnapShot ?? null);
-    setGeneratedLeia(null);
     setCustomizations({
       ...restoredCustomizations,
       leia: {
@@ -748,6 +760,36 @@ export const CreateLeia: React.FC = () => {
     setShowLeaveDraftDialog(false);
     action?.();
   }, [hasDraftContent, saveCurrentDraft]);
+
+  const discardDraftAndLeave = useCallback(async () => {
+    const action = pendingLeaveActionRef.current;
+    setDraftError(null);
+    setIsSavingDraft(true);
+
+    try {
+      const pendingSave = draftSavePromiseRef.current;
+      if (pendingSave) {
+        await pendingSave;
+      }
+
+      const draftId = currentDraftIdRef.current;
+      if (draftId) {
+        await deleteLeiaDraft(draftId);
+        setDrafts((previous) => previous.filter((draft) => draft.id !== draftId));
+        currentDraftIdRef.current = null;
+        setCurrentDraftId(null);
+      }
+
+      pendingLeaveActionRef.current = null;
+      setShowLeaveDraftDialog(false);
+      action?.();
+    } catch (draftDiscardError) {
+      console.error("Error discarding LEIA draft:", draftDiscardError);
+      setDraftError("Could not discard this draft. It was not deleted.");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }, []);
 
   useEffect(() => {
     currentDraftIdRef.current = currentDraftId;
@@ -996,37 +1038,25 @@ export const CreateLeia: React.FC = () => {
     }
   }, [location.state, navigate, location.pathname, restoreDraft]);
 
-  useEffect(() => {
-    if (
-      leiaConfig.persona &&
-      leiaConfig.behaviour &&
-      leiaConfig.problem
-    ) {
-      try {
-        setGenerationError(null);
-        const leia = generateLeia(
-          leiaConfig.persona,
-          leiaConfig.behaviour,
-          leiaConfig.problem,
-        );
-        setGeneratedLeia(leia as Leia);
-      } catch (err: unknown) {
-        const error =
-          err instanceof Error
-            ? err
-            : new Error("Unknown error occurred while generating LEIA");
-        setGenerationError(error);
-        setGeneratedLeia(null);
-      }
-    } else {
-      // Do not leave a previously generated LEIA in the preview after one of
-      // its source components has been removed. The rest of this screen uses
-      // leiaConfig as the source of truth, so retaining generatedLeia here
-      // made the preview and Test action expose stale component data.
-      setGenerationError(null);
-      setGeneratedLeia(null);
+  // Derive the assembled LEIA during render. An incomplete selection must never
+  // retain a previously valid LEIA, including during navigation/draft restoration.
+  const leiaAssembly = useMemo((): { generatedLeia: Leia | null; generationError: Error | null } => {
+    if (!leiaConfig.persona || !leiaConfig.behaviour || !leiaConfig.problem) {
+      return { generatedLeia: null, generationError: null };
     }
-  }, [currentStep, leiaConfig]);
+    try {
+      return {
+        generatedLeia: generateLeia(leiaConfig.persona, leiaConfig.behaviour, leiaConfig.problem) as Leia,
+        generationError: null,
+      };
+    } catch (err: unknown) {
+      return {
+        generatedLeia: null,
+        generationError: err instanceof Error ? err : new Error("Unknown error occurred while generating LEIA"),
+      };
+    }
+  }, [leiaConfig]);
+  const { generatedLeia, generationError } = leiaAssembly;
 
   const loadPersonas = async (
     visibility: "all" | "public" | "private" = "all",
@@ -1203,6 +1233,7 @@ export const CreateLeia: React.FC = () => {
     resource: Persona | Problem | Behaviour,
     resourceType: "persona" | "problem" | "behaviour",
   ) => {
+    if (resourceType === "behaviour" && !canEditBehaviour) return;
     setDeleteModal({
       isOpen: true,
       resource,
@@ -1385,7 +1416,7 @@ const openGenerateProblemModal = () => {
   };
 
   const openGenerateBehaviourModal = () => {
-    if (!leiaConfig.behaviour) {
+    if (!canEditBehaviour || !leiaConfig.behaviour) {
       return;
     }
     setGenerateBehaviourSubject(DEFAULT_BEHAVIOUR_GENERATION_SUBJECT);
@@ -1469,7 +1500,7 @@ const openGenerateProblemModal = () => {
 
   // Función para generar un behaviour similar con IA
   const handleGenerateBehaviour = async () => {
-    if (!generateBehaviourSubject.trim() || !leiaConfig.behaviour) {
+    if (!canEditBehaviour || !generateBehaviourSubject.trim() || !leiaConfig.behaviour) {
       return;
     }
 
@@ -1601,8 +1632,8 @@ const openGenerateProblemModal = () => {
   ]);
 
   const handleTestLeia = async () => {
-    if (!generatedLeia) {
-      console.error("No generated LEIA available");
+    if (chatBusy || testingLeia || !generatedLeia || !leiaConfig.persona || !leiaConfig.problem || !leiaConfig.behaviour) {
+      console.error("No complete LEIA available, or the designer is busy");
       return;
     }
 
@@ -1777,6 +1808,11 @@ const openGenerateProblemModal = () => {
           resourceName && resourceName !== value?.metadata?.name,
         );
 
+        if (key === "behaviour" && !canEditBehaviour && (value?.edited || isRenamed)) {
+          setError("Only advanced users and administrators can edit Behaviour resources. Select an existing Behaviour instead.");
+          return;
+        }
+
         if (value && (value.edited || isRenamed)) {
           const newResource: {
             apiVersion: string;
@@ -1930,7 +1966,7 @@ const openGenerateProblemModal = () => {
   };
 
   const isStep1Complete = Boolean(
-    leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour && !generationError && generatedLeia,
+    leiaConfig.persona && leiaConfig.problem && leiaConfig.behaviour && !generationError && generatedLeia && !chatBusy,
   );
   const isStep2Complete = (() => {
     const customizationsValid =
@@ -2005,13 +2041,18 @@ const openGenerateProblemModal = () => {
   };
 
   const applyChatProblem = useCallback(
-    (spec: ProblemSpec, name?: string) => {
+    (spec: ProblemSpec, name?: string, behaviourForTurn?: Behaviour | null): Behaviour | null => {
       // Keep the current rubric while the assistant applies the other LEIA
       // resources. A complete assistant turn may apply the problem first and
       // the rubric afterwards; clearing here made the rubric disappear again
       // when the assistant revisited the problem in a later turn.
       const incomingSpec = normalizeProcessFields(spec as unknown as Record<string, unknown>);
       const process = copyProcess(incomingSpec.process);
+      // Keep only a compatible behaviour explicitly selected in THIS assistant
+      // turn. The inherited behaviour still needs an explicit suitability check.
+      const retainedBehaviour = behaviourForTurn && haveSameProcess(behaviourForTurn.spec.process, process)
+        ? behaviourForTurn
+        : null;
       setLeiaConfig((prev) => ({
         ...prev,
         problem: {
@@ -2034,7 +2075,9 @@ const openGenerateProblemModal = () => {
           isPublished: false,
           user: currentUser!,
         } as unknown as Problem,
+        behaviour: retainedBehaviour,
       }));
+      return retainedBehaviour;
     },
     [currentUser],
   );
@@ -2060,29 +2103,28 @@ const openGenerateProblemModal = () => {
 
   const applyChatBehaviour = useCallback(
     (spec: Record<string, unknown>, name?: string) => {
-      setLeiaConfig((prev) => {
-        const process = copyProcess(prev.problem?.spec?.process ?? spec.process);
-
-        return {
-          ...prev,
-          behaviour: {
-            apiVersion: "v1",
-            metadata: {
-              name: name || prev.behaviour?.metadata?.name || "ai-generated-behaviour",
-              version: "1.0.0",
-            },
-            spec: { ...normalizeProcessFields(spec), process },
-            id: "generated-" + Date.now(),
-            edited: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            isPublished: false,
-            user: currentUser!,
-          } as unknown as Behaviour,
-        };
-      });
+      if (!canEditBehaviour) return;
+      // The chat supplies the final Problem process, including when both
+      // resources are applied in the same tool response before React renders.
+      const normalizedSpec = normalizeProcessFields(spec);
+      const behaviour = {
+        apiVersion: "v1",
+        metadata: {
+          name: name || "ai-generated-behaviour",
+          version: "1.0.0",
+        },
+        spec: { ...normalizedSpec, process: copyProcess(normalizedSpec.process) },
+        id: "generated-" + Date.now(),
+        edited: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isPublished: false,
+        user: currentUser!,
+      } as unknown as Behaviour;
+      setLeiaConfig(prev => ({ ...prev, behaviour }));
+      return behaviour;
     },
-    [currentUser],
+    [canEditBehaviour, currentUser],
   );
 
   const applyChatPersona = useCallback(
@@ -2161,6 +2203,53 @@ const openGenerateProblemModal = () => {
       return { ok: true, name: persona.metadata?.name };
     },
     [personas],
+  );
+
+  const handleUseExistingProblem = useCallback(
+    (id: string, behaviourForTurn?: Behaviour | null): { ok: boolean; name?: string; process?: string[]; behaviour?: Behaviour | null; error?: string } => {
+      const problem = problems.find((item) => item.id === id);
+      if (!problem) return { ok: false, error: `No problem with id '${id}' is available.` };
+      const retainedBehaviour = behaviourForTurn && haveSameProcess(behaviourForTurn.spec.process, problem.spec.process)
+        ? behaviourForTurn
+        : null;
+      setLeiaConfig((previous) => ({
+        ...previous,
+        problem,
+        behaviour: previous.problem?.id === problem.id ? previous.behaviour : retainedBehaviour,
+      }));
+      return {
+        ok: true,
+        name: problem.metadata?.name,
+        process: copyProcess(problem.spec?.process),
+        behaviour: retainedBehaviour,
+      };
+    },
+    [problems],
+  );
+
+  const handleUseExistingBehaviour = useCallback(
+    (id: string, problemProcess?: string[], candidate?: Behaviour): { ok: boolean; name?: string; error?: string; behaviour?: Behaviour } => {
+      const behaviour = candidate?.id === id && candidate.edited
+        ? candidate
+        : behaviours.find((item) => item.id === id) ?? (candidate?.id === id ? candidate : undefined);
+      if (!behaviour) return { ok: false, error: `No behaviour with id '${id}' is available.` };
+      if (behaviour.edited && !canEditBehaviour) {
+        return { ok: false, error: "Only an advanced user or administrator can use an authored behaviour draft." };
+      }
+      const expectedProcess = problemProcess ?? leiaConfig.problem?.spec?.process;
+      if (!expectedProcess) {
+        return { ok: false, error: "Select or create the problem before selecting its behaviour." };
+      }
+      if (!haveSameProcess(behaviour.spec?.process, expectedProcess)) {
+        return {
+          ok: false,
+          error: "The behaviour process must exactly match the selected problem process.",
+        };
+      }
+      setLeiaConfig((previous) => ({ ...previous, behaviour }));
+      return { ok: true, name: behaviour.metadata?.name, behaviour };
+    },
+    [behaviours, leiaConfig.problem, canEditBehaviour],
   );
 
   const handleAssistantLeiaName = useCallback(
@@ -2332,9 +2421,10 @@ const openGenerateProblemModal = () => {
   );
 
   const renderNewStep = () => {
-    const canTest = Boolean(resolveTestRunnerConfiguration()) && !chatOptionsLoading;
+    const canTest = Boolean(resolveTestRunnerConfiguration()) && !chatOptionsLoading && !chatBusy && isStep1Complete;
 
     const editResource = (resource: "persona" | "problem" | "behaviour") => {
+      if (resource === "behaviour" && !canEditBehaviour) return;
       const current = leiaConfig[resource];
       if (!current) return;
       setEditingResource({
@@ -2443,14 +2533,16 @@ const openGenerateProblemModal = () => {
               currentBehaviour={leiaConfig.behaviour}
               currentPersona={leiaConfig.persona}
               currentRubric={rubricDraft}
-              renderedProblem={generatedLeia?.spec?.problem ?? null}
-              renderedBehaviour={generatedLeia?.spec?.behaviour ?? null}
-              renderedPersona={generatedLeia?.spec?.persona ?? null}
+              problems={problems}
+              behaviours={behaviours}
               personas={personas}
+              canEditBehaviour={canEditBehaviour}
               onApplyProblem={applyChatProblem}
               onApplyBehaviour={applyChatBehaviour}
               onApplyPersona={applyChatPersona}
               onApplyRubric={applyChatRubric}
+              onUseProblem={handleUseExistingProblem}
+              onUseBehaviour={handleUseExistingBehaviour}
               onUsePersona={handleUseExistingPersona}
               onSetLeiaName={handleAssistantLeiaName}
               modelName={chatModelName}
@@ -2458,6 +2550,8 @@ const openGenerateProblemModal = () => {
               key={chatResetKey}
               initialChatState={chatState}
               onChatStateChange={setChatState}
+              onBusyChange={setChatBusy}
+              disabled={testingLeia}
             />
           </Box>
 
@@ -2471,18 +2565,21 @@ const openGenerateProblemModal = () => {
             }}
           >
             <LeiaLivePreview
-              leia={generatedLeia}
+              leia={generatedLeia ?? { spec: leiaConfig }}
               rubric={rubricDraft}
+              readyToTest={Boolean(generatedLeia) && !chatBusy}
               title={customizations.leia.name}
               onTitleChange={handleLeiaNameChange}
               titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}
               testAction={testAction}
+              canEditBehaviour={canEditBehaviour}
               onComponentClick={handleOverviewComponentClick}
             />
           </Box>
         </Box>
 
-        {editingResource.resource && (
+        {editingResource.resource &&
+          (editingResource.resource !== "behaviour" || canEditBehaviour) && (
           <Dialog
             open
             onClose={() => setEditingResource({ resource: null, content: null, apiVersion: "v1" })}
@@ -2497,6 +2594,7 @@ const openGenerateProblemModal = () => {
                 onSave={(data, apiVersion, resourceName) => {
                   const resource = editingResource.resource;
                   if (!resource) return;
+                  if (resource === "behaviour" && !canEditBehaviour) return;
 
                   setLeiaConfig((previous) => {
                     const current = previous[resource];
@@ -2670,6 +2768,7 @@ const openGenerateProblemModal = () => {
       resource: "leia" | "persona" | "problem" | "behaviour",
       value: string,
     ) => {
+      if (resource === "behaviour" && !canEditBehaviour) return;
       if (resource === "leia") setLeiaNameManuallyEdited(true);
       setCustomizations((previous) => ({
         ...previous,
@@ -2699,8 +2798,13 @@ const openGenerateProblemModal = () => {
               value={name}
               onChange={(event) => updateName(resource, event.target.value)}
               placeholder={"Enter " + title.toLowerCase() + " name"}
+              disabled={resource === "behaviour" && !canEditBehaviour}
               error={Boolean(validationErrors?.[resource])}
-              helperText={validationErrors?.[resource]}
+              helperText={
+                resource === "behaviour" && !canEditBehaviour
+                  ? "Select an existing Behaviour. Only advanced users and administrators can edit the base resource."
+                  : validationErrors?.[resource]
+              }
               fullWidth
             />
             {currentUser?.role === "admin" && (
@@ -2806,8 +2910,40 @@ const openGenerateProblemModal = () => {
               inputValue={labelSearchInput}
               disabled={loading || Boolean(labelsError)}
               onInputChange={(_, value) => setLabelSearchInput(value)}
+              filterOptions={(options, state) => {
+                const filteredOptions = options.filter((option) =>
+                  option.label.toLowerCase().includes(state.inputValue.trim().toLowerCase()),
+                );
+                const candidate = state.inputValue.trim();
+                const hasExactMatch = options.some(
+                  (option) => option.label.toLowerCase() === candidate.toLowerCase(),
+                );
+
+                if (candidate && !hasExactMatch) {
+                  filteredOptions.push({
+                    value: "__create_label__",
+                    label: `Create label "${candidate}"`,
+                    color: "transparent",
+                    secundaryColor: "inherit",
+                    isGlobal: false,
+                    action: "create",
+                    createName: candidate,
+                  });
+                }
+
+                return filteredOptions;
+              }}
               onChange={(_, nextValues) => {
                 const values = nextValues as Array<LabelOption | string>;
+                const createLabelOption = values.find(
+                  (value) => typeof value !== "string" && value.action === "create",
+                );
+                if (createLabelOption && typeof createLabelOption !== "string") {
+                  setNewLabelName(createLabelOption.createName || "");
+                  setCreateLabelError(null);
+                  setShowCreateLabelModal(true);
+                  return;
+                }
                 const newLabel = values.find((value) => typeof value === "string");
                 if (typeof newLabel === "string") {
                   const candidate = newLabel.trim();
@@ -2833,9 +2969,15 @@ const openGenerateProblemModal = () => {
               }
               renderOption={(props, option) => (
                 <Box component="li" {...props}>
-                  <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: option.color, mr: 1 }} />
+                  {option.action === "create" ? (
+                    <AddOutlinedIcon fontSize="small" color="primary" sx={{ mr: 1 }} />
+                  ) : (
+                    <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: option.color, mr: 1 }} />
+                  )}
                   <Typography variant="body2">{option.label}</Typography>
-                  {option.isGlobal && <Chip label="Global" size="small" sx={{ ml: "auto" }} />}
+                  {option.action !== "create" && option.isGlobal && (
+                    <Chip label="Global" size="small" sx={{ ml: "auto" }} />
+                  )}
                 </Box>
               )}
               renderInput={(params) => (
@@ -3422,7 +3564,15 @@ const openGenerateProblemModal = () => {
             {draftError && <Alert severity="error">{draftError}</Alert>}
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions disableSpacing sx={{ px: 3, py: 2,  justifyContent: "space-between" }}>
+          <Button
+            color="error"
+            variant="outlined"
+            onClick={() => void discardDraftAndLeave()}
+            disabled={isSavingDraft}
+          >
+            Discard and leave
+          </Button>
           <Button color="inherit" onClick={continueEditingDraft} disabled={isSavingDraft}>
             Continue editing
           </Button>
@@ -3491,7 +3641,7 @@ const openGenerateProblemModal = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={showGenerateBehaviourModal} onClose={closeGenerateBehaviourModal} fullWidth maxWidth="sm">
+      <Dialog open={showGenerateBehaviourModal && canEditBehaviour} onClose={closeGenerateBehaviourModal} fullWidth maxWidth="sm">
         <DialogTitle>Generate Similar Behaviour</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>

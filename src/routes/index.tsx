@@ -153,11 +153,11 @@ export const AppRoutes = () => {
         }
       />
       <Route
-        path="/administration/labels"
+        path="/labels"
         element={
-          <AdminRoute>
+          <AuthenticatedRoute>
             <LabelManagement />
-          </AdminRoute>
+          </AuthenticatedRoute>
         }
       />
       <Route path="/forbidden" element={<ForbiddenPage />} />

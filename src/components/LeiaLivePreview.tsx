@@ -18,19 +18,21 @@ import type { RubricDefinition } from "../models/Rubric";
 
 interface GeneratedLeiaPreview {
   spec?: {
-    persona?: Persona;
-    problem?: Problem;
-    behaviour?: Behaviour;
+    persona?: Persona | null;
+    problem?: Problem | null;
+    behaviour?: Behaviour | null;
   };
 }
 
 interface LeiaLivePreviewProps {
   leia: GeneratedLeiaPreview | null;
-  rubric: RubricDefinition | null;
+  rubric?: RubricDefinition | null;
   title: string;
   onTitleChange: (value: string) => void;
   titleSuggested?: boolean;
   testAction: React.ReactNode;
+  readyToTest?: boolean;
+  canEditBehaviour?: boolean;
   onComponentClick?: (component: "persona" | "behaviour" | "problem" | "rubric") => void;
 }
 
@@ -41,6 +43,7 @@ interface PreviewSectionProps {
   subtitle?: string;
   children: React.ReactNode;
   onClick?: () => void;
+  isBlocked?: boolean;
 }
 
 const truncate = (value?: string, length = 240) => {
@@ -62,6 +65,7 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
   subtitle,
   children,
   onClick,
+  isBlocked,
 }) => (
   <Paper
     variant="outlined"
@@ -77,7 +81,12 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
       borderRadius: 2,
       overflow: "hidden",
       cursor: onClick ? "pointer" : "default",
+      flexShrink: isBlocked ? 0 : 1,
       transition: onClick ? "border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease" : undefined,
+      ...(isBlocked && {
+        bgcolor: "surfaces.subtle",
+        borderColor: "divider",
+      }),
       "&:hover": onClick
         ? { borderColor: "primary.main", boxShadow: "0 5px 16px rgba(15, 23, 42, 0.08)", transform: "translateY(-1px)" }
         : undefined,
@@ -90,7 +99,7 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
       direction="row"
       alignItems="center"
       spacing={1.25}
-      sx={{ px: 1.5, py: 1.25, bgcolor: "surfaces.subtle", borderBottom: 1, borderColor: "divider" }}
+      sx={{ px: 1.5, py: 1.25, bgcolor: isBlocked ? "action.hover" : "surfaces.subtle", borderBottom: 1, borderColor: "divider" }}
     >
       <Box
         sx={{
@@ -100,8 +109,8 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
           display: "grid",
           placeItems: "center",
           flexShrink: 0,
-          bgcolor: accent,
-          color: "common.white",
+          bgcolor: isBlocked ? "grey.300" : accent,
+          color: isBlocked ? "grey.600" : "common.white",
         }}
       >
         {icon}
@@ -115,13 +124,27 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
         )}
       </Box>
     </Stack>
-    <Box sx={{ p: 1.5 }}>{children}</Box>
+    {isBlocked ? (
+  <Box sx={{ p: 1.5, minWidth: 0 }}>
+    <Typography
+      variant="body2"
+      color="text.disabled"
+      fontStyle="italic"
+    >
+      You have to be advanced or admin to edit this component.
+    </Typography>
+  </Box>
+) : (
+  <Box sx={{ p: 1.5 }}>{children}</Box>
+)}
   </Paper>
 );
 
-const EmptySection: React.FC = () => (
+const EmptySection: React.FC<{ label?: string }> = ({
+  label = "Waiting for the assistant to create this component.",
+}) => (
   <Typography variant="body2" color="text.disabled" fontStyle="italic">
-    Waiting for the assistant to create this component.
+    {label}
   </Typography>
 );
 
@@ -132,13 +155,15 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   onTitleChange,
   titleSuggested = false,
   testAction,
+  readyToTest,
+  canEditBehaviour = true,
   onComponentClick,
 }) => {
   const persona = leia?.spec?.persona;
   const problem = leia?.spec?.problem;
   const behaviour = leia?.spec?.behaviour;
   const displayName = title || persona?.spec?.fullName || "Untitled LEIA";
-  const isReady = Boolean(persona && problem && behaviour);
+  const isReady = readyToTest ?? Boolean(persona && problem && behaviour);
   const widgetCount = problem?.spec?.widgets?.length ?? 0;
   const rubricCriteriaCount = rubric?.spec.sections.reduce(
     (total, section) => total + section.criteria.length,
@@ -192,7 +217,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
 
       <Stack
         spacing={1.5}
-        sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 1.5 }}
+        sx={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: 1.5 }}
       >
         <PreviewSection
           accent="#7C3AED"
@@ -209,13 +234,14 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
             </Stack>
           ) : <EmptySection />}
         </PreviewSection>
-
+        
         <PreviewSection
           accent="#0EA5E9"
           icon={<PsychologyOutlinedIcon sx={{ fontSize: 17 }} />}
           title="Behaviour"
           subtitle={behaviour?.metadata?.name}
-          onClick={behaviour ? () => onComponentClick?.("behaviour") : undefined}
+          onClick={behaviour && canEditBehaviour ? () => onComponentClick?.("behaviour") : undefined}
+          isBlocked={!canEditBehaviour}
         >
           {behaviour ? (
             <Stack spacing={1}>
@@ -279,7 +305,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
                 Click to edit the Markdown or JSON and open the rendered preview.
               </Typography>
             </Stack>
-          ) : <EmptySection />}
+          ) : <EmptySection label="No rubric configured yet (optional)." />}
         </PreviewSection>
       </Stack>
 
