@@ -1,3 +1,5 @@
+import type { User } from "./User";
+
 export interface RubricDescriptor { level: string; description: string }
 export interface RubricCriterion { name: string; descriptors: RubricDescriptor[] }
 export interface RubricSection {
@@ -15,5 +17,17 @@ export interface RubricDefinition {
   metadata: { name: string };
   spec: RubricSpec;
 }
-export interface Rubric extends RubricDefinition { _id: string; createdAt: string; updatedAt: string }
-export interface RubricSnapshot extends RubricDefinition { _id?: string }
+export interface Rubric extends RubricDefinition {
+  id: string;
+  _id?: string;
+  user?: User;
+  isPublished?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface RubricSnapshot extends RubricDefinition {
+  id?: string;
+  _id?: string;
+  user?: User;
+  isPublished?: boolean;
+}

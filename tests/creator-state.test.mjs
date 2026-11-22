@@ -87,7 +87,7 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
     currentStep: 1, leiaConfigSnapShot: null, selectedLabelIds: [], customizations: {},
     currentDraftIdRef: { current: "draft" }, chatState: { messages: [{ role: "user", text: "Burger stock" }] },
     chatModelName: "fixture-model", chatApiKeyId: "fixture-key", pendingLabelDrafts: [], supervisorConfig: {},
-    leiaNameManuallyEdited: false, leiaPublish: false, behaviourPublish: false, problemPublish: false, personaPublish: false,
+    leiaNameManuallyEdited: false, leiaPublish: false, behaviourPublish: false, problemPublish: false, personaPublish: false, rubricPublish: false,
     chatBusy: false, chatOptionsLoading: false, testingLeia: false,
     Button: ({ children, disabled }) => React.createElement("button", { disabled }, children), PlayArrowIcon: "svg", CircularProgress: "svg",
     pushMessage() {}, setError(message) { context.error = message; },
