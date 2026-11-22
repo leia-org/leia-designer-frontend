@@ -6,7 +6,10 @@ export interface RubricSection {
   levels: string[];
   criteria: RubricCriterion[];
 }
-export interface RubricSpec { sections: RubricSection[] }
+export interface RubricSpec {
+  evaluationPrompt?: string;
+  sections: RubricSection[];
+}
 export interface RubricDefinition {
   apiVersion: "v1";
   metadata: { name: string };

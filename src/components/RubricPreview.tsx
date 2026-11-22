@@ -4,7 +4,18 @@ import type { RubricSpec } from "../models/Rubric";
 const formatWeight = (weight: number) => Number.isInteger(weight) ? String(weight) : weight.toFixed(1);
 
 export function RubricPreview({ spec }: { spec: RubricSpec }) {
-  return <Stack spacing={2.5}>{spec.sections.map((section, sectionIndex) => {
+  return <Stack spacing={2.5}>
+    {spec.evaluationPrompt && (
+      <Box sx={{ p: 2, borderRadius: 1.5, bgcolor: "surfaces.subtle", border: "1px solid", borderColor: "divider" }}>
+        <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", display: "block", mb: 0.5 }}>
+          Evaluation prompt
+        </Typography>
+        <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+          {spec.evaluationPrompt}
+        </Typography>
+      </Box>
+    )}
+    {spec.sections.map((section, sectionIndex) => {
     const descriptors = (criterionIndex: number) => new Map(section.criteria[criterionIndex].descriptors.map((item) => [item.level, item.description]));
     return <Box key={`${section.title}-${sectionIndex}`} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, overflow: "hidden" }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ px: 2, py: 1.25, bgcolor: "surfaces.subtle" }}>

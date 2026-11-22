@@ -94,3 +94,45 @@ export function serializeRubricMarkdown(spec: RubricSpec): string {
     return [`## ${section.title} [${formatWeight(section.weight)}%]`, `| ${header.join(" | ")} |`, `| ${header.map(() => "---").join(" | ")} |`, ...rows.map((row) => `| ${row.join(" | ")} |`)].join("\n");
   }).join("\n\n");
 }
+
+export function formatRubricCriteriaSummary(spec: RubricSpec): string {
+  return spec.sections
+    .map((section) => {
+      const levels = section.levels.join(" -> ");
+      const criteriaLines = section.criteria.map((criterion) => `- ${criterion.name}`);
+      return [
+        `${section.title} (${formatWeight(section.weight)}%)${levels ? ` [Levels: ${levels}]` : ""}`,
+        ...criteriaLines,
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
+export function createDefaultRubricTemplate(name = "evaluation-rubric"): RubricDefinition {
+  return {
+    apiVersion: "v1",
+    metadata: { name },
+    spec: {
+      evaluationPrompt:
+        "Evaluate the participant's work using {{currentStage.outputs.conversation}} and {{currentStage.outputs.submitedSolution}}.",
+      sections: [
+        {
+          title: "Understanding & Application",
+          weight: 100,
+          levels: ["Initial", "Developing", "Proficient", "Exemplary"],
+          criteria: [
+            {
+              name: "Core concepts",
+              descriptors: [
+                { level: "Initial", description: "Limited or inaccurate understanding." },
+                { level: "Developing", description: "Partial understanding with notable gaps." },
+                { level: "Proficient", description: "Clear and accurate application of core concepts." },
+                { level: "Exemplary", description: "Thorough mastery with clear justification of trade-offs." },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+}

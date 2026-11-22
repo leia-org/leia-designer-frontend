@@ -9,11 +9,63 @@ import {
 } from './helper.js';
 
 import type { Problem, Behaviour, Persona } from '../models/Leia.js';
+import type { RubricSnapshot } from '../models/Rubric.js';
 
 interface Leia {
   problem?: Problem;
   persona?: Persona;
   behaviour?: Behaviour;
+  rubric?: RubricSnapshot | null;
+}
+
+const RUBRIC_PLACEHOLDER_PATTERN = /{{\s*rubric\.[\w.]+\s*}}/;
+
+function containsRubricPlaceholder(value: unknown): boolean {
+  if (typeof value === 'string') return RUBRIC_PLACEHOLDER_PATTERN.test(value);
+  if (Array.isArray(value)) return value.some(containsRubricPlaceholder);
+  if (isObject(value)) return Object.values(value as Record<string, unknown>).some(containsRubricPlaceholder);
+  return false;
+}
+
+function escapeRubricCell(value: string): string {
+  return String(value ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+}
+
+function formatRubricWeight(weight: number): string {
+  return Number.isInteger(weight) ? String(weight) : String(Number(weight.toFixed(6)));
+}
+
+function buildRubricPlaceholderView(rubric: RubricSnapshot) {
+  const sections = rubric.spec?.sections || [];
+  const markdown = sections
+    .map((section) => {
+      const header = ['Criterion', ...section.levels].map(escapeRubricCell);
+      const rows = section.criteria.map((criterion) => {
+        const byLevel = new Map(criterion.descriptors.map((d) => [d.level, d.description]));
+        return [criterion.name, ...section.levels.map((level) => byLevel.get(level) ?? '')].map(escapeRubricCell);
+      });
+      return [
+        `## ${section.title} [${formatRubricWeight(section.weight)}%]`,
+        `| ${header.join(' | ')} |`,
+        `| ${header.map(() => '---').join(' | ')} |`,
+        ...rows.map((row) => `| ${row.join(' | ')} |`),
+      ].join('\n');
+    })
+    .join('\n\n');
+  const criteria = sections
+    .map((section) => {
+      const levels = section.levels.join(' -> ');
+      const lines = section.criteria.map((criterion) => `- ${criterion.name}`);
+      return [`${section.title} (${formatRubricWeight(section.weight)}%)${levels ? ` [Levels: ${levels}]` : ''}`, ...lines].join('\n');
+    })
+    .join('\n\n');
+  return {
+    name: rubric.metadata?.name || '',
+    evaluationPrompt: rubric.spec?.evaluationPrompt || '',
+    markdown,
+    criteria,
+    sections: JSON.stringify(sections),
+  };
 }
 
 /**
@@ -140,30 +192,57 @@ export function resolveOverrides(leia: Leia) {
 }
 
 export function resolvePlaceholders(leia: Leia) {
-  const replacementOrder = ['problem', 'persona', 'behaviour'] as const;
+  const hasRubric = Boolean(leia.rubric?.spec);
+  if (
+    !hasRubric &&
+    (containsRubricPlaceholder(leia.behaviour?.spec) || containsRubricPlaceholder(leia.problem?.spec))
+  ) {
+    throw new Error('Behaviour or problem references rubric placeholders, but no rubric is attached to this LEIA.');
+  }
 
-  // Create a view of the leia object with only the spec fields
-  const view = Object.fromEntries(Object.entries(leia).map(([key, value]) => [key, value?.spec]));
+  const view: Record<string, unknown> = {
+    problem: leia.problem?.spec,
+    persona: leia.persona?.spec,
+    behaviour: leia.behaviour?.spec,
+    ...(hasRubric && leia.rubric ? { rubric: buildRubricPlaceholderView(leia.rubric) } : {}),
+  };
 
-  for (const entity of replacementOrder) {
-    const leiaEntitySpec = leia[entity as keyof Leia]?.spec;
-
+  for (const entity of ['problem', 'persona'] as const) {
+    const leiaEntitySpec = leia[entity]?.spec;
     if (!leiaEntitySpec) {
       console.log(`Ignoring: ${entity}. Entity not found.`);
       continue;
     }
+    leia[entity]!.spec = replacePlaceholders(leiaEntitySpec, view);
+    view[entity] = leia[entity]!.spec;
+  }
 
-    // Replace placeholders in the object
-    leia[entity as keyof Leia]!.spec = replacePlaceholders(leiaEntitySpec, view);
+  if (hasRubric && leia.rubric) {
+    if (typeof leia.rubric.spec.evaluationPrompt === 'string' && leia.rubric.spec.evaluationPrompt) {
+      leia.rubric.spec = {
+        ...leia.rubric.spec,
+        evaluationPrompt: replacePlaceholders(leia.rubric.spec.evaluationPrompt, view),
+      };
+    }
+    view.rubric = buildRubricPlaceholderView(leia.rubric);
+  }
 
-    // Update the view
-    view[entity] = leia[entity as keyof Leia]!.spec;
+  if (leia.behaviour?.spec) {
+    leia.behaviour.spec = replacePlaceholders(leia.behaviour.spec, view);
+    view.behaviour = leia.behaviour.spec;
+  } else {
+    console.log('Ignoring: behaviour. Entity not found.');
   }
   return leia;
 }
 
-export function generateLeia(persona: any, behaviour: any, problem: any) {
-  const entities = { persona: structuredClone(persona), behaviour: structuredClone(behaviour), problem: structuredClone(problem) };
+export function generateLeia(persona: any, behaviour: any, problem: any, rubric?: RubricSnapshot | null) {
+  const entities: Leia = {
+    persona: structuredClone(persona),
+    behaviour: structuredClone(behaviour),
+    problem: structuredClone(problem),
+    ...(rubric ? { rubric: structuredClone(rubric) } : {}),
+  };
 
   synchronizeProcessTypes(entities);
   checkConstraints(entities);
@@ -179,6 +258,7 @@ export function generateLeia(persona: any, behaviour: any, problem: any) {
       persona: replacedEntities.persona,
       behaviour: replacedEntities.behaviour,
       problem: replacedEntities.problem,
+      ...(replacedEntities.rubric ? { rubric: replacedEntities.rubric } : {}),
     },
   };
 

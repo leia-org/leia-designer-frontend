@@ -315,9 +315,11 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   },
 ];
 
-const buildChatTools = (canEditBehaviour: boolean): ProblemChatTool[] =>
+const buildChatTools = (canEditBehaviour: boolean, rubricEnabled: boolean): ProblemChatTool[] =>
   AUTHORING_CHAT_TOOLS.filter(
-    (tool) => canEditBehaviour || tool.name !== "apply_behaviour",
+    (tool) =>
+      (canEditBehaviour || tool.name !== "apply_behaviour") &&
+      (rubricEnabled || (tool.name !== "apply_rubric" && tool.name !== "get_current_rubric")),
   ).map((tool) =>
     !canEditBehaviour && tool.name === "apply_problem"
       ? {
@@ -348,6 +350,7 @@ interface ProblemChatPanelProps {
   currentBehaviour: Behaviour | null;
   currentPersona: Persona | null;
   currentRubric: RubricDefinition | null;
+  rubricEnabled?: boolean;
   problems: Problem[];
   behaviours: Behaviour[];
   personas: Persona[];
@@ -373,6 +376,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   currentBehaviour,
   currentPersona,
   currentRubric,
+  rubricEnabled = false,
   problems,
   behaviours,
   personas,
@@ -405,13 +409,13 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const inspectedLibrariesRef = useRef<Set<"problem" | "behaviour" | "persona">>(new Set());
   const chatTools = useMemo(
     () =>
-      buildChatTools(canEditBehaviour).map((tool) => {
+      buildChatTools(canEditBehaviour, rubricEnabled).map((tool) => {
         if (tool.name !== "apply_rubric" || !rubricSchema) return tool;
         const parameters = { ...rubricSchema };
         delete parameters.$id;
         return { ...tool, parameters };
       }),
-    [canEditBehaviour, rubricSchema],
+    [canEditBehaviour, rubricEnabled, rubricSchema],
   );
 
   useEffect(() => {
@@ -445,10 +449,11 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   personasRef.current = personas;
 
   useEffect(() => {
+    if (!rubricEnabled || rubricSchema) return;
     getRubricSchema().then(setRubricSchema).catch(() => setError("Failed to load the rubric schema."));
-  }, []);
+  }, [rubricEnabled, rubricSchema]);
 
-  const ready = Boolean(modelName && apiKeyId && rubricSchema);
+  const ready = Boolean(modelName && apiKeyId && (!rubricEnabled || rubricSchema));
 
   // Changing the model/key invalidates the server-side session.
   useEffect(() => {
@@ -613,6 +618,10 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
           output = { status: "applied" };
         } else if (call.name === "apply_rubric") {
+          if (!rubricEnabled) {
+            output = { error: "rubric is not enabled for this LEIA; the instructor must add a rubric first" };
+            return { callId: call.callId, output };
+          }
           const rubric = args as unknown as RubricDefinition;
           const schemaError = rubricSchema ? validateAgainstRubricSchema(rubric, rubricSchema) : "rubric schema is unavailable";
           const semanticError = schemaError ? null : validateRubricSemantics(rubric);
@@ -778,10 +787,10 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       <Stack ref={transcriptRef} spacing={1.5} sx={{ flex: 1, minHeight: 160, overflowY: "auto", px: 2, py: 1.5 }}>
         {messages.length === 0 ? (
           <Typography variant="caption" color="text.disabled" fontStyle="italic">
-            Attach a PDF of a past exercise or describe what you want. I'll first search the
-            existing problem, behaviour and persona library, reuse the best matches, and create
-            only what is missing — including an evaluation rubric and suggested LEIA title.
-            E.g. "{EXAMPLE_PROMPT}".
+            {rubricEnabled
+              ? "Attach a PDF of a past exercise or describe what you want. I'll first search the existing problem, behaviour and persona library, reuse the best matches, and create only what is missing — including an evaluation rubric and suggested LEIA title."
+              : "Attach a PDF of a past exercise or describe what you want. I'll first search the existing problem, behaviour and persona library, reuse the best matches, and create only what is missing."}
+            {" "}E.g. "{EXAMPLE_PROMPT}".
           </Typography>
         ) : (
           messages.map((msg, i) => {

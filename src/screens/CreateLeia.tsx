@@ -70,7 +70,14 @@ import {
 } from "../lib/leiaDrafts";
 import { generateLeia } from "../lib/leia";
 import { RubricPreview } from "../components/RubricPreview";
-import { parseRubricMarkdown, serializeRubricMarkdown, validateRubricSemantics } from "../lib/rubrics";
+import { HighlightableTextarea } from "../components/HighlightableInput";
+import {
+  createDefaultRubricTemplate,
+  parseRubricMarkdown,
+  serializeRubricMarkdown,
+  validateRubricSemantics,
+} from "../lib/rubrics";
+import { RUBRIC_PLACEHOLDER_ITEMS } from "../lib/rubricPlaceholders";
 import { getRubricSchema, validateAgainstRubricSchema, type JsonSchema } from "../lib/rubricSchema";
 import { normalizeProcess, normalizeProcessFields } from "../lib/process";
 import { toast, ToastContainer } from "react-toastify";
@@ -295,6 +302,7 @@ export const CreateLeia: React.FC = () => {
   const [behaviours, setBehaviours] = useState<Behaviour[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
   const [rubricDraft, setRubricDraft] = useState<RubricSnapshot | null>(null);
+  const [rubricEnabled, setRubricEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [testingLeia, setTestingLeia] = useState(false);
@@ -581,6 +589,7 @@ export const CreateLeia: React.FC = () => {
     setSelectedLabelIds([]);
     setPendingLabelDrafts([]);
     setRubricDraft(null);
+    setRubricEnabled(false);
     setLabelSearchInput("");
     setValidationErrors(null);
     setChatState({ messages: [], input: "" });
@@ -623,6 +632,7 @@ export const CreateLeia: React.FC = () => {
     setSelectedLabelIds(state.selectedLabelIds ?? []);
     setPendingLabelDrafts(state.pendingLabelDrafts ?? []);
     setRubricDraft(state.rubricDraft ?? null);
+    setRubricEnabled(Boolean(state.rubricDraft));
     setChatState({
       messages: Array.isArray(state.chatState?.messages)
         ? state.chatState.messages
@@ -1023,6 +1033,7 @@ export const CreateLeia: React.FC = () => {
       setChatApiKeyId(savedState.chatApiKeyId ?? null);
       setPendingLabelDrafts(savedState.pendingLabelDrafts ?? []);
       setRubricDraft(savedState.rubricDraft ?? null);
+      setRubricEnabled(Boolean(savedState.rubricDraft));
       setSupervisorConfig(savedState.supervisorConfig ?? DEFAULT_SUPERVISOR_CONFIG);
       setLeiaNameManuallyEdited(Boolean(savedState.leiaNameManuallyEdited));
       setLeiaPublish(savedState.leiaPublish ?? true);
@@ -1046,7 +1057,7 @@ export const CreateLeia: React.FC = () => {
     }
     try {
       return {
-        generatedLeia: generateLeia(leiaConfig.persona, leiaConfig.behaviour, leiaConfig.problem) as Leia,
+        generatedLeia: generateLeia(leiaConfig.persona, leiaConfig.behaviour, leiaConfig.problem, rubricDraft) as Leia,
         generationError: null,
       };
     } catch (err: unknown) {
@@ -1055,7 +1066,7 @@ export const CreateLeia: React.FC = () => {
         generationError: err instanceof Error ? err : new Error("Unknown error occurred while generating LEIA"),
       };
     }
-  }, [leiaConfig]);
+  }, [leiaConfig, rubricDraft]);
   const { generatedLeia, generationError } = leiaAssembly;
 
   const loadPersonas = async (
@@ -2151,18 +2162,30 @@ const openGenerateProblemModal = () => {
   );
 
   const applyChatRubric = useCallback((rubric: RubricDefinition) => {
+    setRubricEnabled(true);
     setRubricDraft(rubric);
   }, []);
 
+  const handleAddRubric = useCallback(() => {
+    setRubricEnabled(true);
+  }, []);
+
+  const handleRemoveRubric = useCallback(() => {
+    setRubricEnabled(false);
+    setRubricDraft(null);
+  }, []);
+
   const openRubricEditor = useCallback(() => {
-    if (!rubricDraft) return;
-    setRubricEditorDraft(structuredClone({
-      apiVersion: rubricDraft.apiVersion,
-      metadata: rubricDraft.metadata,
-      spec: rubricDraft.spec,
-    }));
-    setRubricMarkdownText(serializeRubricMarkdown(rubricDraft.spec));
-    setRubricJsonText(JSON.stringify(rubricDraft.spec, null, 2));
+    const baseRubric = rubricDraft
+      ? {
+          apiVersion: rubricDraft.apiVersion,
+          metadata: rubricDraft.metadata,
+          spec: rubricDraft.spec,
+        }
+      : createDefaultRubricTemplate();
+    setRubricEditorDraft(structuredClone(baseRubric));
+    setRubricMarkdownText(serializeRubricMarkdown(baseRubric.spec));
+    setRubricJsonText(JSON.stringify(baseRubric.spec, null, 2));
     setRubricEditorMode("markdown");
     setRubricEditorError(null);
   }, [rubricDraft]);
@@ -2533,6 +2556,7 @@ const openGenerateProblemModal = () => {
               currentBehaviour={leiaConfig.behaviour}
               currentPersona={leiaConfig.persona}
               currentRubric={rubricDraft}
+              rubricEnabled={rubricEnabled}
               problems={problems}
               behaviours={behaviours}
               personas={personas}
@@ -2567,6 +2591,9 @@ const openGenerateProblemModal = () => {
             <LeiaLivePreview
               leia={generatedLeia ?? { spec: leiaConfig }}
               rubric={rubricDraft}
+              rubricEnabled={rubricEnabled}
+              onAddRubric={handleAddRubric}
+              onRemoveRubric={handleRemoveRubric}
               readyToTest={Boolean(generatedLeia) && !chatBusy}
               title={customizations.leia.name}
               onTitleChange={handleLeiaNameChange}
@@ -2660,6 +2687,44 @@ const openGenerateProblemModal = () => {
                       fullWidth
                     />
                     <Box>
+                      <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
+                        Evaluation prompt (optional — supports {"{{}}"} placeholders)
+                      </Typography>
+                      <HighlightableTextarea
+                        value={rubricEditorDraft.spec.evaluationPrompt ?? ""}
+                        placeholder="Explain how to apply this rubric (e.g., use {{currentStage.outputs.conversation}} and {{currentStage.outputs.submitedSolution}})."
+                        rows={3}
+                        autocompleteItems={RUBRIC_PLACEHOLDER_ITEMS}
+                        onValueChange={(nextValue) => {
+                          setRubricEditorError(null);
+                          setRubricEditorDraft((current) => {
+                            if (!current) return current;
+                            const nextSpec = {
+                              ...current.spec,
+                              ...(nextValue ? { evaluationPrompt: nextValue } : {}),
+                            };
+                            if (!nextValue) delete nextSpec.evaluationPrompt;
+                            setRubricJsonText(JSON.stringify(nextSpec, null, 2));
+                            return { ...current, spec: nextSpec };
+                          });
+                        }}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setRubricEditorError(null);
+                          setRubricEditorDraft((current) => {
+                            if (!current) return current;
+                            const nextSpec = {
+                              ...current.spec,
+                              ...(nextValue ? { evaluationPrompt: nextValue } : {}),
+                            };
+                            if (!nextValue) delete nextSpec.evaluationPrompt;
+                            setRubricJsonText(JSON.stringify(nextSpec, null, 2));
+                            return { ...current, spec: nextSpec };
+                          });
+                        }}
+                      />
+                    </Box>
+                    <Box>
                       <ToggleButtonGroup
                         size="small"
                         exclusive
@@ -2678,7 +2743,7 @@ const openGenerateProblemModal = () => {
                       </ToggleButtonGroup>
                       <Box sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
                         <Editor
-                          height="480px"
+                          height="380px"
                           language={rubricEditorMode}
                           theme="vs-light"
                           value={rubricEditorMode === "markdown" ? rubricMarkdownText : rubricJsonText}
@@ -2691,8 +2756,17 @@ const openGenerateProblemModal = () => {
                                 setRubricEditorError(parsed.error);
                                 return;
                               }
-                              setRubricEditorDraft((current) => current ? ({ ...current, spec: parsed.spec! }) : current);
-                              setRubricJsonText(JSON.stringify(parsed.spec, null, 2));
+                              setRubricEditorDraft((current) => {
+                                if (!current) return current;
+                                const nextSpec = {
+                                  ...parsed.spec!,
+                                  ...(current.spec.evaluationPrompt
+                                    ? { evaluationPrompt: current.spec.evaluationPrompt }
+                                    : {}),
+                                };
+                                setRubricJsonText(JSON.stringify(nextSpec, null, 2));
+                                return { ...current, spec: nextSpec };
+                              });
                               setRubricEditorError(null);
                               return;
                             }
