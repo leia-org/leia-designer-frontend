@@ -10,13 +10,22 @@ export function getStageOutputSource(stage: ActivityStage, output: StageOutput):
 }
 
 export function leiaUsesPreviousStageOutputs(
-  leia: { spec?: { behaviour?: { spec?: { description?: string } } } } | string | null | undefined,
+  leia: {
+    spec?: {
+      behaviour?: { spec?: { description?: string } };
+      rubric?: { spec?: { evaluationPrompt?: string } };
+    };
+  } | string | null | undefined,
 ): boolean {
   if (!leia || typeof leia !== "object") return false;
-  const description = leia.spec?.behaviour?.spec?.description ?? "";
-  return (
-    STAGE_OUTPUT_PATTERNS.conversation.test(description) ||
-    STAGE_OUTPUT_PATTERNS.submitedSolution.test(description)
+  const templates = [
+    leia.spec?.behaviour?.spec?.description ?? "",
+    leia.spec?.rubric?.spec?.evaluationPrompt ?? "",
+  ];
+  return templates.some(
+    (text) =>
+      STAGE_OUTPUT_PATTERNS.conversation.test(text) ||
+      STAGE_OUTPUT_PATTERNS.submitedSolution.test(text),
   );
 }
 
@@ -26,7 +35,11 @@ export function stageUsesOutput(experiment: Experiment, stageId: string, output:
     (entry) =>
       entry.stageId === stageId &&
       typeof entry.leia === "object" &&
-      pattern.test(entry.leia?.spec?.behaviour?.spec?.description ?? ""),
+      (pattern.test(entry.leia?.spec?.behaviour?.spec?.description ?? "") ||
+        pattern.test(
+          (entry.leia as { spec?: { rubric?: { spec?: { evaluationPrompt?: string } } } })
+            ?.spec?.rubric?.spec?.evaluationPrompt ?? "",
+        )),
   );
 }
 

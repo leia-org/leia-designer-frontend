@@ -9,6 +9,7 @@ export interface ConversationDynamics {
 }
 
 import type { User } from "./User";
+import type { RubricSnapshot } from "./Rubric";
 
 export interface Label {
   _id: string,
@@ -91,7 +92,7 @@ export interface ProblemSpec {
   personaBackground: string,
   details: string,
   solution: string,
-  initialSolution: string,
+  initialSolution?: string,
   solutionFormat: string,
   process: [
     string
@@ -131,6 +132,8 @@ export interface Leia {
     avatar?: string,
     infographic?: string,
     infographicSolution?: string,
+    rubricId?: string,
+    rubric?: RubricSnapshot,
     persona: {
       id: string,
       apiVersion: string,
@@ -166,7 +169,7 @@ export interface Leia {
         personaBackground: string,
         details: string,
         solution: string,
-        initialSolution: string,
+        initialSolution?: string,
         solutionFormat: string,
         evaluationPrompt?: string,
         process: [

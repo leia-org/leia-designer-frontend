@@ -44,6 +44,7 @@ import {
 } from "../lib/avatar";
 import InfographicViewer from "./InfographicViewer";
 import { Avatar } from "./shared/Avatar";
+import { RubricPreview } from "./RubricPreview";
 
 const SyntaxHighlighter = lazy(() =>
   import("react-syntax-highlighter").then((module) => ({ default: module.Prism })),
@@ -95,7 +96,7 @@ interface LeiaViewModalProps {
   onClose: () => void;
 }
 
-type ViewMode = "problem" | "persona" | "behaviour" | "infographics";
+type ViewMode = "problem" | "persona" | "behaviour" | "rubric" | "infographics";
 
 function getUserId(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -174,6 +175,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
   const problem = problemResource?.spec;
   const persona = personaResource?.spec;
   const behaviour = displayLeia.spec?.behaviour?.spec;
+  const rubric = displayLeia.spec?.rubric;
   const isAdmin = user?.role === "admin";
   const canViewBehaviour = isAdmin || user?.role === "advanced";
   const canRegenerateLeia = isAdmin || getUserId(displayLeia.user) === user?.id;
@@ -389,6 +391,7 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
         <Tab value="problem" icon={<ExtensionOutlinedIcon fontSize="small" />} iconPosition="start" label="Problem" />
         <Tab value="persona" icon={<PersonOutlineIcon fontSize="small" />} iconPosition="start" label="Persona" />
         {canViewBehaviour && <Tab value="behaviour" icon={<PsychologyOutlinedIcon fontSize="small" />} iconPosition="start" label="Behaviour" />}
+        {rubric && <Tab value="rubric" icon={<FactCheckOutlinedIcon fontSize="small" />} iconPosition="start" label="Rubric" />}
         <Tab value="infographics" icon={<InsertChartOutlinedIcon fontSize="small" />} iconPosition="start" label="Infographics" />
       </Tabs>
       <DialogContent sx={{ py: 3, display: "flex", flexDirection: "column" }}>
@@ -499,6 +502,13 @@ export const LeiaViewModal: React.FC<LeiaViewModalProps> = memo(({ leia, isOpen,
               </ContentSection>
             )}
             {behaviour?.tooltip && <ContentSection title="Initial Tooltip"><Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{behaviour.tooltip}</Typography></ContentSection>}
+          </Stack>
+        )}
+
+        {viewMode === "rubric" && rubric && (
+          <Stack spacing={2.5}>
+            <Typography variant="subtitle1" fontWeight={700}>{rubric.metadata.name}</Typography>
+            <RubricPreview spec={rubric.spec} />
           </Stack>
         )}
 

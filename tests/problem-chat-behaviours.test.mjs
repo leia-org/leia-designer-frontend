@@ -23,6 +23,15 @@ function declaration(source, name) {
 const compile = source => ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
+const loadProcessHelpers = () => {
+  const context = { exports: {}, require: () => ({}), console };
+  vm.createContext(context);
+  return context;
+};
+const processSource = await readFile(new URL("../src/lib/process.ts", import.meta.url), "utf8");
+const processContext = loadProcessHelpers();
+vm.runInContext(compile(processSource), processContext);
+const processHelpers = processContext.exports;
 const callbackSource = [
   ...["copyProcess", "haveSameProcess", "applyChatProblem", "applyChatBehaviour", "handleUseExistingBehaviour"].map(name => declaration(createSource, name)),
   declaration(panelSource, "stripAvatar"),
@@ -48,6 +57,7 @@ function editor({ canEdit = true, saved = [] } = {}) {
   const results = [];
   let replies = [];
   const context = {
+    ...processHelpers,
     behaviourPage, behaviourCandidates, missingBehaviourReferences, templateReferences,
     useCallback: fn => fn, canEditBehaviour: canEdit,
     currentUser: { id: "instructor" }, behaviours: saved, chatTools: [], attachments: [],

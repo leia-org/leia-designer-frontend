@@ -14,11 +14,22 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { BEHAVIOUR_PLACEHOLDER_SECTIONS } from "../lib/behaviourPlaceholders";
+import {
+  BEHAVIOUR_PLACEHOLDER_SECTIONS,
+  type PlaceholderSection,
+} from "../lib/behaviourPlaceholders";
 
-export const BehaviourPlaceholdersInfoButton: React.FC = () => {
+interface BehaviourPlaceholdersInfoButtonProps {
+  sections?: readonly PlaceholderSection[];
+  title?: string;
+}
+
+export const BehaviourPlaceholdersInfoButton: React.FC<BehaviourPlaceholdersInfoButtonProps> = ({
+  sections = BEHAVIOUR_PLACEHOLDER_SECTIONS,
+  title = "Available {{}} placeholders",
+}) => {
   const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
-  const [activeSection, setActiveSection] = useState<"leia" | "stages">("leia");
+  const [activeSection, setActiveSection] = useState<"leia" | "stages">(sections[0]?.id ?? "leia");
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
   const open = Boolean(anchorEl);
@@ -43,12 +54,12 @@ export const BehaviourPlaceholdersInfoButton: React.FC = () => {
   };
 
   const currentSection =
-    BEHAVIOUR_PLACEHOLDER_SECTIONS.find((section) => section.id === activeSection) ??
-    BEHAVIOUR_PLACEHOLDER_SECTIONS[0];
+    sections.find((section) => section.id === activeSection) ??
+    sections[0];
 
   return (
     <>
-      <Tooltip title="Available {{}} placeholders">
+      <Tooltip title={title}>
         <IconButton
           size="small"
           aria-label="Available placeholders cheat sheet"
@@ -73,19 +84,19 @@ export const BehaviourPlaceholdersInfoButton: React.FC = () => {
       >
         <Box sx={{ px: 2, pt: 2, pb: 1 }}>
           <Typography variant="subtitle2" fontWeight={700}>
-            {"Available {{}} placeholders"}
+            {title}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Click any placeholder to copy it to the clipboard.
           </Typography>
           <Tabs
-            value={activeSection}
+            value={currentSection.id}
             onChange={(_, value: "leia" | "stages") => setActiveSection(value)}
             aria-label="Placeholder categories"
             variant="fullWidth"
             sx={{ mt: 1, minHeight: 36, borderBottom: 1, borderColor: "divider" }}
           >
-            {BEHAVIOUR_PLACEHOLDER_SECTIONS.map((section) => (
+            {sections.map((section) => (
               <Tab
                 key={section.id}
                 value={section.id}

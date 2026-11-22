@@ -53,6 +53,16 @@ export const BEHAVIOUR_PLACEHOLDER_SECTIONS: readonly PlaceholderSection[] = [
           { token: "{{behaviour.tooltip}}", description: "Behaviour tooltip summary" },
         ],
       },
+      {
+        title: "Rubric",
+        items: [
+          { token: "{{rubric.name}}", description: "Rubric name" },
+          { token: "{{rubric.criteria}}", description: "Compact summary of rubric sections, weights, levels, and criteria" },
+          { token: "{{rubric.markdown}}", description: "Complete rubric rendered as Markdown tables" },
+          { token: "{{rubric.evaluationPrompt}}", description: "Rubric evaluation instructions" },
+          { token: "{{rubric.sections}}", description: "Raw JSON of the rubric sections" },
+        ],
+      },
     ],
   },
   {
