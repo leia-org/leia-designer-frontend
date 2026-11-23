@@ -9,7 +9,6 @@ import { z } from "zod";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
-import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
 import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
 import {
   getDependentStagesForConversation,
@@ -1353,7 +1352,9 @@ export const MyActivities: React.FC = () => {
               {experiments?.map((experiment, experimentIndex) => {
                 const isOwner = (typeof experiment.user === "string" ? experiment.user : experiment.user.id) === user?.id;
                 const expanded = expandedExperiments.has(experiment.id);
-                const FlowEditor = experiment.stages ? ActivityStagesEditor : ActivityOrchestrationEditor;
+                const hasMultiStage = experiment.stages.some(
+                  (stage) => stage.orchestration?.mode === "multi",
+                );
 
                 return (
                   <Paper
@@ -1394,7 +1395,7 @@ export const MyActivities: React.FC = () => {
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-                        {experiment.orchestration?.mode === "multi" && (
+                        {hasMultiStage && (
                           <Chip label="MultiLEIA" color="primary" size="small" variant="outlined" />
                         )}
                         {experiment.isPublished && <Chip label="Published" color="success" size="small" />}
@@ -1434,7 +1435,7 @@ export const MyActivities: React.FC = () => {
 
                     <Collapse in={expanded}>
                       <Box sx={{ borderTop: 1, borderColor: "divider" }}>
-                        <FlowEditor
+                        <ActivityStagesEditor
                           experiment={experiment}
                           onSaved={(updatedExperiment) =>
                             setExperiments((previous) =>
@@ -1451,11 +1452,9 @@ export const MyActivities: React.FC = () => {
                           <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
                             {experiment.leias.map((leiaConfig, leiaIndex) => {
                               const leia = typeof leiaConfig.leia === "object" ? leiaConfig.leia : null;
-                              const stageIndex = experiment.stages?.findIndex(({ id }) => id === leiaConfig.stageId) ?? -1;
+                              const stageIndex = experiment.stages.findIndex(({ id }) => id === leiaConfig.stageId);
                               const stageIsMulti =
-                                (experiment.stages
-                                  ? experiment.stages[stageIndex]?.orchestration
-                                  : experiment.orchestration)?.mode === "multi";
+                                experiment.stages[stageIndex]?.orchestration?.mode === "multi";
                               const conversationDependents = getDependentStagesForConversation(
                                 experiment,
                                 leiaConfig.stageId,
