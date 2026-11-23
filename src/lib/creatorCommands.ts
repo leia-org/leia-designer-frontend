@@ -1,8 +1,12 @@
 import { z } from "zod";
 import type { Behaviour, Persona, Problem } from "../models/Leia";
+import type { RubricDefinition, RubricSnapshot } from "../models/Rubric";
 import type { User } from "../models/User";
 import { missingBehaviourReferences, templateReferences } from "./chatBehaviours.mjs";
 import { generateLeia } from "./leia";
+import { normalizeProcess, normalizeProcessFields } from "./process";
+import { validateAgainstRubricSchema, type JsonSchema } from "./rubricSchema";
+import { validateRubricSemantics } from "./rubrics";
 
 export type LeiaConfig = { persona: Persona | null; problem: Problem | null; behaviour: Behaviour | null };
 export type Component = keyof LeiaConfig;
@@ -14,6 +18,8 @@ export interface CreatorDraft {
   config: LeiaConfig;
   customizations: LeiaCustomizations;
   nameManuallyEdited: boolean;
+  rubricDraft: RubricSnapshot | null;
+  rubricEnabled: boolean;
 }
 
 const components = ["problem", "behaviour", "persona"] as const;
@@ -43,10 +49,11 @@ const commandTargets = {
   apply_problem: "problem", edit_problem: "problem", use_problem: "problem",
   apply_behaviour: "behaviour", edit_behaviour: "behaviour", use_behaviour: "behaviour",
   apply_persona: "persona", edit_persona: "persona", use_persona: "persona",
+  apply_rubric: "rubric",
   set_leia_name: "leia",
 } as const;
 type CommandName = keyof typeof commandTargets;
-export type DraftTarget = Component | "leia";
+export type DraftTarget = Component | "rubric" | "leia";
 
 export function commandTarget(name: string): DraftTarget | undefined {
   return Object.hasOwn(commandTargets, name) ? commandTargets[name as CommandName] : undefined;
@@ -54,17 +61,13 @@ export function commandTarget(name: string): DraftTarget | undefined {
 
 type Resource = NonNullable<LeiaConfig[Component]>;
 export type CreatorLibrary = { problem: Problem[]; behaviour: Behaviour[]; persona: Persona[] };
-export type CommandContext = { user: User; canEditBehaviour: boolean; library: CreatorLibrary };
+export type CommandContext = { user: User; canEditBehaviour: boolean; library: CreatorLibrary; rubricSchema?: JsonSchema | null };
 type CommandAction = "Create" | "Edit" | "Replace" | "Reuse" | "Set title";
 type Result = { draft: CreatorDraft; action: CommandAction } | { error: string; missingReferences?: string[] };
 
-export function copyProcess(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === "string") : [];
-}
-
 function sameProcess(left: unknown, right: unknown): boolean {
-  const actual = new Set(copyProcess(left));
-  const expected = new Set(copyProcess(right));
+  const actual = new Set(normalizeProcess(left));
+  const expected = new Set(normalizeProcess(right));
   return actual.size === expected.size && [...actual].every(tag => expected.has(tag));
 }
 
@@ -101,10 +104,10 @@ function referencesIn(value: unknown): string[] {
 
 function normalizeSpec(component: Component, spec: Record<string, unknown>, draft: CreatorDraft) {
   if (component === "problem") {
-    return { ...spec, process: copyProcess(spec.process), extends: spec.extends ?? {}, overrides: spec.overrides ?? {}, constrainedTo: spec.constrainedTo ?? {} };
+    return normalizeProcessFields({ ...spec, process: spec.process ?? [], extends: spec.extends ?? {}, overrides: spec.overrides ?? {}, constrainedTo: spec.constrainedTo ?? {} });
   }
   if (component === "behaviour") {
-    return { ...spec, process: copyProcess(spec.process ?? draft.config.problem?.spec.process) };
+    return { ...spec, process: normalizeProcess(spec.process ?? draft.config.problem?.spec.process) };
   }
   return spec;
 }
@@ -122,6 +125,19 @@ export function stageCreatorCommand(
     const parsed = z.strictObject({ name: nonempty }).safeParse(args);
     if (!parsed.success) return { error: "Provide a title." };
     return { draft: setTitle(draft, parsed.data.name), action: "Set title" };
+  }
+  if (component === "rubric") {
+    if (!draft.rubricEnabled) return { error: "The instructor must enable a rubric before proposing one." };
+    if (!context.rubricSchema) return { error: "Rubric schema is not available." };
+    const rubric = args as unknown as RubricDefinition;
+    const error = validateAgainstRubricSchema(rubric, context.rubricSchema) ?? validateRubricSemantics(rubric);
+    if (error) return { error };
+    const previous = draft.rubricDraft;
+    const action = previous ? "Replace" : "Create";
+    if (previous?.metadata.name === rubric.metadata.name && JSON.stringify(previous.spec) === JSON.stringify(rubric.spec)) {
+      return { draft, action };
+    }
+    return { draft: { ...draft, rubricDraft: rubric }, action };
   }
 
   const selected = draft.config[component];
@@ -207,7 +223,7 @@ export function validateCreatorChanges(base: CreatorDraft, next: CreatorDraft, c
   }
   if ((behaviourChanged || problemChanged || persona !== base.config.persona) && behaviour && persona && problem) {
     try {
-      generateLeia(persona, behaviour, problem);
+      generateLeia(persona, behaviour, problem, next.rubricDraft);
     } catch (error) {
       return error instanceof Error ? error.message : "These components cannot be combined.";
     }
@@ -231,6 +247,12 @@ export interface CreatorProposal {
   changes: ReviewedChange[];
 }
 
+function reviewFields(before: Record<string, unknown>, after: Record<string, unknown>): FieldChange[] {
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter(field => JSON.stringify(before[field]) !== JSON.stringify(after[field]))
+    .map(field => ({ field, before: before[field], after: after[field] }));
+}
+
 export function reviewCreatorChanges(base: CreatorDraft, staged: CreatorDraft, actions: Map<DraftTarget, CommandAction>): CreatorProposal {
   const next = staged !== base && !staged.nameManuallyEdited && !staged.customizations.leia.name.trim()
     ? setTitle(staged, suggestedTitle(staged.config)) : staged;
@@ -245,11 +267,6 @@ export function reviewCreatorChanges(base: CreatorDraft, staged: CreatorDraft, a
     const action = actions.get(target);
     if (!resource || previous === resource || !action) continue;
     const netAction = !previous && action !== "Reuse" ? "Create" : action;
-    const beforeSpec: Record<string, unknown> = { ...previous?.spec };
-    const afterSpec: Record<string, unknown> = { ...resource.spec };
-    const fields = [...new Set([...Object.keys(beforeSpec), ...Object.keys(afterSpec)])]
-      .filter(field => JSON.stringify(beforeSpec[field]) !== JSON.stringify(afterSpec[field]))
-      .map(field => ({ field, before: beforeSpec[field], after: afterSpec[field] }));
     changes.push({
       target, action: netAction,
       before: previous ? base.customizations[target]?.name || previous.metadata.name : "",
@@ -258,9 +275,18 @@ export function reviewCreatorChanges(base: CreatorDraft, staged: CreatorDraft, a
       reason: target === "behaviour" && requiresCompatibleBehaviour
         ? "The proposed Problem uses a different process. It needs a compatible Behaviour."
         : undefined,
-      fields,
+      fields: reviewFields({ ...previous?.spec }, { ...resource.spec }),
     });
   }
+  const rubric = next.rubricDraft;
+  const previousRubric = base.rubricDraft;
+  if (rubric && rubric !== previousRubric) changes.push({
+    target: "rubric",
+    action: previousRubric ? "Replace" : "Create",
+    before: previousRubric?.metadata.name ?? "",
+    after: rubric.metadata.name,
+    fields: reviewFields({ ...previousRubric?.spec }, { ...rubric.spec }),
+  });
   if (base.customizations.leia.name !== next.customizations.leia.name) changes.push({
     target: "leia", action: "Set title", before: base.customizations.leia.name, after: next.customizations.leia.name, fields: [],
   });

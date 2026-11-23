@@ -30,10 +30,16 @@ export function loadModule(source, resolve = require) {
 }
 const helper = loadModule(await readSource("src/lib/helper.ts"));
 const leia = loadModule(await readSource("src/lib/leia.ts"), () => helper);
+const process = loadModule(await readSource("src/lib/process.ts"));
+const rubrics = loadModule(await readSource("src/lib/rubrics.ts"));
+const rubricSchema = loadModule(await readSource("src/lib/rubricSchema.ts"), name => name === "./axios" ? {} : require(name));
 export const { generateLeia } = leia;
 const commands = loadModule(await readSource("src/lib/creatorCommands.ts"), name => {
   if (name === "./chatBehaviours.mjs") return chatBehaviours;
   if (name === "./leia") return leia;
+  if (name === "./process") return process;
+  if (name === "./rubrics") return rubrics;
+  if (name === "./rubricSchema") return rubricSchema;
   return require(name);
 });
 
@@ -42,13 +48,13 @@ export function chatFixture({ config, canEdit, problems = [], behaviours = [], p
   let replies = [];
   let proposal = null;
   const editor = {
-    draft: { config, customizations: { leia: { name: "" } }, nameManuallyEdited: false },
+    draft: { config, customizations: { leia: { name: "" } }, nameManuallyEdited: false, rubricDraft: null, rubricEnabled: false },
     user: { id: "instructor" },
     canEditBehaviour: canEdit,
     library: { problem: problems, behaviour: [...behaviours], persona: personas },
   };
   const context = {
-    ...commands, ...chatBehaviours, chatTools: [], attachments: [], latest: { current: editor },
+    ...commands, ...chatBehaviours, chatTools: [], attachments: [], latest: { current: editor }, rubricSchema: null,
     setProposal: value => { proposal = value; },
     sendProblemChatMessage: async (_chatId, body) => {
       if (body.toolResults) results.push(...body.toolResults);

@@ -39,6 +39,7 @@ import { PageShell } from "../components/shared/PageShell";
 import { LeiaTryDropdown } from "../components/LeiaTryDropdown";
 import { LeiaListSkeleton } from "../components/LeiaListSkeleton";
 import type { Leia, Persona, Problem, Behaviour, Label } from "../models/Leia";
+import type { Rubric } from "../models/Rubric";
 import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { DeleteLeiaModal } from "../components/DeleteLeiaModal";
@@ -186,7 +187,6 @@ export const LeiaSearch: React.FC = () => {
           setError(backendMessage);
           return;
         }
-
         setError("Could not load LEIAs");
       } finally {
         if (active) setLoading(false);
@@ -259,11 +259,16 @@ export const LeiaSearch: React.FC = () => {
 
   const handlePersonalize = useCallback(async (leia: Leia, fromTour: boolean) => {
     try {
-      const [personaResp, problemResp, behaviourResp] = await Promise.all([
+      const rubricId = leia.spec.rubricId || leia.spec.rubric?.id || leia.spec.rubric?._id;
+      const [personaResp, problemResp, behaviourResp, rubricResp] = await Promise.all([
         api.get<Persona>(`/api/v1/personas/${leia.spec.persona.id}`),
         api.get<Problem>(`/api/v1/problems/${leia.spec.problem.id}`),
         api.get<Behaviour>(`/api/v1/behaviours/${leia.spec.behaviour.id}`),
+        rubricId
+          ? api.get<Rubric>(`/api/v1/rubrics/${rubricId}`).catch(() => null)
+          : Promise.resolve(null),
       ]);
+      const presetRubric = rubricResp?.data ?? leia.spec.rubric ?? null;
       navigate("/create", {
         state: {
           startTourFromSearch : fromTour,
@@ -271,6 +276,7 @@ export const LeiaSearch: React.FC = () => {
             persona: personaResp.data,
             problem: problemResp.data,
             behaviour: behaviourResp.data,
+            rubric: presetRubric,
           },
         },
       });
@@ -1091,7 +1097,11 @@ export const LeiaSearch: React.FC = () => {
         <Box
           sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 2, md: 4 }, py: 3 }}
         >
-          <Box id="search-results" sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}>
+          <Box
+            id="search-results"
+            aria-busy={loading}
+            sx={{ width: "100%", maxWidth: 1280, mx: "auto" }}
+          >
             {error && <Alert severity="error" action={
               <Button color="inherit" size="small" onClick={handleRetry}>
                 {error === "Unauthorized: Login or API key required"

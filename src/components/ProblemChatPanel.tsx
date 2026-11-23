@@ -40,6 +40,7 @@ import {
   type ProblemChatToolResult,
   type UploadedFile,
 } from "../lib/problemChat";
+import { getRubricSchema, type JsonSchema } from "../lib/rubricSchema";
 
 // Widget catalog context for the model: available widgetTypes + their tool
 // functions, so it can decide whether the activity needs a widget (e.g. a
@@ -132,7 +133,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
         solution: { type: "string", description: "The expected solution, in the chosen solutionFormat." },
         initialSolution: {
           type: "string",
-          description: "Optional starting solution shown to the student (empty string if none).",
+          description: "Optional starting solution shown to the student. Use an empty string when none is needed; it will not be persisted.",
         },
         solutionFormat: {
           type: "string",
@@ -141,12 +142,12 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
         },
         evaluationPrompt: {
           type: "string",
-          description: "Optional instructions for grading the student's solution (empty string if none).",
+          description: "Optional instructions for grading the student's solution. Use an empty string when none is needed; it will not be persisted.",
         },
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Activity process tags. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
+          description: "Activity process tags. 'other' is exclusive: never combine it with 'requirements-elicitation' or 'game'. This is the source of truth for the LEIA, so use the exact same list when applying its behaviour.",
         },
         extends: componentScoped(
           "ADD to the paired persona/behaviour/problem spec (e.g. add persona personality traits). Empty object {} unless asked to compose.",
@@ -242,7 +243,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
         process: {
           type: "array",
           items: { type: "string", enum: ["requirements-elicitation", "game", "other"] },
-          description: "Must exactly match the current Problem process tags.",
+          description: "Must exactly match the current Problem process tags. 'other' must be the only value when used.",
         },
         tooltip: { type: "string", description: "Short helper tooltip describing this behaviour." },
       },
@@ -274,6 +275,19 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
       },
       required: ["firstName", "description"],
     },
+  },
+  {
+    name: "get_current_rubric",
+    description:
+      "Returns the rubric currently prepared for the LEIA. Call it before revising an existing rubric.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "apply_rubric",
+    description:
+      "Proposes a COMPLETE structured evaluation rubric for the exact current Problem. Levels must be ordered from worst to best, section weights must total 100, and every criterion must contain exactly one descriptor for every section level.",
+    parameters: { type: "object", properties: {} },
+    strict: true,
   },
   {
     name: "list_personas",
@@ -310,7 +324,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   },
 ];
 
-const turnPriority = { problem: 1, behaviour: 2, persona: 3, leia: 4 };
+const turnPriority = { problem: 1, behaviour: 2, persona: 3, rubric: 4, leia: 5 };
 const toolPriority = (tool: string) => {
   const target = commandTarget(tool);
   return target ? turnPriority[target] : 0;
@@ -322,11 +336,14 @@ const editDescriptions = {
   persona: "Edit specific fields of the selected Persona. Keep all fields outside the request.",
 };
 
-const buildChatTools = (canEditBehaviour: boolean): ProblemChatTool[] => {
-  const tools = AUTHORING_CHAT_TOOLS.filter(tool => canEditBehaviour || tool.name !== "apply_behaviour");
+const buildChatTools = (canEditBehaviour: boolean, rubricEnabled: boolean): ProblemChatTool[] => {
+  const tools = AUTHORING_CHAT_TOOLS.filter(tool =>
+    (canEditBehaviour || tool.name !== "apply_behaviour") &&
+    (rubricEnabled || (tool.name !== "apply_rubric" && tool.name !== "get_current_rubric")),
+  );
   return tools.flatMap(tool => {
     const component = commandTarget(tool.name);
-    if (!component || component === "leia" || !tool.name.startsWith("apply_")) return [tool];
+    if (!component || component === "leia" || component === "rubric" || !tool.name.startsWith("apply_")) return [tool];
     const fields = { ...tool.parameters.properties as Record<string, unknown> };
     delete fields.name;
     return [tool, {
@@ -397,15 +414,23 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rubricSchema, setRubricSchema] = useState<JsonSchema | null>(null);
   const [proposal, setProposal] = useState<CreatorProposal | null>(null);
   const [revising, setRevising] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chatIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const { rubricEnabled } = draft;
   const chatTools = useMemo(
-    () => buildChatTools(canEditBehaviour),
-    [canEditBehaviour],
+    () =>
+      buildChatTools(canEditBehaviour, rubricEnabled).map((tool) => {
+        if (tool.name !== "apply_rubric" || !rubricSchema) return tool;
+        const parameters = { ...rubricSchema };
+        delete parameters.$id;
+        return { ...tool, parameters };
+      }),
+    [canEditBehaviour, rubricEnabled, rubricSchema],
   );
 
   useEffect(() => {
@@ -427,7 +452,12 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   latest.current = { draft, user, canEditBehaviour, library };
   const stale = proposal !== null && proposal.base !== draft;
 
-  const ready = Boolean(modelName && apiKeyId);
+  useEffect(() => {
+    if (!rubricEnabled || rubricSchema) return;
+    getRubricSchema().then(setRubricSchema).catch(() => setError("Failed to load the rubric schema."));
+  }, [rubricEnabled, rubricSchema]);
+
+  const ready = Boolean(modelName && apiKeyId && (!rubricEnabled || rubricSchema));
 
   // Changing the model/key invalidates the server-side session.
   useEffect(() => {
@@ -439,8 +469,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     if (transcript) transcript.scrollTop = transcript.scrollHeight;
   }, [messages, sending, proposal]);
 
-  const pushMessage = (role: ChatRole, text: string) =>
-    setMessages((prev) => [...prev, { role, text }]);
+  const pushMessage = useCallback((role: ChatRole, text: string) =>
+    setMessages((prev) => [...prev, { role, text }]), []);
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (chatIdRef.current) return chatIdRef.current;
@@ -474,7 +504,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const runTurn = async (chatId: string, message: string, base: CreatorDraft): Promise<string> => {
     const { user, canEditBehaviour, library } = latest.current;
     if (!user) throw new Error("Sign in to propose draft changes.");
-    const context = { user, canEditBehaviour, library };
+    const context = { user, canEditBehaviour, library, rubricSchema };
     const inspected = new Set<DraftTarget>();
     const actions = new Map<DraftTarget, ReviewedChange["action"]>();
     const errors = new Map<DraftTarget, string>();
@@ -504,7 +534,7 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
         const target = commandTarget(call.name);
         let output: unknown;
         if (target) {
-          const result = call.name.startsWith("apply_") && !inspectedBeforeRound.has(target)
+          const result = target !== "rubric" && call.name.startsWith("apply_") && !inspectedBeforeRound.has(target)
             ? { error: `Inspect list_${target}s first, then propose a new ${target}.` }
             : stageCreatorCommand(staged, call.name, args, context);
           if ("error" in result) {
@@ -514,9 +544,12 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             errors.delete(target);
             if (result.draft !== staged && (result.action !== "Edit" || !actions.has(target))) actions.set(target, result.action);
             staged = result.draft;
+            const name = target === "leia" ? staged.customizations.leia.name
+              : target === "rubric" ? staged.rubricDraft?.metadata.name
+              : staged.config[target]?.metadata.name;
             output = {
               status: "proposed",
-              name: target === "leia" ? staged.customizations.leia.name : staged.config[target]?.metadata.name,
+              name,
               ...(processConflict(staged) ? { warning: "The proposed Problem and Behaviour have different processes. Propose a compatible selection before finishing." } : {}),
             };
           }
@@ -526,6 +559,8 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
           output = staged.config.behaviour?.spec ?? null;
         } else if (call.name === "get_current_persona") {
           output = staged.config.persona?.spec ?? null;
+        } else if (call.name === "get_current_rubric" && staged.rubricEnabled) {
+          output = staged.rubricDraft;
         } else if (call.name === "list_behaviours") {
           inspected.add("behaviour");
           output = behaviourPage(library.behaviour, typeof args.offset === "number" ? args.offset : 0);
@@ -627,9 +662,10 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
       <Stack ref={transcriptRef} spacing={1.5} sx={{ flex: 1, minHeight: 160, overflowY: "auto", px: 2, py: 1.5 }}>
         {messages.length === 0 ? (
           <Typography variant="caption" color="text.disabled" fontStyle="italic">
-            Attach a PDF of a past exercise or describe what you want. I'll first search the
-            existing problem, behaviour and persona library, reuse the best matches, and create only what is missing.
-            E.g. "{EXAMPLE_PROMPT}".
+            {rubricEnabled
+              ? "Attach a PDF of a past exercise or describe what you want. I'll first search the existing problem, behaviour and persona library, reuse the best matches, and create only what is missing — including an evaluation rubric and suggested LEIA title."
+              : "Attach a PDF of a past exercise or describe what you want. I'll first search the existing problem, behaviour and persona library, reuse the best matches, and create only what is missing."}
+            {" "}E.g. "{EXAMPLE_PROMPT}".
           </Typography>
         ) : (
           messages.map((msg, i) => {

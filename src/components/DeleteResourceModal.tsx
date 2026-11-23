@@ -17,15 +17,19 @@ import {
   Typography,
 } from "@mui/material";
 import type { Persona, Problem, Behaviour } from "../models/Leia";
+import type { Rubric } from "../models/Rubric";
+
+type DeletableResource = Persona | Problem | Behaviour | Rubric;
+type DeletableResourceType = "persona" | "problem" | "behaviour" | "rubric";
 
 interface DeleteResourceModalProps {
   isOpen: boolean;
-  resource: Persona | Problem | Behaviour | null;
-  resourceType: "persona" | "problem" | "behaviour" | null;
+  resource: DeletableResource | null;
+  resourceType: DeletableResourceType | null;
   onClose: () => void;
   onConfirm: (
-    resource: Persona | Problem | Behaviour,
-    resourceType: "persona" | "problem" | "behaviour"
+    resource: DeletableResource,
+    resourceType: DeletableResourceType
   ) => void;
   isDeleting?: boolean;
   error?: {
@@ -115,7 +119,9 @@ export const DeleteResourceModal: React.FC<DeleteResourceModalProps> = ({
             <Stack spacing={0.5}>
               <Typography variant="body2"><strong>Name:</strong> {resource.metadata.name}</Typography>
               <Typography variant="body2"><strong>Type:</strong> {resourceLabel}</Typography>
-              <Typography variant="body2"><strong>Version:</strong> {resource.metadata.version}</Typography>
+              {"version" in resource.metadata && resource.metadata.version && (
+                <Typography variant="body2"><strong>Version:</strong> {resource.metadata.version}</Typography>
+              )}
               {resource.createdAt && (
                 <Typography variant="body2"><strong>Created:</strong> {formatDate(resource.createdAt)}</Typography>
               )}

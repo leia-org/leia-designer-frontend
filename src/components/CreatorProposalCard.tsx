@@ -2,7 +2,7 @@ import { Box, Button, Paper, Stack, Typography } from "@mui/material";
 import type { CreatorProposal, DraftTarget } from "../lib/creatorCommands";
 
 const labels: Record<DraftTarget, string> = {
-  problem: "Problem", behaviour: "Behaviour", persona: "Persona", leia: "LEIA title",
+  problem: "Problem", behaviour: "Behaviour", persona: "Persona", rubric: "Rubric", leia: "LEIA title",
 };
 
 const formatValue = (value: unknown): string => {

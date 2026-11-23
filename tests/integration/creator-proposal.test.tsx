@@ -4,12 +4,19 @@ import { describe, expect, it, vi } from "vitest";
 import { ProblemChatPanel } from "../../src/components/ProblemChatPanel";
 import type { CreatorDraft } from "../../src/lib/creatorCommands";
 import { sendProblemChatMessage } from "../../src/lib/problemChat";
+import { createDefaultRubricTemplate } from "../../src/lib/rubrics";
 import type { User } from "../../src/models/User";
 
 vi.mock("../../src/lib/problemChat", () => ({
   openProblemChat: vi.fn(async () => "creator-chat"),
   sendProblemChatMessage: vi.fn(),
   uploadProblemChatFile: vi.fn(),
+}));
+vi.mock("../../src/lib/rubricSchema", async importOriginal => ({
+  ...await importOriginal<typeof import("../../src/lib/rubricSchema")>(),
+  getRubricSchema: vi.fn(async () => ({
+    type: "object", required: ["apiVersion", "metadata", "spec"],
+  })),
 }));
 
 const owner: User = { id: "owner", email: "owner@example.com", role: "advanced", createdAt: "", updatedAt: "" };
@@ -35,10 +42,12 @@ const original: CreatorDraft = {
   },
   customizations: { leia: { name: "Router support roleplay" } },
   nameManuallyEdited: true,
+  rubricDraft: null,
+  rubricEnabled: false,
 };
 
-function Creator() {
-  const [draft, setDraft] = useState(original);
+function Creator({ rubricEnabled = false }: { rubricEnabled?: boolean }) {
+  const [draft, setDraft] = useState(() => ({ ...original, rubricEnabled }));
   return (
     <>
       <ProblemChatPanel
@@ -49,6 +58,7 @@ function Creator() {
       <div data-testid="behaviour">{draft.config.behaviour?.spec.description}</div>
       <div data-testid="persona">{draft.config.persona?.spec.fullName}</div>
       <div data-testid="title">{draft.customizations.leia.name}</div>
+      <div data-testid="rubric">{draft.rubricDraft?.metadata.name}</div>
       <button onClick={() => setDraft(previous => ({
         ...previous,
         customizations: { leia: { name: "New manual title" } },
@@ -105,5 +115,31 @@ describe("Creator proposal review", () => {
     expect(screen.queryByRole("button", { name: "Apply changes" })).toBeNull();
     expect(screen.getByTestId("behaviour").textContent).toBe(description);
     expect(screen.getByTestId("title").textContent).toBe("New manual title");
+  });
+
+  it("stages an enabled rubric with the other proposed resources until approval", async () => {
+    render(<Creator rubricEnabled />);
+    const rubric = createDefaultRubricTemplate();
+    rubric.metadata.name = "router-assessment";
+    vi.mocked(sendProblemChatMessage)
+      .mockResolvedValueOnce({ toolCalls: [
+        { callId: "rubric", name: "apply_rubric", arguments: JSON.stringify(rubric) },
+        { callId: "behaviour", name: "edit_behaviour", arguments: JSON.stringify({
+          changes: {}, appendInstructions: "Ask the learner to explain their diagnosis.",
+        }) },
+      ] })
+      .mockResolvedValueOnce({ message: "Here are the proposed changes." });
+    const button = screen.getByRole("button", { name: "Send message" });
+    const input = await screen.findByRole("textbox", { name: "Message the assistant" });
+    fireEvent.change(input, { target: { value: "Propose a rubric and a guardrail." } });
+    fireEvent.click(button);
+
+    const proposal = await screen.findByRole("region", { name: "Proposed draft changes" });
+    expect(within(proposal).getByText("Create Rubric")).toBeTruthy();
+    expect(screen.getByTestId("rubric").textContent).toBe("");
+    expect(screen.getByTestId("behaviour").textContent).toBe(description);
+    fireEvent.click(within(proposal).getByRole("button", { name: "Apply changes" }));
+    expect(screen.getByTestId("rubric").textContent).toBe("router-assessment");
+    expect(screen.getByTestId("behaviour").textContent).toContain("Ask the learner to explain their diagnosis.");
   });
 });
