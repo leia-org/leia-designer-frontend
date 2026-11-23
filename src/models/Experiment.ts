@@ -7,9 +7,23 @@ export interface Experiment {
   isPublished: boolean;
   leias: LeiaConfig[];
   orchestration?: ActivityOrchestration;
+  stages?: ActivityStage[];
   user: User | string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type StageOutput = "conversation" | "submitedSolution";
+
+export interface StageOutputSources {
+  conversation?: string | null;
+  submitedSolution?: string | null;
+}
+
+export interface ActivityStage {
+  id: string;
+  outputSources?: StageOutputSources;
+  orchestration: ActivityOrchestration;
 }
 
 export interface ActivityOrchestration {
@@ -22,6 +36,7 @@ export interface ActivityOrchestration {
 
 export interface LeiaConfig {
   id: string;
+  stageId?: string;
   leia: Leia | string;
   configuration: {
     mode: string;
