@@ -37,6 +37,7 @@ function loadModule(source, require) {
   return context.exports;
 }
 const helper = loadModule(await source("src/lib/helper.ts"));
+const processHelpers = loadModule(await source("src/lib/process.ts"));
 const { generateLeia } = loadModule(await source("src/lib/leia.ts"), () => helper);
 const ui = new Proxy({}, { get: () => ({ children, label, value }) => React.createElement("div", null, children ?? label ?? value) });
 const { LeiaLivePreview } = loadModule(previewSource, name => name === "@mui/material"
@@ -77,8 +78,8 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
   const requests = [];
   const results = [];
   const context = {
-    ...chatHelpers, exports: {}, require, console: { error() {} }, Date, useCallback: fn => fn, useMemo: fn => fn(), generateLeia,
-    leiaConfig: config, currentUser: { id: "synthetic-instructor" }, canEditBehaviour: canEdit,
+    ...chatHelpers, ...processHelpers, exports: {}, require, console: { error() {} }, Date, useCallback: fn => fn, useMemo: fn => fn(), generateLeia,
+    leiaConfig: config, rubricDraft: null, currentUser: { id: "synthetic-instructor" }, canEditBehaviour: canEdit,
     problems, behaviours, personas: [], chatTools: [], attachments: [],
     currentProblemRef: { current: null }, currentBehaviourRef: { current: null }, currentPersonaRef: { current: null },
     previousBehaviourRef: { current: config.behaviour }, rememberedBehavioursRef: { current: new Map() },
@@ -86,7 +87,7 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
     currentStep: 1, leiaConfigSnapShot: null, selectedLabelIds: [], customizations: {},
     currentDraftIdRef: { current: "draft" }, chatState: { messages: [{ role: "user", text: "Burger stock" }] },
     chatModelName: "fixture-model", chatApiKeyId: "fixture-key", pendingLabelDrafts: [], supervisorConfig: {},
-    leiaNameManuallyEdited: false, leiaPublish: false, behaviourPublish: false, problemPublish: false, personaPublish: false,
+    leiaNameManuallyEdited: false, leiaPublish: false, behaviourPublish: false, problemPublish: false, personaPublish: false, rubricPublish: false,
     chatBusy: false, chatOptionsLoading: false, testingLeia: false,
     Button: ({ children, disabled }) => React.createElement("button", { disabled }, children), PlayArrowIcon: "svg", CircularProgress: "svg",
     pushMessage() {}, setError(message) { context.error = message; },

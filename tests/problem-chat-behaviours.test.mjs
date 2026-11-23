@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { behaviourCandidates, CORE_BEHAVIOUR_REFERENCES, missingBehaviourReferences, templateReferences } from "../src/lib/chatBehaviours.mjs";
+import { behaviourPage, behaviourCandidates, CORE_BEHAVIOUR_REFERENCES, missingBehaviourReferences, templateReferences } from "../src/lib/chatBehaviours.mjs";
 
 // Exercise the actual editor callbacks and tool loop without an LLM, browser,
 // network or database. TypeScript is already a frontend build dependency.
@@ -23,6 +23,15 @@ function declaration(source, name) {
 const compile = source => ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
+const loadProcessHelpers = () => {
+  const context = { exports: {}, require: () => ({}), console };
+  vm.createContext(context);
+  return context;
+};
+const processSource = await readFile(new URL("../src/lib/process.ts", import.meta.url), "utf8");
+const processContext = loadProcessHelpers();
+vm.runInContext(compile(processSource), processContext);
+const processHelpers = processContext.exports;
 const callbackSource = [
   ...["copyProcess", "haveSameProcess", "applyChatProblem", "applyChatBehaviour", "handleUseExistingBehaviour"].map(name => declaration(createSource, name)),
   declaration(panelSource, "stripAvatar"),
@@ -48,7 +57,8 @@ function editor({ canEdit = true, saved = [] } = {}) {
   const results = [];
   let replies = [];
   const context = {
-    behaviourCandidates, missingBehaviourReferences, templateReferences,
+    ...processHelpers,
+    behaviourPage, behaviourCandidates, missingBehaviourReferences, templateReferences,
     useCallback: fn => fn, canEditBehaviour: canEdit,
     currentUser: { id: "instructor" }, behaviours: saved, chatTools: [], attachments: [],
     leiaConfig: { problem: null, behaviour: null, persona: null },
@@ -92,13 +102,19 @@ test("a LEIA created in conversation reuses its exact draft when the problem cha
   await e.turn([
     call("get_current_behaviour"), call("list_problems"), call("apply_problem", problem("gym management with users, instructors and training plans")), call("list_behaviours"),
     body => {
-      const [candidate] = body.toolResults[0].output;
+      const [candidate] = body.toolResults[0].output.items;
       assert.equal(candidate.id, original.id);
-      assert.equal(candidate.description, template); // Includes references beyond character 240.
+      assert.equal(candidate.description, template.slice(0, 240));
       assert.equal(candidate.isDraft, true);
-      assert.ok(candidate.templateReferences.includes("{{problem.details}}"));
       assert.equal(e.context.leiaConfig.behaviour, null); // Never silently keep an unchecked selection.
-      return call("use_behaviour", { id: candidate.id });
+      return call("get_behaviour", { id: candidate.id });
+    },
+    body => {
+      const detail = body.toolResults[0].output;
+      assert.equal(detail.spec.description, template);
+      assert.ok(detail.templateReferences.includes("{{problem.details}}"));
+      assert.equal(e.context.leiaConfig.behaviour, null);
+      return call("use_behaviour", { id: detail.id });
     },
   ], "cambiame el problema para que sea de gestión de un gimnasio con los usuarios los instructores y los planes de entrenamiento");
   assert.equal(e.context.leiaConfig.behaviour, original);
@@ -176,4 +192,43 @@ test("assembling the adapted LEIA resolves gym context without changing reusable
   assert.ok(result.spec.behaviour.spec.description.includes("gym management"));
   assert.ok(!result.spec.behaviour.spec.description.includes("{{"));
   assert.equal(original.spec.description, template);
+});
+
+
+test("large behaviour libraries return compact pages and complete details only on demand", async () => {
+  const saved = Array.from({ length: 35 }, (_, i) => ({
+    id: `saved-${i}`, metadata: { name: `client-${i}` },
+    spec: { ...behaviour(template.repeat(30)), conversationDynamics: { instructions: "x".repeat(20000) } },
+  }));
+  const e = editor({ saved });
+  const seen = [];
+  for (const offset of [0, 10, 20, 30]) {
+    await e.turn([call("list_behaviours", { offset })]);
+    const page = e.results.at(-1).output;
+    assert.equal(page.total, 35);
+    assert.equal(page.items.length, offset === 30 ? 5 : 10);
+    assert.equal(page.nextOffset, offset === 30 ? null : offset + 10);
+    assert.ok(Buffer.byteLength(JSON.stringify(page)) < 10000);
+    for (const item of page.items) {
+      seen.push(item.id);
+      assert.equal(item.description.length, 240);
+      assert.equal(item.conversationDynamics, undefined);
+    }
+  }
+  assert.deepEqual(seen, saved.map(item => item.id));
+  await e.turn([call("get_behaviour", { id: "saved-34" })]);
+  assert.equal(e.results.at(-1).output.spec.description, saved[34].spec.description);
+  assert.equal(e.results.at(-1).output.spec.conversationDynamics.instructions.length, 20000);
+  assert.equal(e.context.leiaConfig.behaviour, null);
+  await e.turn([call("get_behaviour", { id: "unknown" })]);
+  assert.match(e.results.at(-1).output.error, /no behaviour/);
+});
+
+test("invalid pagination offsets start at the first page", () => {
+  const candidates = [{ id: "saved", spec: behaviour() }];
+  for (const offset of [-1, 0.5, NaN, Infinity]) {
+    assert.equal(behaviourPage(candidates, offset).items[0].id, "saved");
+  }
+  assert.deepEqual(behaviourPage([], 0), { items: [], total: 0, nextOffset: null });
+  assert.deepEqual(behaviourPage(candidates, 10), { items: [], total: 1, nextOffset: null });
 });

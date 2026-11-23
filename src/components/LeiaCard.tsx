@@ -16,9 +16,10 @@ loader.init().then((monaco) => {
 interface LeiaCardProps {
   title: string;
   description: string;
-  version: string;
+  version?: string;
   selected?: boolean;
   yaml?: string;
+  previewContent?: React.ReactNode;
   onClick?: () => void;
   user?: User;
   isPublished?: boolean;
@@ -36,6 +37,7 @@ export default function LeiaCard({
   version,
   selected = false,
   yaml,
+  previewContent,
   onClick,
   user,
   isPublished = false,
@@ -111,7 +113,7 @@ export default function LeiaCard({
                 {title}
               </Typography>
               <Stack direction="row" spacing={0.75} alignItems="center" flexShrink={0}>
-                <Chip label={`v${version}`} size="small" />
+                {version && <Chip label={`v${version}`} size="small" />}
                 {user && (
                   <Chip
                     label={isPublished ? "Published" : "Unpublished"}
@@ -173,44 +175,50 @@ export default function LeiaCard({
       </Paper>
 
       <Popper
-        open={showPopup && Boolean(yaml) && !hideContentForInstructor}
+        open={showPopup && Boolean(yaml || previewContent) && !hideContentForInstructor}
         anchorEl={cardRef.current}
         placement="right"
         sx={{ zIndex: (theme) => theme.zIndex.tooltip }}
         modifiers={[{ name: "offset", options: { offset: [0, 8] } }]}
       >
-        <Paper sx={{ width: 500, height: 300, p: 1, bgcolor: "#1E1E1E", overflow: "hidden" }}>
-          <Editor
-            height="100%"
-            language="yaml"
-            theme="vs-dark"
-            value={yaml}
-            options={{
-              readOnly: true,
-              minimap: { enabled: false },
-              fontSize: 12,
-              lineNumbers: "off",
-              folding: false,
-              lineDecorationsWidth: 0,
-              lineNumbersMinChars: 0,
-              renderLineHighlight: "none",
-              scrollBeyondLastLine: false,
-              wordWrap: "on",
-              automaticLayout: true,
-              contextmenu: false,
-              hover: { enabled: false },
-              links: false,
-              occurrencesHighlight: "off",
-              renderValidationDecorations: "off",
-              selectionHighlight: false,
-            }}
-            beforeMount={(monaco) => {
-              if (!monaco.languages.getLanguages().find((language: { id: string }) => language.id === "yaml")) {
-                monaco.languages.register({ id: "yaml" });
-              }
-            }}
-          />
-        </Paper>
+        {previewContent ? (
+          <Paper elevation={6} sx={{ width: 520, maxWidth: "85vw", bgcolor: "background.paper", overflow: "hidden", border: 1, borderColor: "divider" }}>
+            {previewContent}
+          </Paper>
+        ) : (
+          <Paper sx={{ width: 500, height: 300, p: 1, bgcolor: "#1E1E1E", overflow: "hidden" }}>
+            <Editor
+              height="100%"
+              language="yaml"
+              theme="vs-dark"
+              value={yaml}
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                fontSize: 12,
+                lineNumbers: "off",
+                folding: false,
+                lineDecorationsWidth: 0,
+                lineNumbersMinChars: 0,
+                renderLineHighlight: "none",
+                scrollBeyondLastLine: false,
+                wordWrap: "on",
+                automaticLayout: true,
+                contextmenu: false,
+                hover: { enabled: false },
+                links: false,
+                occurrencesHighlight: "off",
+                renderValidationDecorations: "off",
+                selectionHighlight: false,
+              }}
+              beforeMount={(monaco) => {
+                if (!monaco.languages.getLanguages().find((language: { id: string }) => language.id === "yaml")) {
+                  monaco.languages.register({ id: "yaml" });
+                }
+              }}
+            />
+          </Paper>
+        )}
       </Popper>
     </Box>
   );

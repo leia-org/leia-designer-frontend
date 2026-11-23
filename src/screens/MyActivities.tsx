@@ -1,3 +1,4 @@
+import { useAuth } from "../context/useAuth";
 import type React from "react";
 import { Header } from "../components/shared/Header";
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -9,6 +10,11 @@ import { ToastContainer, toast } from "react-toastify";
 import { LeiaViewModal } from "../components/LeiaViewModal";
 import { TranscriptionView } from "../components/TranscriptionView";
 import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
+import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
+import {
+  getDependentStagesForConversation,
+  leiaUsesPreviousStageOutputs,
+} from "../lib/activityStages";
 import { ActivityListSkeleton } from "../components/ActivityListSkeleton";
 import { useNavigate, useLocation } from "react-router-dom";
 import Editor from "@monaco-editor/react";
@@ -28,6 +34,8 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LinkIcon from "@mui/icons-material/Link";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import {
@@ -42,6 +50,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Fade,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -77,6 +86,10 @@ const TranscriptionArraySchema = z
 
 export const MyActivities: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [ownedOnly, setOwnedOnly] = useState(false);
+  const requestGeneration = useRef(0);
+  const invalidateRequests = useCallback(() => { requestGeneration.current++; }, []);
   const location = useLocation();
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [experiments, setExperiments] = useState<Experiment[] | null>(null);
@@ -146,18 +159,23 @@ export const MyActivities: React.FC = () => {
     leiaConfig: LeiaConfig;
   } | null>(null);
 
-  // Fetch experiments for the current user
+  // Fetch own activities and activities published by other users
 
-  const fetchExperiments = async () => {
+  const fetchExperiments = useCallback(async () => {
+    const generation = ++requestGeneration.current;
+    isFetchingRef.current = true;
+    setLoadingMore(false);
     setLoadingExperiments(true);
     setErrorLoadingExperiments("");
     try {
-      const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/user/me", {
-        params: { populated: true, text: debouncedSearchQuery || undefined },
+      const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/accessible", {
+        params: { ownedOnly, text: debouncedSearchQuery || undefined },
       });
+      if (generation !== requestGeneration.current) return;
       setExperiments(response.data.experiments);
       setNextCursor(response.data.nextCursor || null);
     } catch (error) {
+      if (generation !== requestGeneration.current) return;
       if (error instanceof Error) {
         setErrorLoadingExperiments(
           "Error loading activities: " + error.message
@@ -166,20 +184,23 @@ export const MyActivities: React.FC = () => {
         setErrorLoadingExperiments("Error loading activities");
       }
     } finally {
-      setLoadingExperiments(false);
+      if (generation === requestGeneration.current) setLoadingExperiments(false);
     }
-  };
+  }, [ownedOnly, debouncedSearchQuery]);
   const loadMoreActivities =useCallback(async () => {
     if (!nextCursor || loadingMore || loadingExperiments) return;
+    const generation = requestGeneration.current;
     setErrorLoadingExperiments("");
     try {
       setLoadingMore(true);
-      const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/user/me", {
-        params: { populated: true, lastActivityId: nextCursor, text: debouncedSearchQuery || undefined },
+      const response = await api.get<{experiments: Experiment[]; nextCursor: string | null}>("/api/v1/experiments/accessible", {
+        params: { ownedOnly, lastActivityId: nextCursor, text: debouncedSearchQuery || undefined },
       });
+      if (generation !== requestGeneration.current) return;
       setExperiments((prev) => [...prev ?? [], ...(response.data.experiments ?? [])]);
       setNextCursor(response.data.nextCursor || null);
     } catch (error) {
+      if (generation !== requestGeneration.current) return;
       if (error instanceof Error) {
         setErrorLoadingExperiments(
           "Error loading more activities: " + error.message
@@ -188,16 +209,17 @@ export const MyActivities: React.FC = () => {
         setErrorLoadingExperiments("Error loading more activities");
       }
     } finally {
-      setLoadingMore(false);
+      if (generation === requestGeneration.current) setLoadingMore(false);
     }
-  }, [loadingExperiments, loadingMore, nextCursor, debouncedSearchQuery]);
+  }, [loadingExperiments, loadingMore, nextCursor, debouncedSearchQuery, ownedOnly]);
 
   useEffect(() => {
     nextCursorRef.current = null;
     setNextCursor(null);
     setExperiments(null);
     fetchExperiments();
-  }, [debouncedSearchQuery]);
+    return invalidateRequests;
+  }, [fetchExperiments, user?.id, invalidateRequests]);
 
   useEffect(() => {
     isFetchingRef.current = loadingExperiments || loadingMore;
@@ -294,6 +316,7 @@ export const MyActivities: React.FC = () => {
 
   // Publish experiment (one-way action)
   const publishExperiment = async (experiment: Experiment) => {
+    if (user?.role !== "admin") return;
     setPublishingExperiments((prev) => new Set([...prev, experiment.id]));
 
     try {
@@ -439,7 +462,7 @@ export const MyActivities: React.FC = () => {
     leiaConfigId: string
   ) => {
     try {
-      await api.delete(
+      const response = await api.delete<Experiment>(
         `/api/v1/experiments/${experimentId}/leias/${leiaConfigId}`
       );
 
@@ -447,12 +470,7 @@ export const MyActivities: React.FC = () => {
         (prev) =>
           prev?.map((exp) => {
             if (exp.id === experimentId) {
-              return {
-                ...exp,
-                leias: exp.leias.filter(
-                  (leiaConfig) => leiaConfig.id !== leiaConfigId
-                ),
-              };
+              return response.data;
             }
             return exp;
           }) || null
@@ -1074,7 +1092,7 @@ export const MyActivities: React.FC = () => {
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
-      <Header title="My Activities" description="View and manage your activities" />
+      <Header title="Activities" description="Browse published activities and manage your own" />
       <ToastContainer />
 
       <Dialog
@@ -1265,6 +1283,17 @@ export const MyActivities: React.FC = () => {
                 ),
               }}
             />
+            <TextField
+              select
+              size="small"
+              label="Ownership"
+              value={ownedOnly ? "mine" : "all"}
+              onChange={(event) => setOwnedOnly(event.target.value === "mine")}
+              sx={{ minWidth: 190 }}
+            >
+              <MenuItem value="all">All available activities</MenuItem>
+              <MenuItem value="mine">My activities</MenuItem>
+            </TextField>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowCreateModal(true)}>
               New Activity
             </Button>
@@ -1322,7 +1351,9 @@ export const MyActivities: React.FC = () => {
           ) : (
             <Stack spacing={1.5}>
               {experiments?.map((experiment, experimentIndex) => {
+                const isOwner = (typeof experiment.user === "string" ? experiment.user : experiment.user.id) === user?.id;
                 const expanded = expandedExperiments.has(experiment.id);
+                const FlowEditor = experiment.stages ? ActivityStagesEditor : ActivityOrchestrationEditor;
 
                 return (
                   <Paper
@@ -1340,7 +1371,16 @@ export const MyActivities: React.FC = () => {
                       sx={{ p: 2.5 }}
                     >
                       <Box>
-                        <Typography variant="h6">{experiment.name}</Typography>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Tooltip title={isOwner ? "Your activity" : "Public activity"}>
+                            {isOwner ? (
+                              <PersonOutlineIcon color="action" role="img" aria-label="Your activity" />
+                            ) : (
+                              <PublicOutlinedIcon color="action" role="img" aria-label="Public activity" />
+                            )}
+                          </Tooltip>
+                          <Typography variant="h6">{experiment.name}</Typography>
+                        </Stack>
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 0.75 }}>
                           <Typography variant="caption" color="text.secondary">
                             Created: {new Date(experiment.createdAt).toLocaleDateString()}
@@ -1358,13 +1398,9 @@ export const MyActivities: React.FC = () => {
                           <Chip label="MultiLEIA" color="primary" size="small" variant="outlined" />
                         )}
                         {experiment.isPublished && <Chip label="Published" color="success" size="small" />}
-                        {experiment.isPublished ? (
-                          <Button size="small" color="secondary" variant="contained" startIcon={<ContentCopyIcon />} onClick={() => handleFastReplication(experiment.id)}>
-                            Replicate
-                          </Button>
-                        ) : (
+                        {!experiment.isPublished && (
                           <>
-                            <Button
+                            {user?.role === "admin" && <Button
                               size="small"
                               variant="contained"
                               onClick={() => publishExperiment(experiment)}
@@ -1372,7 +1408,7 @@ export const MyActivities: React.FC = () => {
                               startIcon={publishingExperiments.has(experiment.id) ? <CircularProgress color="inherit" size={14} /> : <AddIcon />}
                             >
                               {publishingExperiments.has(experiment.id) ? "Publishing..." : "Publish"}
-                            </Button>
+                            </Button>}
                             <Button
                               size="small"
                               variant="contained"
@@ -1384,6 +1420,9 @@ export const MyActivities: React.FC = () => {
                             </Button>
                           </>
                         )}
+                        <Button size="small" color="secondary" variant="contained" startIcon={<ContentCopyIcon />} onClick={() => handleFastReplication(experiment.id)}>
+                          Replicate
+                        </Button>
                         <IconButton
                           aria-label={expanded ? "Collapse activity" : "Expand activity"}
                           onClick={() => toggleExperiment(experiment.id)}
@@ -1395,7 +1434,7 @@ export const MyActivities: React.FC = () => {
 
                     <Collapse in={expanded}>
                       <Box sx={{ borderTop: 1, borderColor: "divider" }}>
-                        <ActivityOrchestrationEditor
+                        <FlowEditor
                           experiment={experiment}
                           onSaved={(updatedExperiment) =>
                             setExperiments((previous) =>
@@ -1412,6 +1451,23 @@ export const MyActivities: React.FC = () => {
                           <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
                             {experiment.leias.map((leiaConfig, leiaIndex) => {
                               const leia = typeof leiaConfig.leia === "object" ? leiaConfig.leia : null;
+                              const stageIndex = experiment.stages?.findIndex(({ id }) => id === leiaConfig.stageId) ?? -1;
+                              const stageIsMulti =
+                                (experiment.stages
+                                  ? experiment.stages[stageIndex]?.orchestration
+                                  : experiment.orchestration)?.mode === "multi";
+                              const conversationDependents = getDependentStagesForConversation(
+                                experiment,
+                                leiaConfig.stageId,
+                              );
+                              const usesPreviousStage = leiaUsesPreviousStageOutputs(leia);
+                              const transcriptionDisabledReason = stageIsMulti
+                                ? "Transcription mode is unavailable in MultiLEIA stages."
+                                : usesPreviousStage
+                                  ? "Transcription unavailable because this LEIA uses outputs from an earlier stage."
+                                  : conversationDependents.length > 0
+                                    ? `Transcription unavailable because ${conversationDependents.map((n) => `Stage ${n}`).join(", ")} ${conversationDependents.length === 1 ? "uses" : "use"} this stage's conversation.`
+                                    : "";
                               const leiaKey = experiment.id + "-" + leiaConfig.id;
                               const hasTranscription =
                                 Boolean(leiaConfig.configuration?.data?.messages) ||
@@ -1425,6 +1481,9 @@ export const MyActivities: React.FC = () => {
                                     <Stack direction={{ xs: "column", md: "row" }} alignItems={{ md: "center" }} justifyContent="space-between" spacing={1.5}>
                                       <Stack direction="row" alignItems="center" spacing={1}>
                                         <Typography variant="subtitle2">{leia?.metadata?.name || "LEIA " + String(leiaIndex + 1)}</Typography>
+                                        {stageIndex >= 0 && (
+                                          <Chip size="small" label={`Stage ${stageIndex + 1}`} />
+                                        )}
                                         {leia && (
                                           <Tooltip title="View LEIA content">
                                             <IconButton
@@ -1446,22 +1505,62 @@ export const MyActivities: React.FC = () => {
                                               label="Mode"
                                               size="small"
                                               value={leiaConfig.configuration.mode}
-                                              onChange={(event) =>
-                                                handleUpdateExperimentLeiaMode(
+                                              onChange={(event) => {
+                                                if (event.target.value === "transcription" && transcriptionDisabledReason) {
+                                                  return;
+                                                }
+                                                void handleUpdateExperimentLeiaMode(
                                                   experiment.id,
                                                   leiaConfig.id,
                                                   leiaConfig,
                                                   event.target.value,
-                                                )
-                                              }
+                                                );
+                                              }}
                                               sx={{ minWidth: 150 }}
                                             >
                                               <MenuItem value="standard">standard</MenuItem>
                                               <MenuItem
                                                 value="transcription"
-                                                disabled={experiment.orchestration?.mode === "multi"}
+                                                disabled={Boolean(transcriptionDisabledReason)}
+                                                disableRipple={Boolean(transcriptionDisabledReason)}
+                                                sx={
+                                                  transcriptionDisabledReason
+                                                    ? {
+                                                        "&.Mui-disabled": {
+                                                          pointerEvents: "auto",
+                                                          cursor: "not-allowed",
+                                                          p: 0,
+                                                          "&:hover": { backgroundColor: "transparent" },
+                                                        },
+                                                      }
+                                                    : undefined
+                                                }
                                               >
-                                                transcription
+                                                {transcriptionDisabledReason ? (
+                                                  <Tooltip
+                                                    title={transcriptionDisabledReason}
+                                                    placement="right"
+                                                    arrow
+                                                    disableInteractive
+                                                    slots={{ transition: Fade }}
+                                                    slotProps={{ transition: { timeout: 120 } }}
+                                                  >
+                                                    <Box
+                                                      component="span"
+                                                      sx={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        width: "100%",
+                                                        px: 2,
+                                                        py: 0.75,
+                                                      }}
+                                                    >
+                                                      transcription
+                                                    </Box>
+                                                  </Tooltip>
+                                                ) : (
+                                                  "transcription"
+                                                )}
                                               </MenuItem>
                                             </TextField>
                                           )

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Editor } from "@monaco-editor/react";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import {
@@ -19,6 +19,8 @@ import type { Persona, Problem, Behaviour, ProblemWidget } from "../models/Leia"
 import { ProblemWidgetsEditor } from "./ProblemWidgetsEditor";
 import { FormatPreview } from "./FormatPreview";
 import { downloadProblemPdf } from "../lib/problemPdf";
+import { BEHAVIOUR_PLACEHOLDER_ITEMS } from "../lib/behaviourPlaceholders";
+import { HighlightableInput, HighlightableTextarea } from "./HighlightableInput";
 
 type ResourceType = "persona" | "problem" | "behaviour";
 
@@ -103,112 +105,18 @@ const restoreOriginalAvatar = (
   };
 };
 
-type HighlightableInputProps = Omit<
-  React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement>,
-  "className" | "color"
-> & Pick<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "rows" | "wrap"> & {
-  multiline?: boolean;
-};
-
-const highlightTokenSx = { borderRadius: 0.5, bgcolor: "#F3E8FF", color: "#7E22CE" };
-const highlightableTextSx = {
-  boxSizing: "border-box",
-  px: 1.5,
-  py: 1,
-  font: "inherit",
-  lineHeight: 1.5,
-  letterSpacing: "inherit",
-} as const;
-
-const HighlightableInput: React.FC<HighlightableInputProps> = ({
-  value, placeholder, multiline = false, onScroll, ...rest
-}) => {
-  const text = Array.isArray(value) ? value.join(", ") : String(value ?? "");
-  const controlRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const whiteSpace = multiline && rest.wrap !== "off" ? "pre-wrap" : "pre";
-
-  const syncOverlay = useCallback(() => {
-    const control = controlRef.current;
-    if (!control || !overlayRef.current || !contentRef.current) return;
-    const { borderLeftWidth: left, borderTopWidth: top } = getComputedStyle(control);
-    Object.assign(overlayRef.current.style, {
-      left, top, width: `${control.clientWidth}px`, height: `${control.clientHeight}px`,
-    });
-    contentRef.current.style.transform = `translate(${-control.scrollLeft}px, ${-control.scrollTop}px)`;
-  }, []);
-
-  useLayoutEffect(syncOverlay);
-  useLayoutEffect(() => {
-    const observer = new ResizeObserver(syncOverlay);
-    if (controlRef.current) observer.observe(controlRef.current);
-    return () => observer.disconnect();
-  }, [syncOverlay]);
-
-  return (
-    <Box sx={{ position: "relative", width: "100%" }}>
-      <Box
-        component={multiline ? "textarea" : "input"}
-        {...rest}
-        ref={controlRef}
-        value={text}
-        placeholder={placeholder}
-        onScroll={(event: React.UIEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-          syncOverlay();
-          onScroll?.(event);
-        }}
-        sx={{
-          ...highlightableTextSx,
-          width: "100%",
-          display: "block",
-          border: 1,
-          borderColor: "divider",
-          borderRadius: 1,
-          bgcolor: "transparent",
-          color: "transparent",
-          caretColor: "primary.main",
-          position: "relative",
-          zIndex: 1,
-          resize: multiline ? "vertical" : "none",
-          whiteSpace,
-          overflowWrap: "break-word",
-          "&::placeholder": { color: "transparent" },
-          "&::selection": { color: "HighlightText", backgroundColor: "Highlight" },
-          "&:focus": {
-            outline: "none",
-            borderColor: "primary.main",
-            boxShadow: "0 0 0 2px rgba(37, 99, 235, 0.16)",
-          },
-        }}
-      />
-      <Box ref={overlayRef} aria-hidden="true" sx={{
-        position: "absolute", overflow: "hidden", pointerEvents: "none", borderRadius: 1,
-      }}>
-        <Box ref={contentRef} sx={{
-          ...highlightableTextSx, whiteSpace, overflowWrap: "break-word", color: "text.primary",
-        }}>
-          {text ? text.split(/(\{\{[^}]+\}\})/g).map((part, index) => (
-            <Box component="span" key={index} sx={index % 2 ? highlightTokenSx : undefined}>
-              {part}
-            </Box>
-          )) : <Box component="span" sx={{ color: "text.disabled" }}>{placeholder}</Box>}
-          {multiline && text.endsWith("\n") && "\u200b"}
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-const HighlightableTextarea: React.FC<HighlightableInputProps> = (props) => (
-  <HighlightableInput {...props} multiline />
-);
-
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+const Field: React.FC<{
+  label: string;
+  labelExtra?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ label, labelExtra, children }) => (
   <Box>
-    <Typography variant="body2" fontWeight={600} sx={{ display: "block", mb: 0.75 }}>
-      {label}
-    </Typography>
+    <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 0.75 }}>
+      <Typography variant="body2" fontWeight={600}>
+        {label}
+      </Typography>
+      {labelExtra}
+    </Stack>
     {children}
   </Box>
 );
@@ -607,10 +515,20 @@ export const ResourceEditor: React.FC<ResourceEditorProps> = ({
 
   const renderBehaviourForm = () => (
     <Stack spacing={2} sx={{ p: 2, maxHeight: 400, overflowY: "auto" }}>
-      <Field label="Description">
+      <Field
+        label="Description"
+        labelExtra={
+          <Typography variant="caption" color="text.secondary">
+            Start typing <code>{"{{"}</code> to insert dynamic placeholders
+          </Typography>
+        }
+      >
         <HighlightableTextarea
+          autoResize
           value={visualData.description || ""}
           onChange={(event) => handleVisualChange("description", event.target.value)}
+          onValueChange={(nextValue) => handleVisualChange("description", nextValue)}
+          autocompleteItems={BEHAVIOUR_PLACEHOLDER_ITEMS}
           rows={3}
           placeholder="Describe the behaviour..."
         />

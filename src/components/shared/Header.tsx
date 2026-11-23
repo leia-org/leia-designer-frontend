@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Avatar,
   Box,
+  Chip,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -154,7 +155,19 @@ export const Header: React.FC<HeaderProps> = ({
               MenuListProps={{ "aria-labelledby": "navigation-menu" }}
               slotProps={{ paper: { sx: { minWidth: 200, mt: 1, border: "1px solid", borderColor: "divider" } } }}
             >
-              {user?.email && <Typography noWrap sx={{ px: 2, py: 1, fontSize: 12, color: "text.secondary", maxWidth: 240 }}>{user.email}</Typography>}
+              {user?.email && (
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.75, px: 2, pt: 1, pb: 1.5, maxWidth: 280, borderBottom: "1px solid", borderColor: "divider", mb: 0.5 }}>
+                  <Typography noWrap title={user.email} sx={{ maxWidth: "100%", fontSize: 12, fontWeight: 600, color: "text.primary" }}>{user.email}</Typography>
+                  {user.role && (
+                    <Chip
+                      label={user.role.toUpperCase()}
+                      aria-label={`Account role: ${user.role.toUpperCase()}`}
+                      size="small"
+                      sx={{ height: 18, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", bgcolor: "surfaces.accent", color: "primary.dark", "& .MuiChip-label": { px: 0.75 } }}
+                    />
+                  )}
+                </Box>
+              )}
               {visibleItems.map((item) => (
                 <MenuItem key={item.label} id={item.id} onClick={() => handleItemClick(item)}>
                   {item.icon && <ListItemIcon>{item.icon}</ListItemIcon>}

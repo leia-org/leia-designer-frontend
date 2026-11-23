@@ -15,6 +15,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { Header } from "../components/shared/Header";
 import { Avatar } from "../components/shared/Avatar";
+import { ChatMarkdown } from "../components/ChatMarkdown";
 import api from "../lib/axios";
 import { useTestConversationDynamics } from "../hooks/useTestConversationDynamics";
 import { toast, ToastContainer } from "react-toastify";
@@ -700,6 +701,7 @@ export const Chat = () => {
                 elevation={msg.isLeia ? 0 : 1}
                 sx={{
                   maxWidth: "80%",
+                  minWidth: 0,
                   px: 2,
                   py: 1.25,
                   bgcolor: msg.isLeia ? "background.paper" : "primary.main",
@@ -709,9 +711,15 @@ export const Chat = () => {
                   borderBottomRightRadius: msg.isLeia ? 2.5 : 0.5,
                 }}
               >
-                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", lineHeight: 1.65 }}>
-                  {msg.text}
-                </Typography>
+                {msg.isLeia ? (
+                  <Typography component="div" variant="body2" sx={{ lineHeight: 1.65 }}>
+                    <ChatMarkdown text={msg.text} />
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", lineHeight: 1.65, overflowWrap: "anywhere" }}>
+                    {msg.text}
+                  </Typography>
+                )}
               </Paper>
               {!msg.isLeia && (
                 <MuiAvatar sx={{ width: 32, height: 32, bgcolor: "primary.main" }}>
