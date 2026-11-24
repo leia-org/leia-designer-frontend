@@ -39,7 +39,9 @@ interface LeiaLivePreviewProps {
   onTitleChange: (value: string) => void;
   titleSuggested?: boolean;
   testAction: React.ReactNode;
+  testDisabledReason?: string;
   readyToTest?: boolean;
+  statusLabel?: string;
   canEditBehaviour?: boolean;
   onComponentClick?: (component: "persona" | "behaviour" | "problem" | "rubric") => void;
 }
@@ -169,7 +171,9 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   onTitleChange,
   titleSuggested = false,
   testAction,
+  testDisabledReason,
   readyToTest,
+  statusLabel,
   canEditBehaviour = true,
   onComponentClick,
 }) => {
@@ -178,6 +182,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   const behaviour = leia?.spec?.behaviour;
   const displayName = title || persona?.spec?.fullName || "Untitled LEIA";
   const isReady = readyToTest ?? Boolean(persona && problem && behaviour);
+  const chipLabel = statusLabel ?? (isReady ? "Ready to test" : "Draft");
   const widgetCount = problem?.spec?.widgets?.length ?? 0;
   const rubricCriteriaCount = rubric?.spec.sections.reduce(
     (total, section) => total + section.criteria.length,
@@ -204,7 +209,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
             <Typography variant="overline" color="text.secondary">Workbench preview</Typography>
-            <Chip label={isReady ? "Ready to test" : "Draft"} size="small" color={isReady ? "success" : "default"} variant={isReady ? "filled" : "outlined"} />
+            <Chip label={chipLabel} size="small" color={isReady ? "success" : "default"} variant={isReady ? "filled" : "outlined"} />
           </Stack>
           <TextField
             variant="standard"
@@ -368,7 +373,22 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
       </Stack>
 
       <Divider />
-      <Box sx={{ p: 1.5 }}>{testAction}</Box>
+      <Box sx={{ p: 1.5 }}>
+        {testDisabledReason ? (
+          <Stack spacing={0.75}>
+            <Tooltip title={testDisabledReason}>
+              <Box component="span" sx={{ display: "block", width: "100%" }}>
+                {testAction}
+              </Box>
+            </Tooltip>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center" }}>
+              {testDisabledReason}
+            </Typography>
+          </Stack>
+        ) : (
+          testAction
+        )}
+      </Box>
     </Paper>
   );
 };

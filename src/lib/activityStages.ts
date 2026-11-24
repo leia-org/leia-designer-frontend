@@ -1,6 +1,9 @@
 import type { ActivityStage, Experiment, StageOutput } from "../models/Experiment";
 
 const ANY_PREVIOUS_STAGE_REF = /{{\s*previousStage\b([^{}]*)}}/g;
+const ANY_PREVIOUS_STAGE_REF_TEST = /{{\s*previousStage\b[^{}]*}}/;
+export const PREVIOUS_STAGE_TEST_DISABLED_REASON =
+  "Cannot test in Designer because this LEIA references previousStage. Add it to a staged activity and test it in Workbench.";
 const STAGE_OUTPUT_KEYS: ReadonlyArray<StageOutput> = [
   "conversation",
   "submitedSolution",
@@ -39,14 +42,18 @@ export function getStageOutputSource(stage: ActivityStage, output: StageOutput):
   return stage.outputSources?.[output] ?? null;
 }
 
-function getLeiaTemplates(
-  leia: {
-    spec?: {
-      behaviour?: { spec?: { description?: string } };
-      rubric?: { spec?: { evaluationPrompt?: string } };
-    };
-  } | string | null | undefined,
-): string[] {
+type PreviousStageInspectableLeia =
+  | {
+      spec?: {
+        behaviour?: { spec?: { description?: string } | null } | null;
+        rubric?: { spec?: { evaluationPrompt?: string } | null } | null;
+      } | null;
+    }
+  | string
+  | null
+  | undefined;
+
+function getLeiaTemplates(leia: PreviousStageInspectableLeia): string[] {
   if (!leia || typeof leia !== "object") return [];
   return [
     leia.spec?.behaviour?.spec?.description ?? "",
@@ -54,13 +61,16 @@ function getLeiaTemplates(
   ];
 }
 
+export function leiaHasPreviousStageReferences(
+  leia: PreviousStageInspectableLeia,
+): boolean {
+  return getLeiaTemplates(leia).some((text) =>
+    ANY_PREVIOUS_STAGE_REF_TEST.test(text),
+  );
+}
+
 export function leiaUsesPreviousStageOutputs(
-  leia: {
-    spec?: {
-      behaviour?: { spec?: { description?: string } };
-      rubric?: { spec?: { evaluationPrompt?: string } };
-    };
-  } | string | null | undefined,
+  leia: PreviousStageInspectableLeia,
 ): boolean {
   return getLeiaTemplates(leia).some(
     (text) =>
