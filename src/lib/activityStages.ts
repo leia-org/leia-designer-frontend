@@ -3,6 +3,7 @@ import type { ActivityStage, Experiment, StageOutput } from "../models/Experimen
 export const STAGE_OUTPUT_PATTERNS: Record<StageOutput, RegExp> = {
   conversation: /{{\s*previousStage\.outputs\.conversation\s*}}/,
   submitedSolution: /{{\s*previousStage\.outputs\.submitedSolution\s*}}/,
+  problem: /{{\s*previousStage\.leia\.problem\.(?:description|details|personaBackground|solution|initialSolution|solutionFormat|evaluationPrompt|process)\s*}}/,
 };
 
 export function getStageOutputSource(stage: ActivityStage, output: StageOutput): string | null {
@@ -25,7 +26,8 @@ export function leiaUsesPreviousStageOutputs(
   return templates.some(
     (text) =>
       STAGE_OUTPUT_PATTERNS.conversation.test(text) ||
-      STAGE_OUTPUT_PATTERNS.submitedSolution.test(text),
+      STAGE_OUTPUT_PATTERNS.submitedSolution.test(text) ||
+      STAGE_OUTPUT_PATTERNS.problem.test(text),
   );
 }
 

@@ -76,6 +76,19 @@ export const BEHAVIOUR_PLACEHOLDER_SECTIONS: readonly PlaceholderSection[] = [
           { token: "{{previousStage.outputs.submitedSolution}}", description: "Submitted solution from an earlier stage" },
         ],
       },
+      {
+        title: "Previous stage problem",
+        items: [
+          { token: "{{previousStage.leia.problem.description}}", description: "Scenario / problem statement from an earlier stage" },
+          { token: "{{previousStage.leia.problem.details}}", description: "Additional details and requirements from an earlier stage" },
+          { token: "{{previousStage.leia.problem.personaBackground}}", description: "Persona background from an earlier stage problem" },
+          { token: "{{previousStage.leia.problem.solution}}", description: "Expected reference solution from an earlier stage" },
+          { token: "{{previousStage.leia.problem.initialSolution}}", description: "Initial solution template from an earlier stage" },
+          { token: "{{previousStage.leia.problem.solutionFormat}}", description: "Expected solution format from an earlier stage" },
+          { token: "{{previousStage.leia.problem.evaluationPrompt}}", description: "Custom evaluation prompt from an earlier stage" },
+          { token: "{{previousStage.leia.problem.process}}", description: "Problem process type(s) from an earlier stage" },
+        ],
+      },
     ],
   },
 ];

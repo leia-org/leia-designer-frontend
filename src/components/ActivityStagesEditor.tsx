@@ -30,6 +30,12 @@ const STAGE_OUTPUTS: ReadonlyArray<{
     summary: "Submitted solution",
     pattern: STAGE_OUTPUT_PATTERNS.submitedSolution,
   },
+  {
+    key: "problem",
+    label: "Source of previous stage problem",
+    summary: "Problem",
+    pattern: STAGE_OUTPUT_PATTERNS.problem,
+  },
 ];
 
 const getOutputSource = getStageOutputSource;
@@ -54,6 +60,7 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
       outputSources: {
         conversation: getOutputSource(stage, "conversation"),
         submitedSolution: getOutputSource(stage, "submitedSolution"),
+        problem: getOutputSource(stage, "problem"),
         [output]: value || null,
       },
     });
@@ -71,6 +78,7 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
         outputSources: {
           conversation: keepEarlier(getOutputSource(stage, "conversation")),
           submitedSolution: keepEarlier(getOutputSource(stage, "submitedSolution")),
+          problem: keepEarlier(getOutputSource(stage, "problem")),
         },
       };
     }));
@@ -79,7 +87,7 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
   const add = () => {
     setDraft([...stages, {
       id: crypto.randomUUID(),
-      outputSources: { conversation: null, submitedSolution: null },
+      outputSources: { conversation: null, submitedSolution: null, problem: null },
       orchestration: {
         mode: "single", maxInternalTurns: 2,
         openingLeiaId: null, problemLeiaId: null, sharedTask: "",
@@ -115,10 +123,20 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
           id: entry.id,
           label: (typeof entry.leia === "object" && entry.leia?.metadata.name) || `LEIA ${entryIndex + 1}`,
         }));
-        const hasAnyReference = entries.some(({ leia }) => typeof leia === "object" &&
-          /{{\s*previousStage\b/.test(leia?.spec?.behaviour?.spec?.description ?? ""));
+        const getStageTemplates = (leia: unknown) => {
+          if (!leia || typeof leia !== "object") return [];
+          const spec = (leia as {
+            spec?: {
+              behaviour?: { spec?: { description?: string } };
+              rubric?: { spec?: { evaluationPrompt?: string } };
+            };
+          }).spec;
+          return [spec?.behaviour?.spec?.description ?? "", spec?.rubric?.spec?.evaluationPrompt ?? ""];
+        };
+        const hasAnyReference = entries.some(({ leia }) =>
+          getStageTemplates(leia).some((template) => /{{\s*previousStage\b/.test(template)));
         const referencedOutputs = STAGE_OUTPUTS.filter(({ pattern }) => entries.some(({ leia }) =>
-          typeof leia === "object" && pattern.test(leia?.spec?.behaviour?.spec?.description ?? "")));
+          getStageTemplates(leia).some((template) => pattern.test(template))));
         const flow = stage.orchestration;
         const publishedSourcesSummary = referencedOutputs.map(({ key, summary }) => {
           const sourceIndex = stages.findIndex(({ id }) => id === getOutputSource(stage, key));
@@ -158,15 +176,17 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
                         sourceId === stage.id ? null : sourceId;
                       const conversation = clearRemoved(getOutputSource(other, "conversation"));
                       const submitedSolution = clearRemoved(getOutputSource(other, "submitedSolution"));
+                      const problem = clearRemoved(getOutputSource(other, "problem"));
                       if (
                         other.outputSources?.conversation !== stage.id &&
-                        other.outputSources?.submitedSolution !== stage.id
+                        other.outputSources?.submitedSolution !== stage.id &&
+                        other.outputSources?.problem !== stage.id
                       ) {
                         return other;
                       }
                       return {
                         ...other,
-                        outputSources: { conversation, submitedSolution },
+                        outputSources: { conversation, submitedSolution, problem },
                       };
                     }))}>
                     <DeleteOutlineIcon fontSize="small" />
