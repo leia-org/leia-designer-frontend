@@ -245,7 +245,7 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
                   return (
                     <TextField key={key} select size="small" label={label} value={sourceId ?? ""}
                       disabled={saving} required error={!sourceId}
-                      helperText={!sourceId ? "Choose an earlier stage before publishing the activity." : undefined}
+                      helperText={!sourceId ? "Choose an earlier stage before publishing or replicating the activity." : undefined}
                       onChange={(event) => changeOutputSource(stage, key, event.target.value)}>
                       <MenuItem value="">None</MenuItem>
                       {stages.slice(0, index).map((earlier, earlierIndex) => {
