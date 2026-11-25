@@ -8,7 +8,7 @@ import type { Leia } from '../../src/models/Leia';
 test('saves an empty stage and only asks for an earlier source after a LEIA references it', async () => {
   const firstStage: ActivityStage = {
     id: 'initial-stage',
-    outputSources: { conversation: null, submitedSolution: null },
+    outputSources: { conversation: null, submitedSolution: null, problem: null },
     orchestration: {
       mode: 'single', maxInternalTurns: 2, openingLeiaId: null, problemLeiaId: null, sharedTask: '',
     },
@@ -30,7 +30,7 @@ test('saves an empty stage and only asks for an earlier source after a LEIA refe
   fireEvent.click(screen.getByRole('button', { name: 'Save stages' }));
   await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
   const secondStage = experiment.stages![1];
-  expect(secondStage.outputSources).toEqual({ conversation: null, submitedSolution: null });
+  expect(secondStage.outputSources).toEqual({ conversation: null, submitedSolution: null, problem: null });
 
   const assignLeia = (id: string, description: string, stageId = secondStage.id): LeiaConfig => ({
     id, stageId, configuration: { mode: 'standard', data: {} },
@@ -56,7 +56,7 @@ test('saves an empty stage and only asks for an earlier source after a LEIA refe
   expect(patch).toHaveBeenLastCalledWith('/api/v1/experiments/activity/stages', {
     stages: [firstStage, {
       ...secondStage,
-      outputSources: { conversation: firstStage.id, submitedSolution: null },
+      outputSources: { conversation: firstStage.id, submitedSolution: null, problem: null },
     }],
   });
   rerender(editor());
@@ -92,7 +92,72 @@ test('saves an empty stage and only asks for an earlier source after a LEIA refe
       experiment.stages![1],
       {
         ...thirdStage,
-        outputSources: { conversation: secondStage.id, submitedSolution: firstStage.id },
+        outputSources: { conversation: secondStage.id, submitedSolution: firstStage.id, problem: null },
+      },
+    ],
+  });
+});
+
+test('asks for previous stage problem source when a LEIA references previousStage.leia.problem.*', async () => {
+  const stages: ActivityStage[] = [
+    {
+      id: 'stage-1',
+      outputSources: { conversation: null, submitedSolution: null, problem: null },
+      orchestration: { mode: 'single', maxInternalTurns: 2, openingLeiaId: null, problemLeiaId: null, sharedTask: '' },
+    },
+    {
+      id: 'stage-2',
+      outputSources: { conversation: null, submitedSolution: null, problem: null },
+      orchestration: { mode: 'single', maxInternalTurns: 2, openingLeiaId: null, problemLeiaId: null, sharedTask: '' },
+    },
+  ];
+  const experiment: Experiment = {
+    id: 'activity-problem-ref',
+    name: 'Problem reference activity',
+    user: 'owner',
+    isPublished: false,
+    stages,
+    leias: [
+      {
+        id: 'l1',
+        stageId: 'stage-1',
+        configuration: { mode: 'standard', data: {} },
+        leia: { id: 'l1', metadata: { name: 'Stage 1' }, spec: { behaviour: { spec: { description: 'Do task' } } } } as Leia,
+      },
+      {
+        id: 'l2',
+        stageId: 'stage-2',
+        configuration: { mode: 'standard', data: {} },
+        leia: {
+          id: 'l2',
+          metadata: { name: 'Stage 2' },
+          spec: {
+            behaviour: { spec: { description: 'Base prompt' } },
+            rubric: { spec: { evaluationPrompt: 'Compare with {{previousStage.leia.problem.description}}' } },
+          },
+        } as unknown as Leia,
+      },
+    ],
+    createdAt: '',
+    updatedAt: '',
+  };
+  const patch = vi.spyOn(api, 'patch').mockImplementation(async (_url, body) => ({
+    data: { ...experiment, stages: body.stages },
+  }));
+  const onSaved = vi.fn();
+
+  render(<ActivityStagesEditor experiment={experiment} onSaved={onSaved} />);
+
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of previous stage problem/ }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Stage 1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save stages' }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+  expect(patch).toHaveBeenLastCalledWith('/api/v1/experiments/activity-problem-ref/stages', {
+    stages: [
+      stages[0],
+      {
+        ...stages[1],
+        outputSources: { conversation: null, submitedSolution: null, problem: 'stage-1' },
       },
     ],
   });

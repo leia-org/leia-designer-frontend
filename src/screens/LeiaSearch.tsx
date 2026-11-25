@@ -48,6 +48,10 @@ import { useAuth } from "../context";
 import { LabelAddModal } from "../components/LabelAddModal";
 import { Avatar } from "../components/shared/Avatar";
 import { buildOriginalAvatarPath } from "../lib/avatar";
+import {
+  leiaHasPreviousStageReferences,
+  PREVIOUS_STAGE_TEST_DISABLED_REASON,
+} from "../lib/activityStages";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 type VersionFilter = "" | "latest";
@@ -620,7 +624,10 @@ export const LeiaSearch: React.FC = () => {
 
   const handleTryMenuToggle = useCallback(
     (leia: Leia, anchor: HTMLElement) => {
-      if (initializingId === leia.id) return;
+      if (initializingId === leia.id || leiaHasPreviousStageReferences(leia)) {
+        if (tryMenuOpenId === leia.id) closeTrySettings();
+        return;
+      }
 
       if (tryMenuOpenId === leia.id) {
         closeTrySettings();
@@ -673,6 +680,14 @@ export const LeiaSearch: React.FC = () => {
     leia: Leia,
     runnerConfiguration: { modelName: string; apiKeyId: string | null }
   ) => {
+    if (leiaHasPreviousStageReferences(leia)) {
+      toast.error(PREVIOUS_STAGE_TEST_DISABLED_REASON, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     try {
       setInitializingId(leia.id);
       const response = await api.post("/api/v1/runner/initialize", {
@@ -696,14 +711,27 @@ export const LeiaSearch: React.FC = () => {
       } else {
         setError("Could not start chat session");
       }
-    } catch {
-      setError("Error starting chat session");
+    } catch (err) {
+      const apiMessage =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      setError(apiMessage || "Error starting chat session");
     } finally {
       setInitializingId(null);
     }
   };
 
   const handleStartTry = async (leia: Leia) => {
+    if (leiaHasPreviousStageReferences(leia)) {
+      closeTrySettings();
+      toast.error(PREVIOUS_STAGE_TEST_DISABLED_REASON, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     const config = tryConfigByLeia[leia.id];
     if (!config?.modelName || !config?.apiKeyId) {
       toast.error("Select a model and API key to start", {
@@ -717,6 +745,14 @@ export const LeiaSearch: React.FC = () => {
   };
 
   const handleDefaultTry = async (leia: Leia) => {
+    if (leiaHasPreviousStageReferences(leia)) {
+      toast.error(PREVIOUS_STAGE_TEST_DISABLED_REASON, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     const hasActiveApiKeys = apiKeys.some((key) => key.isActive !== false);
     if (!isApiKeysLoading && !apiKeysError && !hasActiveApiKeys) {
       toast.error("Configure an API key before testing a LEIA", {
@@ -1150,13 +1186,15 @@ export const LeiaSearch: React.FC = () => {
                   const tryModelName = tryConfig?.modelName ?? "";
                   const tryApiKeyId = tryConfig?.apiKeyId ?? null;
                   const requiresTools = leiaRequiresTools(leia);
+                  const usesPreviousStage = leiaHasPreviousStageReferences(leia);
                   const validTryModels = getTryModels(leia);
                   const validTryApiKeys = getTryApiKeys(leia, tryModelName);
-                  const isTryMenuOpen = tryMenuOpenId === leia.id;
+                  const isTryMenuOpen = !usesPreviousStage && tryMenuOpenId === leia.id;
                   const isExpanded = expandedLeiaId === leia.id || isTryMenuOpen || (isTourActive && index === 1);
                   const actionsId = `leia-actions-${leia.id}`;
                   const isTryLoading = isProvidersLoading || isApiKeysLoading;
-                  const canStartTry = Boolean(tryModelName && tryApiKeyId) && !isTryLoading;
+                  const isTestDisabled = initializingId === leia.id || usesPreviousStage;
+                  const canStartTry = !usesPreviousStage && Boolean(tryModelName && tryApiKeyId) && !isTryLoading;
                   const showNoApiKeys =
                     !isTryLoading &&
                     !providersError &&
@@ -1357,41 +1395,62 @@ export const LeiaSearch: React.FC = () => {
                               </Button>
                             </Tooltip>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<LightbulbOutlinedIcon />}
-                                onClick={() => void handleDefaultTry(leia)}
-                                disabled={initializingId === leia.id}
-                                id={index === 1 ? "try-button" : undefined}
-                                sx={{
-                                  borderTopRightRadius: showNoApiKeys ? undefined : 0,
-                                  borderBottomRightRadius: showNoApiKeys ? undefined : 0,
-                                }}
+                              <Tooltip
+                                title={
+                                  usesPreviousStage
+                                    ? PREVIOUS_STAGE_TEST_DISABLED_REASON
+                                    : ""
+                                }
                               >
-                                {initializingId === leia.id ? "Starting…" : "Test LEIA"}
-                              </Button>
-                              {!showNoApiKeys && (
-                                <Tooltip title="Test settings">
-                                  <IconButton
+                                <Box component="span" sx={{ display: "inline-flex" }}>
+                                  <Button
                                     size="small"
-                                    aria-label="Choose Test LEIA settings"
-                                    aria-expanded={isTryMenuOpen}
-                                    aria-haspopup="dialog"
-                                    onClick={(event) => handleTryMenuToggle(leia, event.currentTarget)}
-                                    disabled={initializingId === leia.id}
+                                    variant="outlined"
+                                    startIcon={<LightbulbOutlinedIcon />}
+                                    onClick={() => void handleDefaultTry(leia)}
+                                    disabled={isTestDisabled}
+                                    id={index === 1 ? "try-button" : undefined}
                                     sx={{
-                                      alignSelf: "stretch",
-                                      border: "1px solid",
-                                      borderLeft: 0,
-                                      borderColor: "divider",
-                                      borderRadius: 0,
-                                      borderTopRightRadius: 6,
-                                      borderBottomRightRadius: 6,
+                                      borderTopRightRadius: showNoApiKeys ? undefined : 0,
+                                      borderBottomRightRadius: showNoApiKeys ? undefined : 0,
                                     }}
                                   >
-                                    <TuneOutlinedIcon fontSize="small" />
-                                  </IconButton>
+                                    {initializingId === leia.id ? "Starting…" : "Test LEIA"}
+                                  </Button>
+                                </Box>
+                              </Tooltip>
+                              {!showNoApiKeys && (
+                                <Tooltip
+                                  title={
+                                    usesPreviousStage
+                                      ? PREVIOUS_STAGE_TEST_DISABLED_REASON
+                                      : "Test settings"
+                                  }
+                                >
+                                  <Box
+                                    component="span"
+                                    sx={{ display: "inline-flex", alignSelf: "stretch" }}
+                                  >
+                                    <IconButton
+                                      size="small"
+                                      aria-label="Choose Test LEIA settings"
+                                      aria-expanded={isTryMenuOpen}
+                                      aria-haspopup="dialog"
+                                      onClick={(event) => handleTryMenuToggle(leia, event.currentTarget)}
+                                      disabled={isTestDisabled}
+                                      sx={{
+                                        alignSelf: "stretch",
+                                        border: "1px solid",
+                                        borderLeft: 0,
+                                        borderColor: "divider",
+                                        borderRadius: 0,
+                                        borderTopRightRadius: 6,
+                                        borderBottomRightRadius: 6,
+                                      }}
+                                    >
+                                      <TuneOutlinedIcon fontSize="small" />
+                                    </IconButton>
+                                  </Box>
                                 </Tooltip>
                               )}
                               <LeiaTryDropdown

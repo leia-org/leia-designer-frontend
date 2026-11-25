@@ -80,6 +80,10 @@ import {
 import { RUBRIC_PLACEHOLDER_ITEMS } from "../lib/rubricPlaceholders";
 import { getRubricSchema, validateAgainstRubricSchema, type JsonSchema } from "../lib/rubricSchema";
 import { normalizeProcess, normalizeProcessFields } from "../lib/process";
+import {
+  leiaHasPreviousStageReferences,
+  PREVIOUS_STAGE_TEST_DISABLED_REASON,
+} from "../lib/activityStages";
 import { toast, ToastContainer } from "react-toastify";
 
 interface Label {
@@ -1707,7 +1711,26 @@ const openGenerateProblemModal = () => {
     providerProviderModuleMap,
   ]);
 
+  const usesPreviousStage = useMemo(
+    () =>
+      leiaHasPreviousStageReferences({
+        spec: {
+          behaviour: leiaConfig.behaviour,
+          rubric: rubricDraft,
+        },
+      }),
+    [leiaConfig.behaviour, rubricDraft],
+  );
+
   const handleTestLeia = async () => {
+    if (usesPreviousStage) {
+      toast.error(PREVIOUS_STAGE_TEST_DISABLED_REASON, {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     if (chatBusy || testingLeia || !generatedLeia || !leiaConfig.persona || !leiaConfig.problem || !leiaConfig.behaviour) {
       console.error("No complete LEIA available, or the designer is busy");
       return;
@@ -2556,7 +2579,12 @@ const openGenerateProblemModal = () => {
   };
 
   const renderNewStep = () => {
-    const canTest = Boolean(resolveTestRunnerConfiguration()) && !chatOptionsLoading && !chatBusy && isStep1Complete;
+    const canTest =
+      Boolean(resolveTestRunnerConfiguration()) &&
+      !chatOptionsLoading &&
+      !chatBusy &&
+      isStep1Complete &&
+      !usesPreviousStage;
 
     const editResource = (resource: "persona" | "problem" | "behaviour") => {
       if (resource === "behaviour" && !canEditBehaviour) return;
@@ -2594,7 +2622,13 @@ const openGenerateProblemModal = () => {
         startIcon={<PlayArrowIcon />}
         onClick={() => void handleTestLeia()}
         disabled={!canTest}
-        title={canTest ? undefined : "Configure a valid model and API key in the Design menu first."}
+        title={
+          usesPreviousStage
+            ? PREVIOUS_STAGE_TEST_DISABLED_REASON
+            : canTest
+              ? undefined
+              : "Configure a valid model and API key in the Design menu first."
+        }
       >
         Test LEIA
       </Button>
@@ -2706,7 +2740,9 @@ const openGenerateProblemModal = () => {
               rubricEnabled={rubricEnabled}
               onAddRubric={handleAddRubric}
               onRemoveRubric={handleRemoveRubric}
-              readyToTest={Boolean(generatedLeia) && !chatBusy}
+              readyToTest={Boolean(generatedLeia) && !chatBusy && !usesPreviousStage}
+              statusLabel={Boolean(generatedLeia) && !chatBusy && usesPreviousStage ? "Workbench only" : undefined}
+              testDisabledReason={Boolean(generatedLeia) && usesPreviousStage ? PREVIOUS_STAGE_TEST_DISABLED_REASON : undefined}
               title={customizations.leia.name}
               onTitleChange={handleLeiaNameChange}
               titleSuggested={Boolean(customizations.leia.name) && !leiaNameManuallyEdited}

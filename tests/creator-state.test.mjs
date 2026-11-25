@@ -38,6 +38,7 @@ function loadModule(source, require) {
 }
 const helper = loadModule(await source("src/lib/helper.ts"));
 const processHelpers = loadModule(await source("src/lib/process.ts"));
+const activityStageHelpers = loadModule(await source("src/lib/activityStages.ts"));
 const { generateLeia } = loadModule(await source("src/lib/leia.ts"), () => helper);
 const ui = new Proxy({}, { get: () => ({ children, label, value }) => React.createElement("div", null, children ?? label ?? value) });
 const { LeiaLivePreview } = loadModule(previewSource, name => name === "@mui/material"
@@ -78,7 +79,8 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
   const requests = [];
   const results = [];
   const context = {
-    ...chatHelpers, ...processHelpers, exports: {}, require, console: { error() {} }, Date, useCallback: fn => fn, useMemo: fn => fn(), generateLeia,
+    ...chatHelpers, ...processHelpers, ...activityStageHelpers, exports: {}, require, console: { error() {} }, Date, useCallback: fn => fn, useMemo: fn => fn(), generateLeia,
+    toast: { error() {} },
     leiaConfig: config, rubricDraft: null, currentUser: { id: "synthetic-instructor" }, canEditBehaviour: canEdit,
     problems, behaviours, personas: [], chatTools: [], attachments: [],
     currentProblemRef: { current: null }, currentBehaviourRef: { current: null }, currentPersonaRef: { current: null },
@@ -109,7 +111,7 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
   const code = [
     ...callbacks, declaration(panelSource, "stripAvatar"), declaration(panelSource, "runTurn"),
     "globalThis.run=runTurn; globalThis.onApplyProblem=applyChatProblem; globalThis.onApplyBehaviour=applyChatBehaviour; globalThis.onApplyPersona=applyChatPersona; globalThis.onUseProblem=handleUseExistingProblem; globalThis.onUseBehaviour=handleUseExistingBehaviour; globalThis.testLeia=handleTestLeia;",
-    `globalThis.assemble=()=>{${declaration(createSource, "leiaAssembly")} return leiaAssembly;};`,
+    `globalThis.assemble=()=>{${declaration(createSource, "leiaAssembly")}${declaration(createSource, "usesPreviousStage")} return { ...leiaAssembly, usesPreviousStage };};`,
     `globalThis.testAction=()=>{${declaration(createSource, "isStep1Complete")}${declaration(createSource, "canTest")}${declaration(createSource, "testAction")}return testAction;};`,
     readPreviewProps,
   ].join("\n");
@@ -241,6 +243,23 @@ test("testing is blocked while the assistant is running and while a test is alre
   assert.equal(e.requests.length, 0);
   e.context.chatBusy = false;
   e.context.testingLeia = true;
+  await e.context.testLeia();
+  assert.equal(e.requests.length, 0);
+});
+
+test("testing is blocked when the LEIA references previousStage", async () => {
+  const previousStageConfig = {
+    ...preset(),
+    behaviour: resource("stage-2-review", {
+      ...behaviour(),
+      description: `${template}\nReview {{previousStage.outputs.conversation}}`,
+    }),
+  };
+  const e = editor({ config: previousStageConfig });
+  assert.ok(e.context.generatedLeia);
+  assert.equal(e.context.usesPreviousStage, true);
+  assert.equal(e.context.testAction().props.disabled, true);
+  assert.ok(!e.preview().includes("Ready to test"));
   await e.context.testLeia();
   assert.equal(e.requests.length, 0);
 });

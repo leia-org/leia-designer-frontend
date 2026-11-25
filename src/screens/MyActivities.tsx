@@ -12,6 +12,7 @@ import { TranscriptionView } from "../components/TranscriptionView";
 import { ActivityOrchestrationEditor } from "../components/ActivityOrchestrationEditor";
 import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
 import {
+  getActivityReplicationBlocker,
   getDependentStagesForConversation,
   leiaUsesPreviousStageOutputs,
 } from "../lib/activityStages";
@@ -1354,6 +1355,7 @@ export const MyActivities: React.FC = () => {
                 const isOwner = (typeof experiment.user === "string" ? experiment.user : experiment.user.id) === user?.id;
                 const expanded = expandedExperiments.has(experiment.id);
                 const FlowEditor = experiment.stages ? ActivityStagesEditor : ActivityOrchestrationEditor;
+                const replicationBlocker = getActivityReplicationBlocker(experiment);
 
                 return (
                   <Paper
@@ -1420,9 +1422,20 @@ export const MyActivities: React.FC = () => {
                             </Button>
                           </>
                         )}
-                        <Button size="small" color="secondary" variant="contained" startIcon={<ContentCopyIcon />} onClick={() => handleFastReplication(experiment.id)}>
-                          Replicate
-                        </Button>
+                        <Tooltip title={replicationBlocker ?? ""}>
+                          <span>
+                            <Button
+                              size="small"
+                              color="secondary"
+                              variant="contained"
+                              startIcon={<ContentCopyIcon />}
+                              disabled={Boolean(replicationBlocker)}
+                              onClick={() => handleFastReplication(experiment.id)}
+                            >
+                              Replicate
+                            </Button>
+                          </span>
+                        </Tooltip>
                         <IconButton
                           aria-label={expanded ? "Collapse activity" : "Expand activity"}
                           onClick={() => toggleExperiment(experiment.id)}
