@@ -38,6 +38,7 @@ type LeiaDraftWorkspace = {
     problem?: DraftComponent | null;
     behaviour?: DraftComponent | null;
   };
+  rubricDraft?: DraftComponent | null;
   chatState?: {
     messages?: unknown[];
   };
@@ -54,6 +55,7 @@ const draftComponentNames = (draft: LeiaDraft<LeiaDraftWorkspace>) =>
     draft.state.leiaConfig?.persona?.metadata?.name,
     draft.state.leiaConfig?.problem?.metadata?.name,
     draft.state.leiaConfig?.behaviour?.metadata?.name,
+    draft.state.rubricDraft?.metadata?.name,
   ].filter((name): name is string => Boolean(name));
 
 export const LeiaDrafts = () => {

@@ -53,6 +53,16 @@ export const BEHAVIOUR_PLACEHOLDER_SECTIONS: readonly PlaceholderSection[] = [
           { token: "{{behaviour.tooltip}}", description: "Behaviour tooltip summary" },
         ],
       },
+      {
+        title: "Rubric",
+        items: [
+          { token: "{{rubric.name}}", description: "Rubric name" },
+          { token: "{{rubric.criteria}}", description: "Compact summary of rubric sections, weights, levels, and criteria" },
+          { token: "{{rubric.markdown}}", description: "Complete rubric rendered as Markdown tables" },
+          { token: "{{rubric.evaluationPrompt}}", description: "Rubric evaluation instructions" },
+          { token: "{{rubric.sections}}", description: "Raw JSON of the rubric sections" },
+        ],
+      },
     ],
   },
   {
@@ -64,6 +74,19 @@ export const BEHAVIOUR_PLACEHOLDER_SECTIONS: readonly PlaceholderSection[] = [
         items: [
           { token: "{{previousStage.outputs.conversation}}", description: "Conversation transcript from an earlier stage" },
           { token: "{{previousStage.outputs.submitedSolution}}", description: "Submitted solution from an earlier stage" },
+        ],
+      },
+      {
+        title: "Previous stage problem",
+        items: [
+          { token: "{{previousStage.leia.problem.description}}", description: "Scenario / problem statement from an earlier stage" },
+          { token: "{{previousStage.leia.problem.details}}", description: "Additional details and requirements from an earlier stage" },
+          { token: "{{previousStage.leia.problem.personaBackground}}", description: "Persona background from an earlier stage problem" },
+          { token: "{{previousStage.leia.problem.solution}}", description: "Expected reference solution from an earlier stage" },
+          { token: "{{previousStage.leia.problem.initialSolution}}", description: "Initial solution template from an earlier stage" },
+          { token: "{{previousStage.leia.problem.solutionFormat}}", description: "Expected solution format from an earlier stage" },
+          { token: "{{previousStage.leia.problem.evaluationPrompt}}", description: "Custom evaluation prompt from an earlier stage" },
+          { token: "{{previousStage.leia.problem.process}}", description: "Problem process type(s) from an earlier stage" },
         ],
       },
     ],

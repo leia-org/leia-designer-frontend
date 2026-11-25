@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
+  getActivityReplicationBlocker,
   getDependentStagesForConversation,
+  leiaHasPreviousStageReferences,
   leiaUsesPreviousStageOutputs,
   stageHasTranscriptionMode,
 } from '../../src/lib/activityStages';
@@ -53,5 +55,121 @@ describe('activityStages transcription helpers', () => {
     expect(stageHasTranscriptionMode(experiment, 's2')).toBe(false);
     expect(leiaUsesPreviousStageOutputs(experiment.leias[0].leia)).toBe(false);
     expect(leiaUsesPreviousStageOutputs(experiment.leias[2].leia)).toBe(true);
+  });
+
+  test('blocks replication when any stage has no LEIAs or unresolved previousStage references', () => {
+    const emptyStage: Experiment = {
+      id: 'exp-empty-stage',
+      name: 'Empty stage activity',
+      user: 'owner',
+      isPublished: false,
+      createdAt: '',
+      updatedAt: '',
+      stages: [
+        { id: 's1', outputSources: { conversation: null, submitedSolution: null, problem: null }, orchestration },
+        { id: 's2', outputSources: { conversation: null, submitedSolution: null, problem: null }, orchestration },
+      ],
+      leias: [makeLeia('l1', 's1', 'Stage 1')],
+    };
+    expect(getActivityReplicationBlocker(emptyStage)).toBe('Stage 2 requires at least one LEIA');
+
+    const unresolvedSolution: Experiment = {
+      ...emptyStage,
+      id: 'exp-unresolved',
+      leias: [
+        makeLeia('l1', 's1', 'Stage 1'),
+        makeLeia('l2', 's2', 'Evaluate {{previousStage.outputs.submitedSolution}}'),
+      ],
+    };
+    expect(getActivityReplicationBlocker(unresolvedSolution)).toBe(
+      'Select an earlier stage for submitted solution in stage 2',
+    );
+
+    const unresolvedProblemInRubric: Experiment = {
+      ...emptyStage,
+      id: 'exp-unresolved-problem',
+      stages: [
+        { id: 's1', outputSources: { conversation: null, submitedSolution: null, problem: null }, orchestration },
+        { id: 's2', outputSources: { conversation: 's1', submitedSolution: null, problem: null }, orchestration },
+      ],
+      leias: [
+        makeLeia('l1', 's1', 'Stage 1'),
+        {
+          ...makeLeia('l2', 's2', 'Discuss {{previousStage.outputs.conversation}}'),
+          leia: {
+            id: 'l2',
+            metadata: { name: 'l2' },
+            spec: {
+              behaviour: { spec: { description: 'Discuss {{previousStage.outputs.conversation}}' } },
+              rubric: { spec: { evaluationPrompt: 'Compare {{previousStage.leia.problem.description}}' } },
+            },
+          } as unknown as Leia,
+        },
+      ],
+    };
+    expect(getActivityReplicationBlocker(unresolvedProblemInRubric)).toBe(
+      'Select an earlier stage for problem in stage 2',
+    );
+
+    const resolved: Experiment = {
+      ...unresolvedProblemInRubric,
+      stages: [
+        { id: 's1', outputSources: { conversation: null, submitedSolution: null, problem: null }, orchestration },
+        { id: 's2', outputSources: { conversation: 's1', submitedSolution: null, problem: 's1' }, orchestration },
+      ],
+    };
+    expect(getActivityReplicationBlocker(resolved)).toBeNull();
+
+    const emptyLegacy: Experiment = {
+      id: 'exp-legacy',
+      name: 'Empty legacy',
+      user: 'owner',
+      isPublished: false,
+      createdAt: '',
+      updatedAt: '',
+      leias: [],
+    };
+    expect(getActivityReplicationBlocker(emptyLegacy)).toBe('Add at least one LEIA before replicating');
+  });
+
+  test('detects any previousStage reference in behaviour or rubric templates', () => {
+    expect(
+      leiaHasPreviousStageReferences({
+        spec: { behaviour: { spec: { description: 'Review {{previousStage.outputs.conversation}}.' } } },
+      }),
+    ).toBe(true);
+    expect(
+      leiaHasPreviousStageReferences({
+        spec: { behaviour: { spec: { description: 'Grade {{ previousStage.outputs.submitedSolution }}.' } } },
+      }),
+    ).toBe(true);
+    expect(
+      leiaHasPreviousStageReferences({
+        spec: { behaviour: { spec: { description: 'Compare {{previousStage.leia.problem.description}}.' } } },
+      }),
+    ).toBe(true);
+    expect(
+      leiaHasPreviousStageReferences({
+        spec: { behaviour: { spec: { description: 'Malformed {{previousStage.unknown}}.' } } },
+      }),
+    ).toBe(true);
+    expect(
+      leiaHasPreviousStageReferences({
+        spec: {
+          behaviour: { spec: { description: 'Standard behaviour.' } },
+          rubric: { spec: { evaluationPrompt: 'Use {{previousStage.leia.problem.solution}}.' } },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      leiaHasPreviousStageReferences({
+        spec: {
+          behaviour: { spec: { description: 'Act as {{persona.fullName}} without previousStage placeholders.' } },
+          rubric: { spec: { evaluationPrompt: 'Evaluate {{currentStage.outputs.conversation}}.' } },
+        },
+      }),
+    ).toBe(false);
+    expect(leiaHasPreviousStageReferences(null)).toBe(false);
+    expect(leiaHasPreviousStageReferences('leia-id')).toBe(false);
   });
 });

@@ -2,17 +2,24 @@ import type React from "react";
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   Divider,
+  IconButton,
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import PsychologyOutlinedIcon from "@mui/icons-material/PsychologyOutlined";
 import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import type { Behaviour, Persona, Problem } from "../models/Leia";
+import type { RubricDefinition } from "../models/Rubric";
 
 interface GeneratedLeiaPreview {
   spec?: {
@@ -24,13 +31,19 @@ interface GeneratedLeiaPreview {
 
 interface LeiaLivePreviewProps {
   leia: GeneratedLeiaPreview | null;
+  rubric?: RubricDefinition | null;
+  rubricEnabled?: boolean;
+  onAddRubric?: () => void;
+  onRemoveRubric?: () => void;
   title: string;
   onTitleChange: (value: string) => void;
   titleSuggested?: boolean;
   testAction: React.ReactNode;
+  testDisabledReason?: string;
   readyToTest?: boolean;
+  statusLabel?: string;
   canEditBehaviour?: boolean;
-  onComponentClick?: (component: "persona" | "behaviour" | "problem") => void;
+  onComponentClick?: (component: "persona" | "behaviour" | "problem" | "rubric") => void;
 }
 
 interface PreviewSectionProps {
@@ -38,6 +51,7 @@ interface PreviewSectionProps {
   icon: React.ReactNode;
   title: string;
   subtitle?: string;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
   onClick?: () => void;
   isBlocked?: boolean;
@@ -60,6 +74,7 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
   icon,
   title,
   subtitle,
+  headerAction,
   children,
   onClick,
   isBlocked,
@@ -120,6 +135,7 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
           </Typography>
         )}
       </Box>
+      {headerAction}
     </Stack>
     {isBlocked ? (
   <Box sx={{ p: 1.5, minWidth: 0 }}>
@@ -137,19 +153,27 @@ const PreviewSection: React.FC<PreviewSectionProps> = ({
   </Paper>
 );
 
-const EmptySection: React.FC = () => (
+const EmptySection: React.FC<{ label?: string }> = ({
+  label = "Waiting for the assistant to create this component.",
+}) => (
   <Typography variant="body2" color="text.disabled" fontStyle="italic">
-    Waiting for the assistant to create this component.
+    {label}
   </Typography>
 );
 
 export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   leia,
+  rubric,
+  rubricEnabled = false,
+  onAddRubric,
+  onRemoveRubric,
   title,
   onTitleChange,
   titleSuggested = false,
   testAction,
+  testDisabledReason,
   readyToTest,
+  statusLabel,
   canEditBehaviour = true,
   onComponentClick,
 }) => {
@@ -158,7 +182,13 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
   const behaviour = leia?.spec?.behaviour;
   const displayName = title || persona?.spec?.fullName || "Untitled LEIA";
   const isReady = readyToTest ?? Boolean(persona && problem && behaviour);
+  const chipLabel = statusLabel ?? (isReady ? "Ready to test" : "Draft");
   const widgetCount = problem?.spec?.widgets?.length ?? 0;
+  const rubricCriteriaCount = rubric?.spec.sections.reduce(
+    (total, section) => total + section.criteria.length,
+    0,
+  ) ?? 0;
+
   return (
     <Paper
       variant="outlined"
@@ -179,7 +209,7 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
             <Typography variant="overline" color="text.secondary">Workbench preview</Typography>
-            <Chip label={isReady ? "Ready to test" : "Draft"} size="small" color={isReady ? "success" : "default"} variant={isReady ? "filled" : "outlined"} />
+            <Chip label={chipLabel} size="small" color={isReady ? "success" : "default"} variant={isReady ? "filled" : "outlined"} />
           </Stack>
           <TextField
             variant="standard"
@@ -263,10 +293,102 @@ export const LeiaLivePreview: React.FC<LeiaLivePreviewProps> = ({
             </Stack>
           ) : <EmptySection />}
         </PreviewSection>
+
+        {rubricEnabled || rubric ? (
+          <PreviewSection
+            accent="#D97706"
+            icon={<FactCheckOutlinedIcon sx={{ fontSize: 17 }} />}
+            title="Rubric"
+            subtitle={rubric?.metadata.name}
+            onClick={() => onComponentClick?.("rubric")}
+            headerAction={
+              onRemoveRubric ? (
+                <Tooltip title="Remove rubric">
+                  <IconButton
+                    size="small"
+                    aria-label="Remove rubric"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRemoveRubric();
+                    }}
+                    sx={{ color: "text.secondary" }}
+                  >
+                    <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              ) : undefined
+            }
+          >
+            {rubric ? (
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                  <Chip
+                    label={`${rubric.spec.sections.length} ${rubric.spec.sections.length === 1 ? "section" : "sections"}`}
+                    size="small"
+                    sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.subtle" }}
+                  />
+                  <Chip
+                    label={`${rubricCriteriaCount} ${rubricCriteriaCount === 1 ? "criterion" : "criteria"}`}
+                    size="small"
+                    sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.subtle" }}
+                  />
+                  {rubric.spec.evaluationPrompt && (
+                    <Chip
+                      label="Custom prompt"
+                      size="small"
+                      sx={{ height: 20, fontSize: 10, bgcolor: "surfaces.accent", color: "primary.dark" }}
+                    />
+                  )}
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  Click to edit evaluation prompt, Markdown, or JSON.
+                </Typography>
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Rubric enabled for the assistant. Ask the AI to generate one or click here to edit manually.
+              </Typography>
+            )}
+          </PreviewSection>
+        ) : onAddRubric ? (
+          <Button
+            variant="outlined"
+            color="inherit"
+            size="small"
+            fullWidth
+            startIcon={<AddOutlinedIcon fontSize="small" />}
+            onClick={onAddRubric}
+            sx={{
+              borderStyle: "dashed",
+              borderColor: "divider",
+              color: "text.secondary",
+              py: 1,
+              textTransform: "none",
+              "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "surfaces.subtle" },
+            }}
+          >
+            Add evaluation rubric (optional)
+          </Button>
+        ) : null}
       </Stack>
 
       <Divider />
-      <Box sx={{ p: 1.5 }}>{testAction}</Box>
+      <Box sx={{ p: 1.5 }}>
+        {testDisabledReason ? (
+          <Stack spacing={0.75}>
+            <Tooltip title={testDisabledReason}>
+              <Box component="span" sx={{ display: "block", width: "100%" }}>
+                {testAction}
+              </Box>
+            </Tooltip>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center" }}>
+              {testDisabledReason}
+            </Typography>
+          </Stack>
+        ) : (
+          testAction
+        )}
+      </Box>
     </Paper>
   );
 };
