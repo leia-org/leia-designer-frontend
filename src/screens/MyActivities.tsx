@@ -1350,7 +1350,7 @@ export const MyActivities: React.FC = () => {
           </Typography>
         </Stack>
           ) : (
-            <Stack spacing={1.5}>
+            <Stack id="activities" spacing={1.5}>
               {experiments?.map((experiment, experimentIndex) => {
                 const isOwner = (typeof experiment.user === "string" ? experiment.user : experiment.user.id) === user?.id;
                 const expanded = expandedExperiments.has(experiment.id);
