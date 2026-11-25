@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
@@ -7,39 +6,14 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 
-// Execute the actual tool loop, React state updaters, assembly and test handler.
-// Flush queued state updates between model responses, as React does. No model,
-// API, browser session, database or credentials are required for this regression.
-const source = async path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const createSource = await source("src/screens/CreateLeia.tsx");
-const panelSource = await source("src/components/ProblemChatPanel.tsx");
-const previewSource = await source("src/components/LeiaLivePreview.tsx");
+import { CORE_BEHAVIOUR_REFERENCES } from "../src/lib/chatBehaviours.mjs";
+import { chatFixture, compile, declaration, generateLeia, loadModule, readSource } from "./creator-chat-fixture.mjs";
+
+const createSource = await readSource("src/screens/CreateLeia.tsx");
+const panelSource = await readSource("src/components/ProblemChatPanel.tsx");
+const previewSource = await readSource("src/components/LeiaLivePreview.tsx");
 const require = createRequire(import.meta.url);
-const chatHelpers = panelSource.includes("missingBehaviourReferences")
-  ? await import("../src/lib/chatBehaviours.mjs") : {};
-function declaration(source, name) {
-  const file = ts.createSourceFile("source.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  let result;
-  function visit(node) {
-    if (ts.isVariableDeclaration(node) && node.name.getText(file) === name) result = `const ${node.getText(file)};`;
-    ts.forEachChild(node, visit);
-  }
-  visit(file);
-  assert.ok(result, `Missing declaration: ${name}`);
-  return result;
-}
-const compile = source => ts.transpileModule(source, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-}).outputText;
-function loadModule(source, require) {
-  const context = { exports: {}, require, structuredClone, console };
-  vm.createContext(context); vm.runInContext(compile(source), context);
-  return context.exports;
-}
-const helper = loadModule(await source("src/lib/helper.ts"));
-const processHelpers = loadModule(await source("src/lib/process.ts"));
-const activityStageHelpers = loadModule(await source("src/lib/activityStages.ts"));
-const { generateLeia } = loadModule(await source("src/lib/leia.ts"), () => helper);
+const activityStageHelpers = loadModule(await readSource("src/lib/activityStages.ts"));
 const ui = new Proxy({}, { get: () => ({ children, label, value }) => React.createElement("div", null, children ?? label ?? value) });
 const { LeiaLivePreview } = loadModule(previewSource, name => name === "@mui/material"
   ? ui : name.startsWith("@mui/icons-material/") ? { default: "svg" } : require(name));
@@ -61,7 +35,7 @@ const readPreviewProps = (() => {
   return `globalThis.previewProps=()=>({${properties.join(",")}});`;
 })();
 const process = ["requirements-elicitation"];
-const template = (chatHelpers.CORE_BEHAVIOUR_REFERENCES ?? ["{{problem.description}}", "{{persona.fullName}}"]).join("\n");
+const template = CORE_BEHAVIOUR_REFERENCES.join("\n");
 const problem = (name, tags = process) => ({ name, description: `${name} requirements`, personaBackground: "Client {{persona.fullName}}", details: "Inventory", solution: "Stock model", process: tags, extends: {}, overrides: {}, constrainedTo: {} });
 const behaviour = (tags = process) => ({ name: "burger-interview", role: "Operations director", description: template, process: tags });
 const resource = (id, spec) => ({ id, apiVersion: "v1", metadata: { name: id, version: "1.0.0" }, spec });
@@ -74,18 +48,12 @@ const call = (name, args = {}) => ({ toolCalls: [{ name, callId: name, arguments
 const inspect = () => [call("list_personas"), call("list_problems"), call("list_behaviours")];
 
 function editor({ config = preset(), canEdit = true, problems = [], behaviours = [] } = {}) {
-  let replies = [];
-  const queued = [];
   const requests = [];
-  const results = [];
+  const chat = chatFixture({ config, canEdit, problems, behaviours });
   const context = {
-    ...chatHelpers, ...processHelpers, ...activityStageHelpers, exports: {}, require, console: { error() {} }, Date, useCallback: fn => fn, useMemo: fn => fn(), generateLeia,
+    ...activityStageHelpers, exports: {}, require, console: { error() {} }, useMemo: fn => fn(), generateLeia,
     toast: { error() {} },
     leiaConfig: config, rubricDraft: null, currentUser: { id: "synthetic-instructor" }, canEditBehaviour: canEdit,
-    problems, behaviours, personas: [], chatTools: [], attachments: [],
-    currentProblemRef: { current: null }, currentBehaviourRef: { current: null }, currentPersonaRef: { current: null },
-    previousBehaviourRef: { current: config.behaviour }, rememberedBehavioursRef: { current: new Map() },
-    inspectedLibrariesRef: { current: new Set() }, problemsRef: { current: problems }, behavioursRef: { current: behaviours }, personasRef: { current: [] },
     currentStep: 1, leiaConfigSnapShot: null, selectedLabelIds: [], customizations: {},
     currentDraftIdRef: { current: "draft" }, chatState: { messages: [{ role: "user", text: "Burger stock" }] },
     chatModelName: "fixture-model", chatApiKeyId: "fixture-key", pendingLabelDrafts: [], supervisorConfig: {},
@@ -93,46 +61,35 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
     chatBusy: false, chatOptionsLoading: false, testingLeia: false,
     Button: ({ children, disabled }) => React.createElement("button", { disabled }, children), PlayArrowIcon: "svg", CircularProgress: "svg",
     pushMessage() {}, setError(message) { context.error = message; },
-    setLeiaConfig: update => queued.push(update),
     setTestingLeia(value) { context.testingLeia = value; },
     resolveTestRunnerConfiguration: () => ({ model: "fixture-model" }),
     saveCurrentDraft: async () => ({ id: "draft" }),
     api: { post: async (path, payload) => { requests.push({ path, payload }); return { data: { sessionId: "fixture-session" } }; } },
     navigate: (path, options) => { context.navigation = { path, ...options }; },
-    sendProblemChatMessage: async (_chatId, body) => {
-      render();
-      if (body.toolResults) results.push(...body.toolResults);
-      const next = replies.shift();
-      assert.ok(next, "Unexpected model continuation");
-      return typeof next === "function" ? next(body) : next;
-    },
   };
-  const callbacks = ["copyProcess", "haveSameProcess", "applyChatProblem", "applyChatBehaviour", "applyChatPersona", "handleUseExistingProblem", "handleUseExistingBehaviour", "handleTestLeia"].map(name => declaration(createSource, name));
   const code = [
-    ...callbacks, declaration(panelSource, "stripAvatar"), declaration(panelSource, "runTurn"),
-    "globalThis.run=runTurn; globalThis.onApplyProblem=applyChatProblem; globalThis.onApplyBehaviour=applyChatBehaviour; globalThis.onApplyPersona=applyChatPersona; globalThis.onUseProblem=handleUseExistingProblem; globalThis.onUseBehaviour=handleUseExistingBehaviour; globalThis.testLeia=handleTestLeia;",
+    declaration(createSource, "handleTestLeia"), "globalThis.testLeia=handleTestLeia;",
     `globalThis.assemble=()=>{${declaration(createSource, "leiaAssembly")}${declaration(createSource, "usesPreviousStage")} return { ...leiaAssembly, usesPreviousStage };};`,
     `globalThis.testAction=()=>{${declaration(createSource, "isStep1Complete")}${declaration(createSource, "canTest")}${declaration(createSource, "testAction")}return testAction;};`,
     readPreviewProps,
   ].join("\n");
   vm.createContext(context); vm.runInContext(compile(code), context);
   function render() {
-    while (queued.length) context.leiaConfig = queued.shift()(context.leiaConfig);
-    context.currentProblemRef.current = context.leiaConfig.problem;
-    context.currentBehaviourRef.current = context.leiaConfig.behaviour;
-    context.currentPersonaRef.current = context.leiaConfig.persona;
     Object.assign(context, context.assemble());
   }
   render();
   return {
-    context, requests, results, render,
+    context, requests, results: chat.results, render,
     async turn(sequence) {
-      replies = [...sequence, { message: "Done" }];
-      context.inspectedLibrariesRef.current.clear();
       context.chatBusy = true;
-      try { await context.run("chat", "Change to burger management"); }
-      finally { context.chatBusy = false; render(); }
-      assert.equal(replies.length, 0);
+      try {
+        await chat.turn(sequence);
+        chat.apply();
+        context.leiaConfig = chat.editor.draft.config;
+      } finally {
+        context.chatBusy = false;
+        render();
+      }
     },
     preview() { return renderToStaticMarkup(React.createElement(LeiaLivePreview, { ...context.previewProps(), title: "Burger stock", onTitleChange() {}, testAction: context.testAction() })); },
   };
@@ -140,7 +97,7 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
 
 test("video regression: persona, behaviour, then problem in separate responses tests and restores the new LEIA", async () => {
   const e = editor();
-  await e.turn([...inspect(), call("apply_persona", { name: "burger-director", fullName: "Laura", description: "Operations director", personality: "Pragmatic" }), call("apply_behaviour", behaviour()), call("apply_problem", problem("burger-inventory"))]);
+  await e.turn([...inspect(), call("apply_persona", { name: "burger-director", fullName: "Laura", firstName: "Laura", description: "Operations director", personality: "Pragmatic" }), call("apply_behaviour", behaviour()), call("apply_problem", problem("burger-inventory"))]);
   assert.equal(e.context.leiaConfig.behaviour.metadata.name, "burger-interview");
   assert.equal(e.context.generatedLeia.spec.problem.metadata.name, "burger-inventory");
   assert.equal(e.context.testAction().props.disabled, false);
@@ -171,39 +128,33 @@ test("a behaviour authored before the first problem also survives when starting 
   assert.equal(e.context.generatedLeia.spec.problem.metadata.name, "burger-inventory");
 });
 
-test("changing a problem alone never silently inherits an unchecked behaviour or stale preview", async () => {
+test("a problem-only proposal keeps a compatible behaviour and assembles a fresh preview", async () => {
   const e = editor();
+  const original = e.context.leiaConfig.behaviour;
   await e.turn([...inspect(), call("apply_problem", problem("burger-inventory"))]);
-  assert.equal(e.context.leiaConfig.behaviour, null);
-  assert.equal(e.context.generatedLeia, null);
-  assert.equal(e.context.testAction().props.disabled, true);
-  await e.context.testLeia();
-  assert.equal(e.requests.length, 0);
-  const html = e.preview();
-  assert.ok(html.includes("burger-inventory"));
-  assert.ok(html.includes("Sara"));
-  assert.equal((html.match(/Waiting for the assistant/g) ?? []).length, 1);
-  assert.ok(!html.includes("Ready to test"));
-  const restored = editor({ config: e.context.leiaConfig });
-  assert.equal(restored.preview(), html);
+  assert.equal(e.context.leiaConfig.behaviour, original);
+  assert.equal(e.context.generatedLeia.spec.problem.metadata.name, "burger-inventory");
+  assert.equal(e.context.testAction().props.disabled, false);
 });
 
-test("an explicit behaviour choice never leaks from one user turn to the next", async () => {
+test("a new problem with a different process cannot be applied with an incompatible behaviour", async () => {
   const e = editor();
-  await e.turn([...inspect(), call("apply_behaviour", behaviour())]);
-  await e.turn([...inspect(), call("apply_problem", problem("burger-inventory"))]);
-  assert.equal(e.context.leiaConfig.behaviour, null);
-  assert.equal(e.context.generatedLeia, null);
+  const original = e.context.leiaConfig;
+  await assert.rejects(e.turn([...inspect(), call("apply_behaviour", behaviour()), call("apply_problem", problem("burger-game", ["game"]))]), /different processes/);
+  assert.equal(e.context.leiaConfig, original);
+  assert.match(e.results.at(-1).output.warning, /different processes/);
 });
 
-test("a new problem with a different process invalidates even this turn's behaviour", async () => {
-  const e = editor();
-  await e.turn([...inspect(), call("apply_behaviour", behaviour()), call("apply_problem", problem("burger-game", ["game"]))]);
-  assert.equal(e.context.leiaConfig.behaviour, null);
-  assert.equal(e.context.generatedLeia, null);
-  assert.equal(e.results.at(-1).output.behaviourPreserved, false);
-  await e.context.testLeia();
-  assert.equal(e.requests.length, 0);
+test("an incompatible Problem change lists the required Behaviour change before approval", async () => {
+  const original = preset();
+  const compatible = resource("game-client", behaviour(["game"]));
+  const chat = chatFixture({ config: original, canEdit: true, behaviours: [compatible] });
+  await chat.turn([...inspect(), call("apply_problem", problem("burger-game", ["game"])), call("use_behaviour", { id: compatible.id })]);
+  assert.equal(chat.editor.draft.config, original);
+  assert.deepEqual(Array.from(chat.proposal.changes, change => change.target), ["problem", "behaviour", "leia"]);
+  assert.match(chat.proposal.changes[1].reason, /different process/);
+  chat.apply();
+  assert.equal(chat.editor.draft.config.behaviour, compatible);
 });
 
 test("selecting an existing problem preserves a compatible behaviour explicitly chosen in this turn", async () => {
@@ -215,11 +166,11 @@ test("selecting an existing problem preserves a compatible behaviour explicitly 
   assert.equal(e.context.generatedLeia.spec.problem.metadata.name, p.id);
 });
 
-test("failed behaviour selection cannot preserve the inherited behaviour for another problem", async () => {
+test("a rejected command prevents applying the other commands in the same proposal", async () => {
   const e = editor({ canEdit: false });
-  await e.turn([...inspect(), call("use_behaviour", { id: "invented" }), call("apply_problem", problem("burger-inventory"))]);
-  assert.equal(e.context.leiaConfig.behaviour, null);
-  assert.equal(e.context.generatedLeia, null);
+  const original = e.context.leiaConfig;
+  await assert.rejects(e.turn([...inspect(), call("use_behaviour", { id: "invented" }), call("apply_problem", problem("burger-inventory"))]), /available behaviour/);
+  assert.equal(e.context.leiaConfig, original);
 });
 
 test("assembly errors immediately clear the old LEIA and disable testing", async () => {
@@ -269,7 +220,7 @@ test("the send handler reports busy state during requests and clears it on succe
     const changes = [];
     const context = {
       input: "Create a LEIA", sending: false, disabled: false,
-      inspectedLibrariesRef: { current: new Set() }, pushMessage() {}, setInput() {}, setError() {}, setSending() {},
+      pushMessage() {}, setInput() {}, setError() {}, setSending() {}, setProposal() {}, setRevising() {}, draft: {}, revising: false,
       onBusyChange: busy => changes.push(busy), ensureSession: async () => "chat",
       runTurn: async () => { assert.deepEqual(changes, [true]); if (fail) throw new Error("Model unavailable"); return "Done"; },
     };

@@ -15,9 +15,22 @@ import {
   Typography,
 } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
-import type { Problem, ProblemSpec, Behaviour, Persona } from "../models/Leia";
-import type { RubricDefinition } from "../models/Rubric";
-import { behaviourPage, behaviourCandidates, CORE_BEHAVIOUR_REFERENCES, missingBehaviourReferences, templateReferences } from "../lib/chatBehaviours.mjs";
+import type { Problem, Behaviour, Persona } from "../models/Leia";
+import { behaviourPage, behaviourCandidates, CORE_BEHAVIOUR_REFERENCES, templateReferences } from "../lib/chatBehaviours.mjs";
+import type { User } from "../models/User";
+import {
+  commandTarget,
+  processConflict,
+  reviewCreatorChanges,
+  stageCreatorCommand,
+  validateCreatorChanges,
+  type CreatorDraft,
+  type CreatorLibrary,
+  type CreatorProposal,
+  type DraftTarget,
+  type ReviewedChange,
+} from "../lib/creatorCommands";
+import { CreatorProposalCard } from "./CreatorProposalCard";
 import { WIDGET_CATALOG } from "../widgets/catalog";
 import {
   openProblemChat,
@@ -27,9 +40,7 @@ import {
   type ProblemChatToolResult,
   type UploadedFile,
 } from "../lib/problemChat";
-import { validateRubricSemantics } from "../lib/rubrics";
-import { getRubricSchema, validateAgainstRubricSchema, type JsonSchema } from "../lib/rubricSchema";
-import { normalizeProcessFields } from "../lib/process";
+import { getRubricSchema, type JsonSchema } from "../lib/rubricSchema";
 
 // Widget catalog context for the model: available widgetTypes + their tool
 // functions, so it can decide whether the activity needs a widget (e.g. a
@@ -74,9 +85,7 @@ const componentScoped = (description: string) => ({
   properties: COMPONENT_SCOPED_PROPS,
 });
 
-// The editor-driving tools. apply_problem's parameters ARE the full Problem
-// spec (structured output via function calling, like the workbench widget
-// tools). get_current_problem lets the model read the editor to iterate.
+// The model proposes changes through commands. Designer previews them on a copy of the draft.
 const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "get_current_problem",
@@ -93,7 +102,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "use_problem",
     description:
-      "Selects an existing problem by id from list_problems. Prefer this when its scenario, learning objective and expected solution materially match the user's request.",
+      "Proposes reusing an existing problem by id from list_problems. Prefer this when its scenario, learning objective and expected solution materially match the user's request.",
     parameters: {
       type: "object",
       properties: {
@@ -105,7 +114,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_problem",
     description:
-      "Writes a NEW, COMPLETE problem into the editor, replacing the current one. Call list_problems first and use this only when no existing problem is semantically suitable. Fill every field you reasonably can.\n\n" +
+      "Proposes a new, complete Problem. If a Problem is selected, this replaces it after review. For edits to the selected Problem, call edit_problem. Call list_problems first and use this only when no existing problem is semantically suitable. Fill every field you reasonably can.\n\n" +
       "`extends` / `overrides` / `constrainedTo` customize the persona / behaviour / problem this activity is paired with. Each is keyed by component (`persona`, `behaviour`, `problem`); each component is `{ spec: { ...fields }, apiVersion?: \"v1\" }`. extends ADDS to a spec, overrides REPLACES fields, constrainedTo CONSTRAINS/limits. persona.spec fields: fullName, firstName, description, personality, subjectPronoum, objectPronoum, possesivePronoum, possesiveAdjective. behaviour.spec fields: description, role, process. Use them ONLY when the user asks to customize the persona/behaviour for this problem; otherwise leave them as {}. Example:\n" +
       '{ "extends": { "persona": { "spec": { "personality": ["amigable", "despistado"] } } }, "overrides": { "behaviour": { "spec": { "role": "alumno de instituto" } } }, "constrainedTo": { "behaviour": { "spec": { "process": ["requirements-elicitation"] }, "apiVersion": "v1" } } }\n\n' +
       "Add `widgets` ONLY when the activity needs an interactive tool (e.g. a coding exercise needs the code editor). Available widgets and their tool functions:\n" +
@@ -212,7 +221,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "use_behaviour",
     description:
-      "Selects a saved or draft behaviour by id from list_behaviours, preserving its identity and template placeholders. Reuse a compatible generic role across different scenarios; the dynamic problem/persona references supply the current context. Its process must exactly match the selected problem process. Inspect its full instructions and reject incompatible hardcoded case data.",
+      "Proposes reusing a saved or draft Behaviour by id from list_behaviours. Reuse a compatible generic role across different scenarios; the dynamic problem/persona references supply the current context. Its process must exactly match the selected problem process. Inspect its full instructions and reject incompatible hardcoded case data.",
     parameters: {
       type: "object",
       properties: {
@@ -224,7 +233,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_behaviour",
     description:
-      "Writes a COMPLETE reusable behaviour into the editor. Call list_behaviours first; prefer use_behaviour when a saved or draft role is compatible. Define the interaction pattern, boundaries and guidance using dynamic problem/persona references rather than hardcoding the current exercise. Preserve all template references in the previous behaviour when editing it. Required references in description: " + CORE_BEHAVIOUR_REFERENCES.join(", ") + ". Missing references return an error without changing the editor. Set `name` so the instructor doesn't have to rename it.",
+      "Proposes a new, complete reusable Behaviour. Call list_behaviours first; prefer use_behaviour when a saved or draft role is compatible. For edits to the selected Behaviour, call edit_behaviour. Define the interaction pattern, boundaries and guidance using dynamic problem/persona references rather than hardcoding the current exercise. Preserve all template references in the previous behaviour when editing it. Required references in description: " + CORE_BEHAVIOUR_REFERENCES.join(", ") + ". Missing references return an error without changing the editor. Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -250,7 +259,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_persona",
     description:
-      "Writes a NEW, COMPLETE persona into the editor, replacing the current one. Call list_personas first and use this only when no existing persona is suitable. The persona is the character the AI embodies (name, background, personality, pronouns). Set `name` so the instructor doesn't have to rename it.",
+      "Proposes a new, complete Persona. If a Persona is selected, this replaces it after review. For edits to the selected Persona, call edit_persona. Call list_personas first and use this only when no existing persona is suitable. The persona is the character the AI embodies (name, background, personality, pronouns). Set `name` so the instructor doesn't have to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -276,7 +285,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "apply_rubric",
     description:
-      "Writes a COMPLETE structured evaluation rubric for the exact current Problem. Levels must be ordered from worst to best, section weights must total 100, and every criterion must contain exactly one descriptor for every section level.",
+      "Proposes a COMPLETE structured evaluation rubric for the exact current Problem. Levels must be ordered from worst to best, section weights must total 100, and every criterion must contain exactly one descriptor for every section level.",
     parameters: { type: "object", properties: {} },
     strict: true,
   },
@@ -289,7 +298,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "use_persona",
     description:
-      "Selects an existing persona by id from list_personas instead of creating a duplicate.",
+      "Proposes reusing an existing Persona from list_personas instead of creating a duplicate.",
     parameters: {
       type: "object",
       properties: {
@@ -301,7 +310,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   {
     name: "set_leia_name",
     description:
-      "Suggests a short, clear learner-facing title for the complete LEIA. Call this after you understand the activity, and call it again only if the activity changes materially.",
+      "Proposes a learner-facing title for a new LEIA or when the user explicitly asks to rename it.",
     parameters: {
       type: "object",
       properties: {
@@ -315,20 +324,43 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
   },
 ];
 
-const buildChatTools = (canEditBehaviour: boolean, rubricEnabled: boolean): ProblemChatTool[] =>
-  AUTHORING_CHAT_TOOLS.filter(
-    (tool) =>
-      (canEditBehaviour || tool.name !== "apply_behaviour") &&
-      (rubricEnabled || (tool.name !== "apply_rubric" && tool.name !== "get_current_rubric")),
-  ).map((tool) =>
-    !canEditBehaviour && tool.name === "apply_problem"
-      ? {
-          ...tool,
-          description:
-            `${tool.description}\n\nThe current user cannot author the base Behaviour resource. Select an existing one with use_behaviour. The Problem may still customize that selected behaviour through extends, overrides or constrainedTo when the activity requires it.`,
-        }
-      : tool,
+const turnPriority = { problem: 1, behaviour: 2, persona: 3, rubric: 4, leia: 5 };
+const toolPriority = (tool: string) => {
+  const target = commandTarget(tool);
+  return target ? turnPriority[target] : 0;
+};
+
+const editDescriptions = {
+  problem: "Edit specific fields of the selected Problem. Keep all fields outside the request.",
+  behaviour: "Edit specific fields of the selected Behaviour. To add a guardrail or other instructions, use appendInstructions with empty changes. Keep the selected role, existing instructions and template references.",
+  persona: "Edit specific fields of the selected Persona. Keep all fields outside the request.",
+};
+
+const buildChatTools = (canEditBehaviour: boolean, rubricEnabled: boolean): ProblemChatTool[] => {
+  const tools = AUTHORING_CHAT_TOOLS.filter(tool =>
+    (canEditBehaviour || tool.name !== "apply_behaviour") &&
+    (rubricEnabled || (tool.name !== "apply_rubric" && tool.name !== "get_current_rubric")),
   );
+  return tools.flatMap(tool => {
+    const component = commandTarget(tool.name);
+    if (!component || component === "leia" || component === "rubric" || !tool.name.startsWith("apply_")) return [tool];
+    const fields = { ...tool.parameters.properties as Record<string, unknown> };
+    delete fields.name;
+    return [tool, {
+      name: `edit_${component}`,
+      description: editDescriptions[component],
+      parameters: {
+        type: "object",
+        properties: {
+          changes: { type: "object", properties: fields, additionalProperties: false },
+          ...(component === "behaviour" ? { appendInstructions: { type: "string" } } : {}),
+        },
+        required: ["changes"],
+        additionalProperties: false,
+      },
+    }];
+  });
+};
 
 export type ProblemChatRole = "user" | "assistant" | "system";
 
@@ -346,23 +378,13 @@ type ChatRole = ProblemChatRole;
 type ChatMessage = ProblemChatMessage;
 
 interface ProblemChatPanelProps {
-  currentProblem: Problem | null;
-  currentBehaviour: Behaviour | null;
-  currentPersona: Persona | null;
-  currentRubric: RubricDefinition | null;
-  rubricEnabled?: boolean;
+  draft: CreatorDraft;
+  user: User | undefined;
   problems: Problem[];
   behaviours: Behaviour[];
   personas: Persona[];
   canEditBehaviour: boolean;
-  onApplyProblem: (spec: ProblemSpec, name?: string, behaviourForTurn?: Behaviour | null) => Behaviour | null;
-  onApplyBehaviour: (spec: Record<string, unknown>, name?: string) => Behaviour | undefined;
-  onApplyPersona: (spec: Record<string, unknown>, name?: string) => void;
-  onApplyRubric: (rubric: RubricDefinition) => void;
-  onUseProblem: (id: string, behaviourForTurn?: Behaviour | null) => { ok: boolean; name?: string; process?: string[]; behaviour?: Behaviour | null; error?: string };
-  onUseBehaviour: (id: string, problemProcess?: string[], candidate?: Behaviour) => { ok: boolean; name?: string; error?: string; behaviour?: Behaviour };
-  onUsePersona: (id: string) => { ok: boolean; name?: string; error?: string };
-  onSetLeiaName?: (name: string) => void;
+  onApplyProposal: (proposal: CreatorProposal) => void;
   modelName: string;
   apiKeyId: string | null;
   initialChatState?: ProblemChatState;
@@ -372,23 +394,13 @@ interface ProblemChatPanelProps {
 }
 
 export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
-  currentProblem,
-  currentBehaviour,
-  currentPersona,
-  currentRubric,
-  rubricEnabled = false,
+  draft,
+  user,
   problems,
   behaviours,
   personas,
   canEditBehaviour,
-  onApplyProblem,
-  onApplyBehaviour,
-  onApplyPersona,
-  onApplyRubric,
-  onUseProblem,
-  onUseBehaviour,
-  onUsePersona,
-  onSetLeiaName,
+  onApplyProposal,
   modelName,
   apiKeyId,
   initialChatState,
@@ -403,10 +415,13 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rubricSchema, setRubricSchema] = useState<JsonSchema | null>(null);
+  const [proposal, setProposal] = useState<CreatorProposal | null>(null);
+  const [revising, setRevising] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const chatIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
-  const inspectedLibrariesRef = useRef<Set<"problem" | "behaviour" | "persona">>(new Set());
+  const { rubricEnabled } = draft;
   const chatTools = useMemo(
     () =>
       buildChatTools(canEditBehaviour, rubricEnabled).map((tool) => {
@@ -422,31 +437,20 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     onChatStateChange?.({ messages, input });
   }, [input, messages, onChatStateChange]);
 
-  // Always read the freshest resources when the model calls get_current_*.
-  const currentProblemRef = useRef<Problem | null>(currentProblem);
-  currentProblemRef.current = currentProblem;
-  const currentBehaviourRef = useRef<Behaviour | null>(currentBehaviour);
-  currentBehaviourRef.current = currentBehaviour;
-  // Applying a new Problem clears the selection, but must not discard the
-  // reusable draft that existed before that change.
   const rememberedBehavioursRef = useRef<Map<string, Behaviour>>(new Map());
-  const previousBehaviourRef = useRef<Behaviour | null>(currentBehaviour);
   useEffect(() => {
-    if (currentBehaviour) {
-      rememberedBehavioursRef.current.set(currentBehaviour.id, currentBehaviour);
-      previousBehaviourRef.current = currentBehaviour;
-    }
-  }, [currentBehaviour]);
-  const currentPersonaRef = useRef<Persona | null>(currentPersona);
-  currentPersonaRef.current = currentPersona;
-  const currentRubricRef = useRef<RubricDefinition | null>(currentRubric);
-  currentRubricRef.current = currentRubric;
-  const problemsRef = useRef<Problem[]>(problems);
-  problemsRef.current = problems;
-  const behavioursRef = useRef<Behaviour[]>(behaviours);
-  behavioursRef.current = behaviours;
-  const personasRef = useRef<Persona[]>(personas);
-  personasRef.current = personas;
+    const behaviour = draft.config.behaviour;
+    if (behaviour?.edited) rememberedBehavioursRef.current.set(behaviour.id, behaviour);
+  }, [draft.config.behaviour]);
+
+  const library: CreatorLibrary = {
+    problem: problems.filter(problem => problem.id && !problem.id.startsWith("generated-")),
+    behaviour: behaviourCandidates(behaviours, rememberedBehavioursRef.current.values()),
+    persona: personas.filter(persona => persona.id && !persona.id.startsWith("generated-")),
+  };
+  const latest = useRef({ draft, user, canEditBehaviour, library });
+  latest.current = { draft, user, canEditBehaviour, library };
+  const stale = proposal !== null && proposal.base !== draft;
 
   useEffect(() => {
     if (!rubricEnabled || rubricSchema) return;
@@ -461,17 +465,12 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
   }, [modelName, apiKeyId]);
 
   useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, sending]);
+    const transcript = transcriptRef.current;
+    if (transcript) transcript.scrollTop = transcript.scrollHeight;
+  }, [messages, sending, proposal]);
 
   const pushMessage = useCallback((role: ChatRole, text: string) =>
     setMessages((prev) => [...prev, { role, text }]), []);
-
-  const stripAvatar = (spec: Record<string, unknown>): ProblemSpec => {
-    const cleanSpec = { ...spec };
-    delete cleanSpec.avatar;
-    return cleanSpec as unknown as ProblemSpec;
-  };
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (chatIdRef.current) return chatIdRef.current;
@@ -502,251 +501,123 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     }
   };
 
-  // One user turn → loop while the model returns tool calls.
-  const runTurn = async (chatId: string, message: string): Promise<string> => {
-    if (currentBehaviourRef.current) {
-      rememberedBehavioursRef.current.set(currentBehaviourRef.current.id, currentBehaviourRef.current);
-      previousBehaviourRef.current = currentBehaviourRef.current;
-    }
-    // Send the uploaded PDF ids with the turn so the runner attaches them even
-    // if the session was re-opened; it only attaches each one once.
+  const runTurn = async (chatId: string, message: string, base: CreatorDraft): Promise<string> => {
+    const { user, canEditBehaviour, library } = latest.current;
+    if (!user) throw new Error("Sign in to propose draft changes.");
+    const context = { user, canEditBehaviour, library, rubricSchema };
+    const inspected = new Set<DraftTarget>();
+    const actions = new Map<DraftTarget, ReviewedChange["action"]>();
+    const errors = new Map<DraftTarget, string>();
+    let staged = base;
     let response = await sendProblemChatMessage(chatId, {
       message,
       tools: chatTools,
-      fileIds: attachments.map((a) => a.fileId),
+      fileIds: attachments.map(attachment => attachment.fileId),
     });
-    // This selection belongs to one user turn, not to the inherited LEIA.
-    let behaviourForTurn: Behaviour | null = null;
-    let activeProblemProcess: string[] | undefined = currentProblemRef.current
-      ? Array.from(currentProblemRef.current.spec?.process ?? [])
-      : undefined;
-    for (let i = 0; i < 14; i++) {
-      const calls = response.toolCalls;
-      if (!Array.isArray(calls) || calls.length === 0) break;
-
-      // Tool calls may be returned in parallel. Resolve the problem before the
-      // behaviour so compatibility is checked against the final selection.
-      const priority: Record<string, number> = {
-        get_current_problem: 0,
-        get_current_behaviour: 0,
-        get_current_persona: 0,
-        get_current_rubric: 0,
-        list_problems: 0,
-        list_behaviours: 0,
-        list_personas: 0,
-        apply_problem: 10,
-        use_problem: 10,
-        apply_behaviour: 20,
-        use_behaviour: 20,
-        apply_persona: 30,
-        use_persona: 30,
-        apply_rubric: 40,
-        set_leia_name: 50,
-      };
-      const orderedCalls = [...calls].sort(
-        (left, right) => (priority[left.name] ?? 100) - (priority[right.name] ?? 100),
-      );
-      const inspectedBeforeThisResponse = new Set(inspectedLibrariesRef.current);
-
-      const results: ProblemChatToolResult[] = orderedCalls.map((call) => {
-        let output: unknown;
-        let args: Record<string, unknown> = {};
+    for (let round = 0; response.toolCalls?.length; round++) {
+      if (round >= 14) throw new Error("The assistant did not finish the proposal. Please try again.");
+      const inspectedBeforeRound = new Set(inspected);
+      const calls = [...response.toolCalls].sort((left, right) => toolPriority(left.name) - toolPriority(right.name));
+      const results: ProblemChatToolResult[] = calls.map(call => {
+        let args: Record<string, unknown>;
         try {
-          args = call.arguments ? JSON.parse(call.arguments) : {};
+          const parsed: unknown = JSON.parse(call.arguments || "{}");
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+          args = parsed as Record<string, unknown>;
         } catch {
-          args = {};
+          const error = "Provide valid arguments for the tool.";
+          const target = commandTarget(call.name);
+          if (target) errors.set(target, error);
+          return { callId: call.callId, output: { error } };
         }
-        const takeName = (): { name?: string; spec: Record<string, unknown> } => {
-          const { name, ...rest } = args as { name?: unknown };
-          return { name: typeof name === "string" && name.trim() ? name.trim() : undefined, spec: rest };
-        };
-        if (call.name === "apply_problem") {
-          if (!inspectedBeforeThisResponse.has("problem")) {
-            output = { error: "call list_problems and inspect its result before creating a new problem" };
-            return { callId: call.callId, output };
-          }
-          const { name, spec } = takeName();
-          const problemSpec = normalizeProcessFields(stripAvatar(spec));
-          activeProblemProcess = Array.from(problemSpec.process ?? []);
-          behaviourForTurn = onApplyProblem(problemSpec, name, behaviourForTurn);
-          currentBehaviourRef.current = behaviourForTurn;
-          pushMessage("system", `✓ Problem applied${name ? ` ("${name}")` : ""}.`);
-          output = {
-            status: "applied",
-            behaviourPreserved: Boolean(behaviourForTurn),
-            next: behaviourForTurn
-              ? "The compatible behaviour explicitly selected in this turn was preserved."
-              : "Call list_behaviours and explicitly select a compatible saved or draft behaviour before testing.",
-          };
-        } else if (call.name === "apply_behaviour") {
-          if (!canEditBehaviour) {
-            output = { error: "this user cannot author or modify behaviours; use an existing behaviour" };
-            return { callId: call.callId, output };
-          }
-          if (!inspectedBeforeThisResponse.has("behaviour")) {
-            output = { error: "call list_behaviours and inspect its result before creating a new behaviour" };
-            return { callId: call.callId, output };
-          }
-          const { name, spec } = takeName();
-          const missing = missingBehaviourReferences(
-            typeof spec.description === "string" ? spec.description : undefined,
-            previousBehaviourRef.current?.spec.description,
-          );
-          if (missing.length > 0) {
-            output = { error: "Keep a reusable behaviour template. Include the missing references in description and retry, or use_behaviour to reuse the compatible previous draft.", missingReferences: missing };
-            return { callId: call.callId, output };
-          }
-          const normalizedSpec = normalizeProcessFields(spec);
-          const applied = onApplyBehaviour({ ...normalizedSpec, process: activeProblemProcess ?? normalizedSpec.process }, name);
-          if (!applied) {
-            output = { error: "The behaviour could not be applied." };
-            return { callId: call.callId, output };
-          }
-          rememberedBehavioursRef.current.set(applied.id, applied);
-          previousBehaviourRef.current = applied;
-          currentBehaviourRef.current = applied;
-          behaviourForTurn = applied;
-          pushMessage("system", `✓ Behaviour applied${name ? ` ("${name}")` : ""}.`);
-          output = { status: "applied" };
-        } else if (call.name === "apply_persona") {
-          if (!inspectedBeforeThisResponse.has("persona")) {
-            output = { error: "call list_personas and inspect its result before creating a new persona" };
-            return { callId: call.callId, output };
-          }
-          const { name, spec } = takeName();
-          onApplyPersona(spec, name);
-          pushMessage("system", `✓ Persona applied${name ? ` ("${name}")` : ""}.`);
-          output = { status: "applied" };
-        } else if (call.name === "apply_rubric") {
-          if (!rubricEnabled) {
-            output = { error: "rubric is not enabled for this LEIA; the instructor must add a rubric first" };
-            return { callId: call.callId, output };
-          }
-          const rubric = args as unknown as RubricDefinition;
-          const schemaError = rubricSchema ? validateAgainstRubricSchema(rubric, rubricSchema) : "rubric schema is unavailable";
-          const semanticError = schemaError ? null : validateRubricSemantics(rubric);
-          if (!schemaError && !semanticError) {
-            onApplyRubric(rubric);
-            pushMessage("system", `✓ Rubric applied${rubric.metadata.name ? ` ("${rubric.metadata.name}")` : ""}.`);
-            output = { status: "applied" };
+
+        const target = commandTarget(call.name);
+        let output: unknown;
+        if (target) {
+          const result = target !== "rubric" && call.name.startsWith("apply_") && !inspectedBeforeRound.has(target)
+            ? { error: `Inspect list_${target}s first, then propose a new ${target}.` }
+            : stageCreatorCommand(staged, call.name, args, context);
+          if ("error" in result) {
+            errors.set(target, result.error);
+            output = result;
           } else {
-            const errorMessage = schemaError || semanticError;
-            pushMessage("system", `⚠ Rubric was not applied: ${errorMessage}`);
-            output = { error: errorMessage };
-          }
-        } else if (call.name === "set_leia_name") {
-          const name = typeof args.name === "string" ? args.name.trim() : "";
-          if (name) {
-            onSetLeiaName?.(name);
-            pushMessage("system", `✓ LEIA title suggested: "${name}".`);
-            output = { status: "applied", name };
-          } else {
-            output = { error: "a non-empty LEIA title is required" };
+            errors.delete(target);
+            if (result.draft !== staged && (result.action !== "Edit" || !actions.has(target))) actions.set(target, result.action);
+            staged = result.draft;
+            const name = target === "leia" ? staged.customizations.leia.name
+              : target === "rubric" ? staged.rubricDraft?.metadata.name
+              : staged.config[target]?.metadata.name;
+            output = {
+              status: "proposed",
+              name,
+              ...(processConflict(staged) ? { warning: "The proposed Problem and Behaviour have different processes. Propose a compatible selection before finishing." } : {}),
+            };
           }
         } else if (call.name === "get_current_problem") {
-          output = currentProblemRef.current?.spec ?? null;
+          output = staged.config.problem?.spec ?? null;
         } else if (call.name === "get_current_behaviour") {
-          output = currentBehaviourRef.current?.spec ?? null;
+          output = staged.config.behaviour?.spec ?? null;
         } else if (call.name === "get_current_persona") {
-          output = currentPersonaRef.current?.spec ?? null;
-        } else if (call.name === "get_current_rubric") {
-          output = currentRubricRef.current;
-        } else if (call.name === "list_problems") {
-          inspectedLibrariesRef.current.add("problem");
-          output = problemsRef.current
-            .filter((problem) => problem.id && !problem.id.startsWith("generated-"))
-            .map((problem) => ({
-              id: problem.id,
-              name: problem.metadata?.name,
-              description:
-                typeof problem.spec?.description === "string"
-                  ? problem.spec.description.slice(0, 240)
-                  : undefined,
-              details:
-                typeof problem.spec?.details === "string"
-                  ? problem.spec.details.slice(0, 240)
-                  : undefined,
-              solutionPreview:
-                typeof problem.spec?.solution === "string"
-                  ? problem.spec.solution.slice(0, 240)
-                  : undefined,
-              process: problem.spec?.process,
-              solutionFormat: problem.spec?.solutionFormat,
-            }));
-        } else if (call.name === "use_problem") {
-          const id = typeof args.id === "string" ? args.id : "";
-          const problemChanged = currentProblemRef.current?.id !== id;
-          const result = onUseProblem(id, behaviourForTurn);
-          if (result.ok) {
-            activeProblemProcess = result.process;
-            if (problemChanged) {
-              behaviourForTurn = result.behaviour ?? null;
-              currentBehaviourRef.current = behaviourForTurn;
-            }
-            pushMessage("system", `✓ Using existing problem${result.name ? ` ("${result.name}")` : ""}.`);
-            output = { status: "selected", name: result.name };
-          } else {
-            output = { error: result.error || `no problem with id '${id}'` };
-          }
+          output = staged.config.persona?.spec ?? null;
+        } else if (call.name === "get_current_rubric" && staged.rubricEnabled) {
+          output = staged.rubricDraft;
         } else if (call.name === "list_behaviours") {
-          inspectedLibrariesRef.current.add("behaviour");
-          output = behaviourPage(
-            behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values()),
-            typeof args.offset === "number" ? args.offset : 0,
-          );
+          inspected.add("behaviour");
+          output = behaviourPage(library.behaviour, typeof args.offset === "number" ? args.offset : 0);
         } else if (call.name === "get_behaviour") {
-          const candidate = behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values())
-            .find(item => item.id === args.id);
+          const candidate = library.behaviour.find(item => item.id === args.id);
           output = candidate
-            ? { id: candidate.id, spec: candidate.spec, templateReferences: templateReferences(candidate.spec?.description), isDraft: candidate.edited === true }
-            : { error: `no behaviour with id '${args.id}'` };
-        } else if (call.name === "use_behaviour") {
-          const id = typeof args.id === "string" ? args.id : "";
-          const candidate = behaviourCandidates(behavioursRef.current, rememberedBehavioursRef.current.values()).find(item => item.id === id);
-          const result: ReturnType<ProblemChatPanelProps["onUseBehaviour"]> = candidate
-            ? onUseBehaviour(id, activeProblemProcess, candidate)
-            : { ok: false, error: `no behaviour with id '${id}'` };
-          if (result.ok) {
-            currentBehaviourRef.current = result.behaviour ?? candidate ?? null;
-            behaviourForTurn = currentBehaviourRef.current;
-            previousBehaviourRef.current = currentBehaviourRef.current;
-            pushMessage("system", `✓ Using existing behaviour${result.name ? ` ("${result.name}")` : ""}.`);
-            output = { status: "selected", name: result.name };
-          } else {
-            output = { error: result.error || `no behaviour with id '${id}'` };
-          }
+            ? { id: candidate.id, spec: candidate.spec, templateReferences: templateReferences(candidate.spec.description), isDraft: candidate.edited === true }
+            : { error: "Choose an available Behaviour from the library." };
+        } else if (call.name === "list_problems") {
+          inspected.add("problem");
+          output = library.problem.map(({ id, metadata, spec }) => ({
+            id, name: metadata.name, description: spec.description?.slice(0, 240),
+            details: spec.details?.slice(0, 240), solutionPreview: spec.solution?.slice(0, 240),
+            process: spec.process, solutionFormat: spec.solutionFormat,
+          }));
         } else if (call.name === "list_personas") {
-          inspectedLibrariesRef.current.add("persona");
-          output = personasRef.current
-            .filter((persona) => persona.id && !persona.id.startsWith("generated-"))
-            .map((persona) => ({
-              id: persona.id,
-              name: persona.metadata?.name,
-              firstName: persona.spec?.firstName,
-              description:
-                typeof persona.spec?.description === "string"
-                  ? persona.spec.description.slice(0, 240)
-                  : undefined,
-              personality: persona.spec?.personality,
-            }));
-        } else if (call.name === "use_persona") {
-          const id = typeof args.id === "string" ? args.id : "";
-          const result = onUsePersona(id);
-          if (result.ok) {
-            pushMessage("system", `✓ Using existing persona${result.name ? ` ("${result.name}")` : ""}.`);
-            output = { status: "selected", name: result.name };
-          } else {
-            output = { error: result.error || `no persona with id '${id}'` };
-          }
+          inspected.add("persona");
+          output = library.persona.map(({ id, metadata, spec }) => ({
+            id, name: metadata.name, firstName: spec.firstName,
+            description: spec.description?.slice(0, 240), personality: spec.personality,
+          }));
         } else {
-          output = { error: `unknown tool '${call.name}'` };
+          output = { error: "This tool is unavailable." };
         }
         return { callId: call.callId, output };
       });
-
       response = await sendProblemChatMessage(chatId, { toolResults: results, tools: chatTools });
     }
+
+    if (latest.current.draft !== base) throw new Error("The draft changed while the assistant was working. Send your request again.");
+    if (errors.size > 0) throw new Error([...errors.values()].join(" "));
+    if (staged !== base) {
+      const validationError = validateCreatorChanges(base, staged, context);
+      if (validationError) throw new Error(validationError);
+      const nextProposal = reviewCreatorChanges(base, staged, actions);
+      if (nextProposal.changes.length) {
+        setProposal(nextProposal);
+        return "";
+      }
+    }
     return response.message ?? "";
+  };
+
+  const handleApply = () => {
+    if (!proposal || disabled || sending || !user) return;
+    const validationError = stale
+      ? "The draft has changed. Ask for a fresh proposal."
+      : validateCreatorChanges(proposal.base, proposal.next, { user, canEditBehaviour, library });
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    onApplyProposal(proposal);
+    setProposal(null);
+    setRevising(false);
+    setError(null);
+    pushMessage("system", "Applied the proposed changes to the draft.");
   };
 
   const handleSend = async () => {
@@ -754,13 +625,17 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
     if (!text || sending || disabled) return;
     setError(null);
     setInput("");
-    inspectedLibrariesRef.current.clear();
+    setProposal(null);
+    setRevising(false);
     pushMessage("user", text);
     setSending(true);
     onBusyChange?.(true);
     try {
       const chatId = await ensureSession();
-      const reply = await runTurn(chatId, text);
+      const instruction = revising && proposal && !stale
+        ? `Revise the previous proposal using this feedback: ${text}`
+        : text;
+      const reply = await runTurn(chatId, instruction, draft);
       if (reply) pushMessage("assistant", reply);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The assistant failed to respond");
@@ -855,6 +730,22 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             );
           })
         )}
+        {proposal && (stale ? (
+          <Alert severity="info">The draft changed. Send a new message to request an updated proposal.</Alert>
+        ) : (
+          <CreatorProposalCard
+            proposal={proposal}
+            disabled={disabled || sending}
+            onApply={handleApply}
+            onRevise={() => { setRevising(true); composerRef.current?.focus(); }}
+            onDiscard={() => {
+              setProposal(null);
+              setRevising(false);
+              setError(null);
+              pushMessage("system", "Proposal discarded.");
+            }}
+          />
+        ))}
         {sending && (
           <Box
             role="status"
@@ -929,15 +820,16 @@ export const ProblemChatPanel: React.FC<ProblemChatPanelProps> = ({
             )}
           </IconButton>
           <TextField
+            inputRef={composerRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             disabled={disabled || !ready || sending}
             multiline
             minRows={1}
             maxRows={5}
-            placeholder={ready ? `E.g. ${EXAMPLE_PROMPT}` : "Select a model and key…"}
+            placeholder={ready ? (revising ? "What should change in the proposal?" : `E.g. ${EXAMPLE_PROMPT}`) : "Select a model and key…"}
             fullWidth
-            slotProps={{ htmlInput: { onKeyDown: handleKeyDown } }}
+            slotProps={{ htmlInput: { onKeyDown: handleKeyDown, "aria-label": "Message the assistant" } }}
             sx={{ "& textarea": { maxHeight: 120, overflowY: "auto" } }}
           />
           <IconButton
