@@ -163,7 +163,7 @@ test('asks for previous stage problem source when a LEIA references previousStag
   });
 });
 
-test('disables earlier stages using transcription mode only for the conversation output selector', async () => {
+test('allows selecting earlier stages using transcription mode for conversation output and warns when empty', async () => {
   const stages: ActivityStage[] = [
     {
       id: 'stage-1',
@@ -213,9 +213,12 @@ test('disables earlier stages using transcription mode only for the conversation
   render(<ActivityStagesEditor experiment={experiment} onSaved={vi.fn()} />);
 
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of conversation output/ }));
-  const conversationStage1Option = await screen.findByRole('option', { name: /Stage 1 \(transcription mode\)/ });
-  expect(conversationStage1Option.getAttribute('aria-disabled')).toBe('true');
-  fireEvent.keyDown(conversationStage1Option, { key: 'Escape' });
+  const conversationStage1Option = await screen.findByRole('option', { name: 'Stage 1' });
+  expect(conversationStage1Option.getAttribute('aria-disabled')).not.toBe('true');
+  fireEvent.click(conversationStage1Option);
+  expect(
+    screen.getByText(/Add transcription chat messages to Stage 1 before publishing or replicating\./i),
+  ).toBeTruthy();
 
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Source of submitted solution output/ }));
   const solutionStage1Option = await screen.findByRole('option', { name: 'Stage 1' });

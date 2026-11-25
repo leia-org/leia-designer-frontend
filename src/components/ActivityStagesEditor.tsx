@@ -9,7 +9,7 @@ import type { ActivityStage, Experiment, StageOutput } from "../models/Experimen
 import {
   getStageOutputSource,
   STAGE_OUTPUT_PATTERNS,
-  stageHasTranscriptionMode,
+  stageHasEmptyTranscription,
 } from "../lib/activityStages";
 
 const STAGE_OUTPUTS: ReadonlyArray<{
@@ -242,22 +242,28 @@ export function ActivityStagesEditor({ experiment, onSaved }: ActivityStagesEdit
                 {hasAnyReference && index === 0 && <Alert severity="error">Move this stage after its source stage.</Alert>}
                 {index > 0 && referencedOutputs.map(({ key, label }) => {
                   const sourceId = getOutputSource(stage, key);
+                  const sourceIndex = sourceId ? stages.findIndex(({ id }) => id === sourceId) : -1;
+                  const emptyTranscriptionSource =
+                    key === "conversation" &&
+                    Boolean(sourceId) &&
+                    stageHasEmptyTranscription(experiment, sourceId!);
                   return (
                     <TextField key={key} select size="small" label={label} value={sourceId ?? ""}
-                      disabled={saving} required error={!sourceId}
-                      helperText={!sourceId ? "Choose an earlier stage before publishing or replicating the activity." : undefined}
+                      disabled={saving} required error={!sourceId || emptyTranscriptionSource}
+                      helperText={
+                        !sourceId
+                          ? "Choose an earlier stage before publishing or replicating the activity."
+                          : emptyTranscriptionSource && sourceIndex >= 0
+                            ? `Add transcription chat messages to Stage ${sourceIndex + 1} before publishing or replicating.`
+                            : undefined
+                      }
                       onChange={(event) => changeOutputSource(stage, key, event.target.value)}>
                       <MenuItem value="">None</MenuItem>
-                      {stages.slice(0, index).map((earlier, earlierIndex) => {
-                        const disabledByTranscription =
-                          key === "conversation" && stageHasTranscriptionMode(experiment, earlier.id);
-                        return (
-                          <MenuItem key={earlier.id} value={earlier.id} disabled={disabledByTranscription}>
-                            Stage {earlierIndex + 1}
-                            {disabledByTranscription ? " (transcription mode)" : ""}
-                          </MenuItem>
-                        );
-                      })}
+                      {stages.slice(0, index).map((earlier, earlierIndex) => (
+                        <MenuItem key={earlier.id} value={earlier.id}>
+                          Stage {earlierIndex + 1}
+                        </MenuItem>
+                      ))}
                     </TextField>
                   );
                 })}

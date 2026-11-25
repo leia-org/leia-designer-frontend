@@ -2,8 +2,10 @@ import { describe, expect, test } from 'vitest';
 import {
   getActivityReplicationBlocker,
   getDependentStagesForConversation,
+  hasTranscriptionMessages,
   leiaHasPreviousStageReferences,
   leiaUsesPreviousStageOutputs,
+  stageHasEmptyTranscription,
   stageHasTranscriptionMode,
 } from '../../src/lib/activityStages';
 import type { Experiment } from '../../src/models/Experiment';
@@ -17,10 +19,16 @@ const orchestration = {
   sharedTask: '',
 };
 
-const makeLeia = (id: string, stageId: string, description: string, mode = 'standard') => ({
+const makeLeia = (
+  id: string,
+  stageId: string,
+  description: string,
+  mode = 'standard',
+  data: Record<string, unknown> = {},
+) => ({
   id,
   stageId,
-  configuration: { mode, data: {} },
+  configuration: { mode, data },
   leia: {
     id,
     metadata: { name: id },
@@ -130,6 +138,55 @@ describe('activityStages transcription helpers', () => {
       leias: [],
     };
     expect(getActivityReplicationBlocker(emptyLegacy)).toBe('Add at least one LEIA before replicating');
+  });
+
+  test('blocks replication when a conversation-referenced transcription stage has no chat messages, and allows it when populated', () => {
+    const baseStages = [
+      { id: 's1', outputSources: { conversation: null, submitedSolution: null, problem: null }, orchestration },
+      { id: 's2', outputSources: { conversation: 's1', submitedSolution: null, problem: null }, orchestration },
+    ];
+    const emptyTranscript: Experiment = {
+      id: 'exp-empty-transcript',
+      name: 'Empty transcript activity',
+      user: 'owner',
+      isPublished: false,
+      createdAt: '',
+      updatedAt: '',
+      stages: baseStages,
+      leias: [
+        makeLeia('l1', 's1', 'Stage 1', 'transcription', { messages: [] }),
+        makeLeia('l2', 's2', 'Review {{previousStage.outputs.conversation}}'),
+      ],
+    };
+    expect(hasTranscriptionMessages(emptyTranscript.leias[0])).toBe(false);
+    expect(stageHasEmptyTranscription(emptyTranscript, 's1')).toBe(true);
+    expect(getActivityReplicationBlocker(emptyTranscript)).toBe(
+      'Stage 1 requires non-empty transcription chat messages because stage 2 uses its conversation',
+    );
+
+    const linkOnlyTranscript: Experiment = {
+      ...emptyTranscript,
+      leias: [
+        makeLeia('l1', 's1', 'Stage 1', 'transcription', { link: 'https://example.com/transcript' }),
+        makeLeia('l2', 's2', 'Review {{previousStage.outputs.conversation}}'),
+      ],
+    };
+    expect(getActivityReplicationBlocker(linkOnlyTranscript)).toBe(
+      'Stage 1 requires non-empty transcription chat messages because stage 2 uses its conversation',
+    );
+
+    const populatedTranscript: Experiment = {
+      ...emptyTranscript,
+      leias: [
+        makeLeia('l1', 's1', 'Stage 1', 'transcription', {
+          messages: [{ text: 'Hello', timestamp: '2026-11-25T10:00:00Z', isLeia: false }],
+        }),
+        makeLeia('l2', 's2', 'Review {{previousStage.outputs.conversation}}'),
+      ],
+    };
+    expect(hasTranscriptionMessages(populatedTranscript.leias[0])).toBe(true);
+    expect(stageHasEmptyTranscription(populatedTranscript, 's1')).toBe(false);
+    expect(getActivityReplicationBlocker(populatedTranscript)).toBeNull();
   });
 
   test('detects any previousStage reference in behaviour or rubric templates', () => {

@@ -14,6 +14,7 @@ import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
 import {
   getActivityReplicationBlocker,
   getDependentStagesForConversation,
+  hasTranscriptionMessages,
   leiaUsesPreviousStageOutputs,
 } from "../lib/activityStages";
 import { ActivityListSkeleton } from "../components/ActivityListSkeleton";
@@ -1478,9 +1479,11 @@ export const MyActivities: React.FC = () => {
                                 ? "Transcription mode is unavailable in MultiLEIA stages."
                                 : usesPreviousStage
                                   ? "Transcription unavailable because this LEIA uses outputs from an earlier stage."
-                                  : conversationDependents.length > 0
-                                    ? `Transcription unavailable because ${conversationDependents.map((n) => `Stage ${n}`).join(", ")} ${conversationDependents.length === 1 ? "uses" : "use"} this stage's conversation.`
-                                    : "";
+                                  : "";
+                              const missingRequiredTranscriptionMessages =
+                                leiaConfig.configuration?.mode === "transcription" &&
+                                conversationDependents.length > 0 &&
+                                !hasTranscriptionMessages(leiaConfig);
                               const leiaKey = experiment.id + "-" + leiaConfig.id;
                               const hasTranscription =
                                 Boolean(leiaConfig.configuration?.data?.messages) ||
@@ -1740,6 +1743,14 @@ export const MyActivities: React.FC = () => {
                                               </Button>
                                             </Stack>
                                           </Stack>
+                                        )}
+
+                                        {missingRequiredTranscriptionMessages && (
+                                          <Alert severity="error">
+                                            Add transcription chat messages because{" "}
+                                            {conversationDependents.map((n) => `Stage ${n}`).join(", ")}{" "}
+                                            {conversationDependents.length === 1 ? "uses" : "use"} this stage&apos;s conversation.
+                                          </Alert>
                                         )}
 
                                         <Alert severity="warning" icon={<WarningAmberOutlinedIcon fontSize="inherit" />}>
