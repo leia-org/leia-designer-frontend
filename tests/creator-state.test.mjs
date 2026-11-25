@@ -13,6 +13,7 @@ const createSource = await readSource("src/screens/CreateLeia.tsx");
 const panelSource = await readSource("src/components/ProblemChatPanel.tsx");
 const previewSource = await readSource("src/components/LeiaLivePreview.tsx");
 const require = createRequire(import.meta.url);
+const activityStageHelpers = loadModule(await readSource("src/lib/activityStages.ts"));
 const ui = new Proxy({}, { get: () => ({ children, label, value }) => React.createElement("div", null, children ?? label ?? value) });
 const { LeiaLivePreview } = loadModule(previewSource, name => name === "@mui/material"
   ? ui : name.startsWith("@mui/icons-material/") ? { default: "svg" } : require(name));
@@ -50,7 +51,8 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
   const requests = [];
   const chat = chatFixture({ config, canEdit, problems, behaviours });
   const context = {
-    exports: {}, require, console: { error() {} }, useMemo: fn => fn(), generateLeia,
+    ...activityStageHelpers, exports: {}, require, console: { error() {} }, useMemo: fn => fn(), generateLeia,
+    toast: { error() {} },
     leiaConfig: config, rubricDraft: null, currentUser: { id: "synthetic-instructor" }, canEditBehaviour: canEdit,
     currentStep: 1, leiaConfigSnapShot: null, selectedLabelIds: [], customizations: {},
     currentDraftIdRef: { current: "draft" }, chatState: { messages: [{ role: "user", text: "Burger stock" }] },
@@ -67,7 +69,7 @@ function editor({ config = preset(), canEdit = true, problems = [], behaviours =
   };
   const code = [
     declaration(createSource, "handleTestLeia"), "globalThis.testLeia=handleTestLeia;",
-    `globalThis.assemble=()=>{${declaration(createSource, "leiaAssembly")} return leiaAssembly;};`,
+    `globalThis.assemble=()=>{${declaration(createSource, "leiaAssembly")}${declaration(createSource, "usesPreviousStage")} return { ...leiaAssembly, usesPreviousStage };};`,
     `globalThis.testAction=()=>{${declaration(createSource, "isStep1Complete")}${declaration(createSource, "canTest")}${declaration(createSource, "testAction")}return testAction;};`,
     readPreviewProps,
   ].join("\n");
@@ -192,6 +194,23 @@ test("testing is blocked while the assistant is running and while a test is alre
   assert.equal(e.requests.length, 0);
   e.context.chatBusy = false;
   e.context.testingLeia = true;
+  await e.context.testLeia();
+  assert.equal(e.requests.length, 0);
+});
+
+test("testing is blocked when the LEIA references previousStage", async () => {
+  const previousStageConfig = {
+    ...preset(),
+    behaviour: resource("stage-2-review", {
+      ...behaviour(),
+      description: `${template}\nReview {{previousStage.outputs.conversation}}`,
+    }),
+  };
+  const e = editor({ config: previousStageConfig });
+  assert.ok(e.context.generatedLeia);
+  assert.equal(e.context.usesPreviousStage, true);
+  assert.equal(e.context.testAction().props.disabled, true);
+  assert.ok(!e.preview().includes("Ready to test"));
   await e.context.testLeia();
   assert.equal(e.requests.length, 0);
 });

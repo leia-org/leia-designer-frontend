@@ -170,7 +170,7 @@ const AUTHORING_CHAT_TOOLS: ProblemChatTool[] = [
               params: {
                 type: "object",
                 description:
-                  "Widget configuration. codeEditor: { fnName, description, starter: { javascript, python }, tests: [{ name, args, expected }] }.",
+                  "Widget configuration. codeEditor: { fnName, description, language, starter, tests: [{ name, args, expected }] }. Supports JavaScript, TypeScript, Python, Java, Rust, C/C++, C#, PHP, Go, Kotlin, Swift, Ruby, R, MATLAB, Dart, Scala, Perl, Lua, SQL and other common languages.",
               },
               tools: {
                 type: "array",

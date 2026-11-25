@@ -7,6 +7,9 @@ import {
 const LEIA_BASE_GROUPS = BEHAVIOUR_PLACEHOLDER_SECTIONS[0].groups.filter(
   (group) => group.title !== "Rubric",
 );
+const PREVIOUS_STAGE_PROBLEM_GROUP = BEHAVIOUR_PLACEHOLDER_SECTIONS[1].groups.find(
+  (group) => group.title === "Previous stage problem",
+);
 
 export const RUBRIC_PLACEHOLDER_SECTIONS: readonly PlaceholderSection[] = [
   {
@@ -39,6 +42,7 @@ export const RUBRIC_PLACEHOLDER_SECTIONS: readonly PlaceholderSection[] = [
           },
         ],
       },
+      ...(PREVIOUS_STAGE_PROBLEM_GROUP ? [PREVIOUS_STAGE_PROBLEM_GROUP] : []),
     ],
   },
   {

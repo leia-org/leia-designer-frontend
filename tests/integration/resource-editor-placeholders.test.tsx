@@ -75,6 +75,23 @@ test('autocompletes {{}} placeholders step by step by dot segment', () => {
   fireEvent.keyDown(textarea, { key: 'Enter' });
   expect(textarea.value).toBe('Act as {{persona.fullName}} {{previousStage.outputs.conversation}}');
   expect(screen.queryByRole('listbox', { name: 'Placeholder suggestions' })).toBeNull();
+
+  // Multi-level path: previousStage -> leia -> problem -> description
+  fireEvent.change(textarea, {
+    target: { value: '{{previousStage.le', selectionStart: 18 },
+  });
+  expect(screen.getByRole('option', { name: /^leia\b/ })).toBeTruthy();
+  fireEvent.click(screen.getByRole('option', { name: /^leia\b/ }));
+  expect(textarea.value).toBe('{{previousStage.leia.');
+
+  expect(screen.getByRole('option', { name: /^problem\b/ })).toBeTruthy();
+  fireEvent.click(screen.getByRole('option', { name: /^problem\b/ }));
+  expect(textarea.value).toBe('{{previousStage.leia.problem.');
+
+  expect(screen.getByRole('option', { name: /description/ })).toBeTruthy();
+  fireEvent.click(screen.getByRole('option', { name: /description/ }));
+  expect(textarea.value).toBe('{{previousStage.leia.problem.description}}');
+  expect(screen.queryByRole('listbox', { name: 'Placeholder suggestions' })).toBeNull();
 });
 
 test('auto-sizes the Behaviour Description textarea to fit its text', () => {
