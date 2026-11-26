@@ -27,6 +27,8 @@ interface NavigationItem {
   icon: React.ReactNode;
   show?: boolean;
   matches?: (pathname: string) => boolean;
+  /** Stable DOM id, used as a target by the guided tour. */
+  id?: string;
 }
 
 const groupLabelSx = {
@@ -99,6 +101,7 @@ export function DesignerSidebar() {
       icon: <ExtensionOutlinedIcon sx={{ fontSize: 18 }} />,
       show: user?.role === "admin" || user?.role === "advanced",
       matches: (pathname) => pathname.startsWith("/users/me/activities"),
+      id: "myActivities-button",
     },
   ];
 
@@ -114,6 +117,7 @@ export function DesignerSidebar() {
       path: "/api-keys",
       icon: <VpnKeyOutlinedIcon sx={{ fontSize: 18 }} />,
       matches: (pathname) => pathname.startsWith("/api-keys"),
+      id: "myApiKeys-button",
     },
     {
       label: "Users",
@@ -130,6 +134,7 @@ export function DesignerSidebar() {
     return (
       <ListItem key={item.path} disablePadding sx={{ display: "block" }}>
         <ListItemButton
+          id={item.id}
           aria-current={selected ? "page" : undefined}
           onClick={() => navigate(item.path)}
           sx={itemButtonSx(selected)}
@@ -182,7 +187,7 @@ export function DesignerSidebar() {
       </Box>
 
       <Box sx={{ display: "flex", flexDirection: "column", height: "calc(100% - 56px)", overflow: "hidden" }}>
-        <Box sx={{ flex: 1, overflowY: "auto" }}>
+        <Box id="sidebar-navigation" sx={{ flex: 1, overflowY: "auto" }}>
           <Typography variant="overline" sx={groupLabelSx}>Workspace</Typography>
           <List dense disablePadding>{workspaceItems.map(renderItem)}</List>
 

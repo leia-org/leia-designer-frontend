@@ -880,7 +880,7 @@ export const CreateLeia: React.FC = () => {
       smoothScroll: true,
       allowClose: true,
       showProgress: true,
-      progressText: "Paso {{current}} de {{total}}",
+      progressText: "Step {{current}} of {{total}}",
       onNextClick: (_element, _step, options) => {
         const activeIndex = options.driver.getActiveIndex();
         if (activeIndex === 3) {

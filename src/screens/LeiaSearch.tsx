@@ -148,7 +148,6 @@ export const LeiaSearch: React.FC = () => {
   } | null>(null);
 
   const tourRef = useRef<ReturnType<typeof driver> | null>(null);
-  const [showDropdown, setShowDropdown] = useState(false);
 
   const handleRetry = useCallback(() => {
     if (error === "Unauthorized: Login or API key required") {
@@ -294,6 +293,12 @@ export const LeiaSearch: React.FC = () => {
     type StepWithRoles = Parameters<ReturnType<typeof driver>["setSteps"]>[0][number] & {
     roles?: string[];
     };
+    // The sidebar is hidden on narrow screens. Returning no element there makes
+    // Driver centre the popover instead of anchoring it to an invisible node.
+    const sidebarTarget = (selector: string) => () => {
+      const target = document.querySelector<HTMLElement>(selector);
+      return (target && target.getClientRects().length > 0 ? target : undefined) as Element;
+    };
     const allSteps: StepWithRoles[] = [
             {
           element: "#search-results",
@@ -395,33 +400,34 @@ export const LeiaSearch: React.FC = () => {
           },
         },
         {
-          element: "#navigation-menu",
+          element: sidebarTarget("#sidebar-navigation"),
           roles: ["admin", "advanced", "instructor"],
           popover: {
             title: "Menu",
             description:
               "Let's go to the main menu",
-            side: "bottom",
+            side: "right",
+            align: "start",
         },
         },
         {
-          element: "#myApiKeys-button",
+          element: sidebarTarget("#myApiKeys-button"),
           roles: ["admin", "advanced", "instructor"],
           popover: {
             title: "API Keys",
             description:
               "In this section you can configure your API Keys with the models you like",
-            side: "bottom",
+            side: "right",
           },
         },
         {
-          element: "#myActivities-button",
+          element: sidebarTarget("#myActivities-button"),
           roles: ["admin", "advanced"],
           popover: {
             title: "Activity",
             description:
               "In this section you can find all your activities",
-            side: "bottom",
+            side: "right",
             onNextClick: () => {
             tour?.destroy();
             navigate("/users/me/activities", {
@@ -450,30 +456,9 @@ export const LeiaSearch: React.FC = () => {
           smoothScroll: true,
           allowClose: true,
           showProgress: true,
-          progressText: "Paso {{current}} de {{total}}",
+          progressText: "Step {{current}} of {{total}}",
           steps: filteredSteps,
-          onNextClick: (_element, _step, options) => {
-          const activeIndex = options.driver.getActiveIndex();
-
-          if (activeIndex === 8 && (user?.role === "advanced" || user?.role === "admin")) {
-            setShowDropdown(true);
-            window.setTimeout(() => {
-              options.driver.moveNext();
-            }, 300);
-            return;
-          }
-          if (activeIndex === 6 && user?.role === "instructor") {
-            setShowDropdown(true);
-            window.setTimeout(() => {
-              options.driver.moveNext();
-            }, 300);
-            return;
-          }
-          options.driver.moveNext();
-        },
-          
         onDestroyed: () => {
-          setShowDropdown(false);
           setIsTourActive(false);
         if (tourRef.current === tour) {
           tourRef.current = null;
@@ -486,9 +471,6 @@ export const LeiaSearch: React.FC = () => {
         window.requestAnimationFrame(() => {
           if (tourRef.current !== tour) return;
           tour.drive(startStep);
-          if (tour.getActiveIndex() === 7) {
-            setShowDropdown(true);
-          }
         });
         
 
@@ -498,14 +480,16 @@ export const LeiaSearch: React.FC = () => {
       const navigationState = location.state;
       if (!navigationState) return;
       if (navigationState.continueTour) {
+        // The resumed steps anchor to the example LEIA row, so wait for the list.
+        if (loading || leias.length === 0) return;
         startGuidedTour(navigationState.continueTour);
         try {
         navigate(location.pathname, { replace: true, state: undefined });
       } catch (e) {
         console.error("Error clearing navigation state after starting tour:", e);}
     }
-    }, [location.pathname, location.state, navigate, startGuidedTour]);
-    
+    }, [leias.length, loading, location.pathname, location.state, navigate, startGuidedTour]);
+
   const getValidModels = useCallback(
     (apiKeyId: string | null | undefined) => {
       const models = Object.values(apiKeyProvidersMapped || {}).flat();
@@ -1004,7 +988,6 @@ export const LeiaSearch: React.FC = () => {
     <PageShell
       title="LEIA library"
       description="Browse, test, and design learning experiences"
-      dropdownTour={showDropdown}
       actions={
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" startIcon={<PlayCircleOutlineIcon />} onClick={() => startGuidedTour()}>
