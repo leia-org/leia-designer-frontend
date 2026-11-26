@@ -378,7 +378,7 @@ export const MyActivities: React.FC = () => {
                 smoothScroll: true,
                 allowClose: true,
                 showProgress: true,
-                progressText: "Paso {{current}} de {{total}}",
+                progressText: "Step {{current}} of {{total}}",
                 steps: [
             {
           element: "#activities",

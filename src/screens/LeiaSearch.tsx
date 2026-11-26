@@ -456,7 +456,7 @@ export const LeiaSearch: React.FC = () => {
           smoothScroll: true,
           allowClose: true,
           showProgress: true,
-          progressText: "Paso {{current}} de {{total}}",
+          progressText: "Step {{current}} of {{total}}",
           steps: filteredSteps,
         onDestroyed: () => {
           setIsTourActive(false);
