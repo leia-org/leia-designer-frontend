@@ -45,12 +45,12 @@ export const ApiKeyMarkDefaultModal: React.FC<ApiKeyMarkDefaultModalProps> = ({
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
         <Typography variant="h6" component="span">
           {apiKey.isDefault
-            ? "¿Desea quitar esta clave como predeterminada?"
-            : "¿Desea marcar esta clave como predeterminada?"}
+            ? "Remove this key as default?"
+            : "Set this key as default?"}
         </Typography>
         <IconButton
           onClick={onClose}
-          aria-label="Cerrar"
+          aria-label="Close"
           size="small"
           sx={{ color: "text.disabled", "&:hover": { color: "text.secondary" } }}
         >
@@ -60,20 +60,20 @@ export const ApiKeyMarkDefaultModal: React.FC<ApiKeyMarkDefaultModalProps> = ({
       <DialogContent>
         <DialogContentText sx={{ color: "text.secondary" }}>
           {apiKey.isDefault
-            ? `¿Está seguro de que desea quitar "${apiKey.description}" como clave predeterminada?`
-            : `¿Desea marcar "${apiKey.description}" como su clave predeterminada? Esto desmarcará la clave que esté marcada actualmente.`}
+            ? `Are you sure you want to remove "${apiKey.description}" as your default key?`
+            : `Set "${apiKey.description}" as your default key? This will unmark the key that is currently set as default.`}
         </DialogContentText>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} disabled={loading} color="inherit">
-          Cancelar
+          Cancel
         </Button>
         <Button onClick={handleConfirm} disabled={loading} variant="contained" color="warning">
           {loading
-            ? "Procesando..."
+            ? "Processing..."
             : apiKey.isDefault
-              ? "Quitar como predeterminada"
-              : "Marcar como predeterminada"}
+              ? "Remove as default"
+              : "Set as default"}
         </Button>
       </DialogActions>
     </Dialog>
