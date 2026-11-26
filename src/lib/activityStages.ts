@@ -89,9 +89,32 @@ export function stageUsesOutput(experiment: Experiment, stageId: string, output:
   );
 }
 
+export function hasTranscriptionMessages(
+  entry: { configuration?: { data?: Record<string, unknown> } } | null | undefined,
+): boolean {
+  const messages = entry?.configuration?.data?.messages;
+  return (
+    Array.isArray(messages) &&
+    messages.some(
+      (message) =>
+        typeof (message as { text?: unknown } | null)?.text === "string" &&
+        ((message as { text: string }).text).trim().length > 0,
+    )
+  );
+}
+
 export function stageHasTranscriptionMode(experiment: Experiment, stageId: string): boolean {
   return experiment.leias.some(
     (entry) => entry.stageId === stageId && entry.configuration?.mode === "transcription",
+  );
+}
+
+export function stageHasEmptyTranscription(experiment: Experiment, stageId: string): boolean {
+  return experiment.leias.some(
+    (entry) =>
+      entry.stageId === stageId &&
+      entry.configuration?.mode === "transcription" &&
+      !hasTranscriptionMessages(entry),
   );
 }
 
@@ -192,8 +215,8 @@ export function getActivityReplicationBlocker(experiment: Experiment): string | 
     const conversationSourceId = getStageOutputSource(stage, "conversation");
     if (referencedOutputs.has("conversation") && conversationSourceId) {
       const sourceIndex = positions.get(conversationSourceId);
-      if (sourceIndex !== undefined && stageHasTranscriptionMode(experiment, conversationSourceId)) {
-        return `Stage ${sourceIndex + 1} cannot use transcription mode because stage ${number} uses its conversation`;
+      if (sourceIndex !== undefined && stageHasEmptyTranscription(experiment, conversationSourceId)) {
+        return `Stage ${sourceIndex + 1} requires non-empty transcription chat messages because stage ${number} uses its conversation`;
       }
     }
 

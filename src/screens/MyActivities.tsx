@@ -14,6 +14,7 @@ import { ActivityStagesEditor } from "../components/ActivityStagesEditor";
 import {
   getActivityReplicationBlocker,
   getDependentStagesForConversation,
+  hasTranscriptionMessages,
   leiaUsesPreviousStageOutputs,
 } from "../lib/activityStages";
 import { ActivityListSkeleton } from "../components/ActivityListSkeleton";
@@ -67,6 +68,8 @@ import "../styles/monaco-tooltip-fix.css";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { useDebounce } from "../hooks/useDebounce";
+import { useApiKeys } from "../hooks/useApiKeys";
+import { useProviders } from "../hooks/useProviders";
 
 interface TranscriptionMessage {
   text: string;
@@ -88,6 +91,18 @@ const TranscriptionArraySchema = z
 export const MyActivities: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const {
+    apiKeys,
+    isLoading: isApiKeysLoading,
+    error: apiKeysError,
+    getDefaultKey,
+  } = useApiKeys();
+  const {
+    defaultModel,
+    apiKeyProvidersMapped,
+    providerProviderModuleMap,
+    isLoading: isProvidersLoading,
+  } = useProviders();
   const [ownedOnly, setOwnedOnly] = useState(false);
   const requestGeneration = useRef(0);
   const invalidateRequests = useCallback(() => { requestGeneration.current++; }, []);
@@ -668,6 +683,34 @@ export const MyActivities: React.FC = () => {
     }
   };
 
+  const resolveTranscriptionRunnerConfiguration = useCallback(
+    (leia: Leia): { modelName: string; apiKeyId: string } | null => {
+      const activeKeys = apiKeys.filter((key) => key.isActive !== false);
+      const requiresTools =
+        Array.isArray(leia.spec?.problem?.spec?.widgets) &&
+        leia.spec.problem.spec.widgets.length > 0;
+      const toolCapableProviders = Object.entries(providerProviderModuleMap || {})
+        .filter(([, moduleName]) => moduleName === "openai-responses")
+        .map(([provider]) => provider);
+      const candidateKeys = requiresTools
+        ? activeKeys.filter((key) => toolCapableProviders.includes(key.provider))
+        : activeKeys;
+      const defaultKey = getDefaultKey();
+      const key =
+        defaultKey && candidateKeys.some((candidate) => candidate.id === defaultKey.id)
+          ? defaultKey
+          : candidateKeys[0] ?? null;
+      if (!key) return null;
+
+      const providerModels = apiKeyProvidersMapped[key.provider] || [];
+      const modelName = [key.model, defaultModel, ...providerModels].find(
+        (model): model is string => Boolean(model && providerModels.includes(model)),
+      );
+      return modelName ? { modelName, apiKeyId: key.id } : null;
+    },
+    [apiKeyProvidersMapped, apiKeys, defaultModel, getDefaultKey, providerProviderModuleMap],
+  );
+
   const handleCreateTranscriptionManually = async (
     experimentId: string,
     leiaConfigId: string,
@@ -677,12 +720,39 @@ export const MyActivities: React.FC = () => {
       return;
     }
 
+    if (isApiKeysLoading || isProvidersLoading) {
+      toast.info("Loading API keys and models, please try again in a moment", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
+    const hasActiveApiKeys = apiKeys.some((key) => key.isActive !== false);
+    if (!apiKeysError && !hasActiveApiKeys) {
+      toast.error("Configure an API key before generating a transcription", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
+    const runnerConfiguration = resolveTranscriptionRunnerConfiguration(leiaConfig.leia);
+    if (!runnerConfiguration) {
+      toast.error("No compatible API key and model available to start this transcription chat", {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     const transcriptionKey = `${experimentId}-${leiaConfigId}`;
     setInitializingTranscriptionChat(transcriptionKey);
 
     try {
       const response = await api.post("/api/v1/runner/initialize", {
         spec: leiaConfig.leia.spec,
+        runnerConfiguration,
       });
       const { sessionId } = response.data || {};
       if (sessionId) {
@@ -703,8 +773,12 @@ export const MyActivities: React.FC = () => {
           },
         });
       }
-    } catch {
-      toast.error("Failed to create transcription session", {
+    } catch (error) {
+      const apiMessage =
+        error && typeof error === "object" && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      toast.error(apiMessage || "Failed to create transcription session", {
         position: "bottom-right",
         autoClose: 3000,
       });
@@ -1478,9 +1552,11 @@ export const MyActivities: React.FC = () => {
                                 ? "Transcription mode is unavailable in MultiLEIA stages."
                                 : usesPreviousStage
                                   ? "Transcription unavailable because this LEIA uses outputs from an earlier stage."
-                                  : conversationDependents.length > 0
-                                    ? `Transcription unavailable because ${conversationDependents.map((n) => `Stage ${n}`).join(", ")} ${conversationDependents.length === 1 ? "uses" : "use"} this stage's conversation.`
-                                    : "";
+                                  : "";
+                              const missingRequiredTranscriptionMessages =
+                                leiaConfig.configuration?.mode === "transcription" &&
+                                conversationDependents.length > 0 &&
+                                !hasTranscriptionMessages(leiaConfig);
                               const leiaKey = experiment.id + "-" + leiaConfig.id;
                               const hasTranscription =
                                 Boolean(leiaConfig.configuration?.data?.messages) ||
@@ -1740,6 +1816,14 @@ export const MyActivities: React.FC = () => {
                                               </Button>
                                             </Stack>
                                           </Stack>
+                                        )}
+
+                                        {missingRequiredTranscriptionMessages && (
+                                          <Alert severity="error">
+                                            Add transcription chat messages because{" "}
+                                            {conversationDependents.map((n) => `Stage ${n}`).join(", ")}{" "}
+                                            {conversationDependents.length === 1 ? "uses" : "use"} this stage&apos;s conversation.
+                                          </Alert>
                                         )}
 
                                         <Alert severity="warning" icon={<WarningAmberOutlinedIcon fontSize="inherit" />}>
